@@ -1,0 +1,98 @@
+// WP5-UX5-AUDIT-INT2 probe (the auditor's own, never part of the repository): an administrator's change to the day open in a person's
+// desktop Day editor. The admin imports a holiday on the open date (a private server, so the company calendar of the shared worker
+// server is not touched). E1: the person's own Check in follows; E2: only the tab returns. Synthetic data only; observations to INT2_OUT.
+import { appendFileSync } from 'node:fs';
+import type { Locator, Page } from '@playwright/test';
+import { expect, newPerson, type Person, SeedClient, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+const OUT = process.env.INT2_OUT ?? '';
+function log(tag: string, line: string): void {
+  if (OUT !== '') appendFileSync(OUT, `[${tag}] ${line}\n`);
+}
+const flat = (text: string) => text.replace(/\s+/g, ' ').trim();
+const TYPED = 'Typed in this editor, not saved (synthetic)';
+
+async function setUp(page: Page, origin: string, admin: SeedClient, person: Person): Promise<{ today: string; editor: Locator }> {
+  const today = person.todayLocal;
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await page.goto(`${origin}/#/timesheet`);
+  await page.getByLabel('Email').fill(person.account.email);
+  await page.getByLabel('Password').fill(person.account.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  if ((await page.locator(`[data-day="${today}"]`).count()) === 0) {
+    await page.locator('.period-bar').getByRole('button', { name: 'Today', exact: true }).click();
+    await expect(page.locator(`[data-day="${today}"]`)).toHaveCount(1);
+  }
+  await page.getByLabel('Open a day').fill(today);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('heading', { name: 'Times', exact: true })).toBeVisible();
+  void admin;
+  return { today, editor };
+}
+
+async function importHoliday(admin: SeedClient, person: Person, date: string): Promise<void> {
+  const periods = await person.api.call<{ in_progress: { period_start: string } }>('GET', '/api/periods/current');
+  const calendar = await admin.call<{ id: string }>('GET', '/api/calendar');
+  const csv = ['date,name,kind', `${date},Synthetic Admin Holiday,holiday`].join('\n');
+  const body = { calendar_id: calendar.id, year: Number(date.slice(0, 4)), effective_from: periods.in_progress.period_start, csv, remove_dates: [] };
+  const preview = await admin.call<{ preview_hash: string }>('POST', '/api/admin/calendar/import/preview', body);
+  const done = await admin.call<{ committed: boolean }>('POST', '/api/admin/calendar/import/commit', { ...body, preview_hash: preview.preview_hash }, 201);
+  expect(done.committed).toBe(true);
+}
+
+// With INT2_NO_FOLLOW=1 (the comparison run on a5cbc91, which has no follow read) wait for the page's period read and an idle network.
+const dayRead = (page: Page, date: string): Promise<unknown> =>
+  process.env.INT2_NO_FOLLOW === '1'
+    ? page
+        .waitForResponse((response) => response.request().method() === 'GET' && /\/api\/timesheets\//.test(new URL(response.url()).pathname), { timeout: 10_000 })
+        .then(() => page.waitForLoadState('networkidle'))
+    : page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/days/${date}`), { timeout: 10_000 });
+
+for (const trigger of ['Check in', 'tab return'] as const) {
+  test(`int2-E admin holiday on the open day, then ${trigger}`, async ({ page, privateServer }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the desktop drawer');
+    const tag = `E admin + ${trigger}`;
+    const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+    const person = await newPerson(admin, privateServer, { displayName: 'Synthetic Calendar Person', signature: 'none' });
+    const { today, editor } = await setUp(page, privateServer.origin, admin, person);
+    const form = editor.getByRole('form', { name: 'Day fields' });
+    const notes = form.getByLabel('Notes');
+    const category = form.getByLabel('Category');
+    await notes.fill(TYPED);
+    const shown = await category.inputValue();
+    await importHoliday(admin, person, today);
+    const afterImport = await person.api.dayView(today);
+    log(tag, `${today}: shown category ${shown}; after the admin import the server says ${afterImport.category}/${afterImport.category_source}, entry ${afterImport.entry === null ? 'none' : `v${afterImport.entry.version}`}`);
+    const read = dayRead(page, today);
+    if (trigger === 'Check in') {
+      const button = page.getByRole('region', { name: 'Check in and out' }).getByRole('button', { name: 'Check in', exact: true });
+      await button.focus();
+      await button.click();
+    } else {
+      await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
+    }
+    await read;
+    await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+    log(tag, `after the ${trigger}: form category ${await category.inputValue()}; note "${await notes.inputValue()}"; cards ${(await editor.locator('.session-card').allInnerTexts()).map(flat).join(' || ') || '(none)'}`);
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    const stale = editor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' });
+    const saved = editor.getByRole('status').filter({ hasText: 'Day fields saved.' });
+    await expect(stale.or(saved)).toBeVisible();
+    const server = await person.api.dayView(today);
+    log(tag, `Save day fields: ${(await stale.count()) === 1 ? 'REFUSED (stale)' : 'ACCEPTED'}; server category ${server.category}/${server.category_source}, notes "${server.entry?.notes ?? ''}"`);
+    if ((await stale.count()) === 1) {
+      const reread = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/days/${today}`), { timeout: 10_000 });
+      await stale.getByRole('button', { name: 'Reload day' }).click();
+      await reread;
+      await expect(stale).toHaveCount(0);
+      await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+      await page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+      log(tag, `Reload day: form category ${await category.inputValue()}; note "${await notes.inputValue()}"`);
+    }
+  });
+}

@@ -158,3 +158,9 @@ Append briefly:
 Return at most 80 words, beginning 'Self-reported model: ...', with the full commit SHA.
 
 ## Results
+
+- HEAD before a5cbc91e6965633a0f9d1dd7e912577321cc71e3; after d96df5daa25b44b156354bc96605e13e94e44396.
+- Pushed to origin main (fast-forward); remote SHA d96df5daa25b44b156354bc96605e13e94e44396.
+- D_PRE = HEAD digest = 6937d79ccce4447a30123a52e0cc6c1ede828994186407028acfce74fc2961cb (git ls-tree form on the staged index tree; npm run digest still hit ENOBUFS).
+- Staged 558 (5 outside handoff, 10 records, 8 tasks, 535 evidence). Nothing masked or unstaged.
+- All checks exit 0. Details in evidence/WP5-UX5-FIX18-FREEZE/checks.txt.

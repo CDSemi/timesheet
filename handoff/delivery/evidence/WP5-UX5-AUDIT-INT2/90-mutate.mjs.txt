@@ -1,0 +1,39 @@
+// WP5-UX5-AUDIT-INT2 mutants of FIX18's change. Usage: node mutate.mjs <exportDir> <pristineDir> <id> apply|restore
+// apply: replaces exactly one occurrence of `from` with `to` in the file (fails otherwise) and prints the sha256 before/after.
+// restore: copies the file back from the pristine export and checks it is byte-equal.
+import { createHash } from 'node:crypto';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const EDITOR = 'src/client/DayEditor.tsx';
+const MUTANTS = {
+  MX1: { file: EDITOR, what: 'sameDayFields no longer compares the notes', from: "    held.wfh === fresh.wfh &&\n    (held.entry?.notes ?? '') === (fresh.entry?.notes ?? '')\n", to: '    held.wfh === fresh.wfh\n' },
+  MX2: { file: EDITOR, what: 'sameDayFields no longer compares the category source', from: '    held.category_source === fresh.category_source &&\n', to: '' },
+  MX3: { file: EDITOR, what: 'sameDayFields no longer compares WFH', from: '    held.wfh === fresh.wfh &&\n', to: '' },
+  MX4: { file: EDITOR, what: 'sameDayFields no longer compares the partial leave (minutes and kind)', from: '    held.leave_minutes === fresh.leave_minutes &&\n    held.leave_kind === fresh.leave_kind &&\n', to: '' },
+  MX5: { file: EDITOR, what: 'an open delete confirmation no longer holds off the follow', from: "  nestedOpen.current = editing.kind !== 'none' || deleting !== null;\n", to: "  nestedOpen.current = editing.kind !== 'none';\n" },
+  MX6: { file: EDITOR, what: 'a follow read overtaken by a newer day is no longer dropped', from: '        if (stamp !== dayStamp.current || nestedOpen.current) return;\n', to: '        if (nestedOpen.current) return;\n' },
+  MX7: { file: EDITOR, what: 'saved() no longer marks a newer day (an older follow read is taken after a save)', from: '    setUsedReason(reason);\n    dayStamp.current += 1;\n    setDay(next);\n', to: '    setUsedReason(reason);\n    setDay(next);\n' },
+  MX8: { file: EDITOR, what: 'sameDayFields also requires the same entry version (a stricter guard that never takes a created entry)', from: '    held.category === fresh.category &&\n', to: '    held.entry?.version === fresh.entry?.version &&\n    held.category === fresh.category &&\n' },
+};
+
+const [dir, pristine, id, action] = process.argv.slice(2);
+const mutant = MUTANTS[id];
+if (mutant === undefined) throw new Error(`unknown mutant ${id}`);
+const path = join(dir, mutant.file);
+const sha = (text) => createHash('sha256').update(text).digest('hex');
+if (action === 'apply') {
+  const text = readFileSync(path, 'utf8');
+  const count = text.split(mutant.from).length - 1;
+  if (count !== 1) throw new Error(`${id}: expected one occurrence, found ${count}`);
+  const next = text.replace(mutant.from, mutant.to);
+  writeFileSync(path, next);
+  console.log(`${id} applied (${mutant.what}) to ${mutant.file}: sha256 ${sha(text).slice(0, 16)} -> ${sha(next).slice(0, 16)}`);
+} else if (action === 'restore') {
+  const original = readFileSync(join(pristine, mutant.file));
+  writeFileSync(path, original);
+  const back = readFileSync(path);
+  console.log(`${id} restored ${mutant.file}: byte-equal to the pristine export ${Buffer.compare(original, back) === 0 ? 'yes' : 'NO'} (sha256 ${sha(back).slice(0, 16)})`);
+} else {
+  throw new Error('action must be apply or restore');
+}

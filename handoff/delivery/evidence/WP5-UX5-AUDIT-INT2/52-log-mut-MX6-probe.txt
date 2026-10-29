@@ -1,0 +1,46 @@
+
+Running 7 tests using 1 worker
+
+(node:13360) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [desktop] › tests\e2e\zz-int2-follow.spec.ts:127:3 › int2-A 1440: a day with saved fields; the typed note survives the page's Check in and Check out, focus stays, the guard still asks (1.5s)
+  ok 2 [desktop] › tests\e2e\zz-int2-follow.spec.ts:227:3 › int2-B notes only: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten (947ms)
+  ok 3 [desktop] › tests\e2e\zz-int2-follow.spec.ts:227:3 › int2-B WFH only: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten (940ms)
+  ok 4 [desktop] › tests\e2e\zz-int2-follow.spec.ts:227:3 › int2-B partial leave only: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten (934ms)
+  ok 5 [desktop] › tests\e2e\zz-int2-follow.spec.ts:227:3 › int2-B category only: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten (961ms)
+  ok 6 [desktop] › tests\e2e\zz-int2-follow.spec.ts:627:1 › int2-N delete confirmation open: a session changed elsewhere, the tab returns, then "Delete session"; the delete is refused (822ms)
+  x  7 [desktop] › tests\e2e\zz-int2-follow.spec.ts:661:1 › int2-O overtaken read: the follow read answers after the editor's own save; a second save still succeeds (2.9s)
+
+
+  1) [desktop] › tests\e2e\zz-int2-follow.spec.ts:661:1 › int2-O overtaken read: the follow read answers after the editor's own save; a second save still succeeds 
+
+    Error: the second save carries the version of the first save
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 200
+    Received: 409
+
+      695 |       `${date}: first save ${first.status()} (sent v${(first.request().postDataJSON() as { expected_version?: number }).expected_version}); the delayed follow read answered after it; second save ${second.status()} (sent v${(second.request().postDataJSON() as { expected_version?: number }).expected_version}); stale alert ${await staleAlert(editor).count()}`,
+      696 |     );
+    > 697 |     expect(second.status(), 'the second save carries the version of the first save').toBe(200);
+          |                                                                                      ^
+      698 |   } finally {
+      699 |     await page.unrouteAll({ behavior: 'ignoreErrors' });
+      700 |     await employeeSeed.resetDay(date);
+        at <task>\export-mut\tests\e2e\zz-int2-follow.spec.ts:697:86
+
+    Error Context: ..\pw-mut-MX6-probe\zz-int2-follow-int2-O-over-fa732--second-save-still-succeeds-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-MX6-probe\zz-int2-follow-int2-O-over-fa732--second-save-still-succeeds-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-MX6-probe\zz-int2-follow-int2-O-over-fa732--second-save-still-succeeds-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\zz-int2-follow.spec.ts:661:1 › int2-O overtaken read: the follow read answers after the editor's own save; a second save still succeeds 
+  6 passed (11.3s)
+exit=1

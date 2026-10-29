@@ -134,3 +134,46 @@
 - Return at most 250 words, beginning with your self-reported model.
 
 ## Results
+
+Self-reported model: claude-opus-5-5 (board agent aec1aeea85222dbd9). Review: `handoff/delivery/WP5_UX5_REVIEW_INT2.md` (+ `.vi.md`).
+Evidence: `handoff/delivery/evidence/WP5-UX5-AUDIT-INT2/` (index `00-README.txt`).
+
+**Decision: FIX REQUIRED** on d96df5daa25b44b156354bc96605e13e94e44396.
+
+- **Identity.** HEAD = origin/main = reviewed_commit before (11:49:52Z) and after (13:01:41Z); no status line outside `handoff/`. Digest
+  6937d79ccce4447a30123a52e0cc6c1ede828994186407028acfce74fc2961cb (882 files) before and after in three forms (clean export, `git ls-tree`,
+  a wide-buffer copy of the target's script in a scratch clone and in the repository). The target's own `npm run digest` fails with
+  ENOBUFS also in a clean clone (F-UX5I2-2). Author separation: no WP5-UX4/UX5 task or audit is mine; strongest author model opus = mine.
+- **F-UX5I-1: closed.** The AUDIT-INT probe passes 3/3 on the target and fails on a5cbc91 (reproduced); my probe A (a day with saved
+  fields, 1440 beside and 1280 floating, keyboard Check in): the drawer follows Check in and Check out, keeps the typed note and WFH, focus
+  stays on the page's clock button, no editor live region is added, the guard still asks, and the save is accepted.
+- **Version check:** refused for a change made elsewhere by another device (notes, WFH, leave, category each), another tab, a grantee's
+  session through a share, an administrator's holiday import plus Check in, and behind an open delete confirmation or session dialog. FIX18's
+  `sameDayFields`, dialog guard and overtaken-read drop are right. **Tab return (M6):** right; docs/03:24 and :40 (the day entry carries
+  its own optimistic version; each action validates the version of what it changes) decide it; a5cbc91 already accepted that save for a day
+  with an entry, and FIX18 changes only the no-entry case (refused before only because the entry row appeared; nothing written elsewhere is
+  overwritten). docs/04:69 does not mention the tab return (R-UX5I2-2).
+- **New findings.** F-UX5I2-1 (Medium, pre-existing since WP2-T10, also on a5cbc91): after a session save, "Confirm breaks" or delete in
+  the open editor, `saved()` (`DayEditor.tsx:279-288`) takes the server's day with day fields changed elsewhere and their newer entry
+  version while `DayFieldsForm` keeps its older draft (`:51-53`, `:85`); the next "Save day fields" silently overwrites the other device's
+  note and WFH (probes G1, G2). F-UX5I2-2 (Low): `scripts/source-digest.mjs:13-15` has no maxBuffer; the tracked list is 1,063,240 bytes
+  from d96df5d, so `npm run digest` (named by docs/12:7 for the release digest) fails in every checkout.
+- **Regressions:** none. U4-05 guard after a follow (Escape, Close, outside press, another day, Next period), the same-task Escape test,
+  the label refresh after a follow (probe P), the phone sheet, shared views, the cross-tab theme, focus and announcements: all hold. axe-core
+  4.14.0: 16 scans (1440/1280 before Check in, after Check in, after Check out; 390 before and after; light and dark), 0 violations.
+- **Carry-forward** over `git diff a5cbc91..d96df5d` (five FIX18 paths): AUDIT-INT's findings, owner-item and gate-failure maps, the load
+  rule, RECHECK-A2 and RECHECK-B3 stay valid (dist/server and dist/domain identical in my builds).
+- **Own mutants (8):** MX1 (notes compare) and MX8 (stricter guard) caught by the suite; MX3 (WFH), MX4 (leave), MX5 (delete-confirmation
+  hold), MX6 (overtaken read), MX7 (saved() stamp) survive the six relevant spec files (201 passed) and are caught only by my probes B, N,
+  O (R-UX5I2-1); MX2 (category source) equivalent in effect. All restored byte-equal; restored dist equals the target's.
+- **Mandatory checks** (clean export): npm ci, typecheck, lint, build 0 (no advisory, no deprecation); npm test 101 / 2,397; real-clock
+  FULL desktop 473/36/0, mobile 408/101/0; AC-13 under Pacific/Auckland 1/1; seven files at 2026-10-27T06:58:30Z (FIX10 wrapper,
+  byte-equal shiftclock) 389 passed, 0 failed. Census 0.61-1.53 busy cores; no failure, no rerun.
+- **Risks carried for the WP5 handoff:** R-UX5I-1..4 unchanged; new R-UX5I2-1 (test strength), R-UX5I2-2 (docs/04:69 tab return),
+  R-UX5I2-3 (no-entry day vs an admin calendar change, pre-existing); the backlog list is updated in the review.
+- **Next action:** one fix round (F-UX5I2-1 with G1/G2 e2e tests, optionally B/N/O; F-UX5I2-2), freeze, regate, fresh integration recheck.
+- **Slips:** one `grep | head` read; probe defects kept and named in `99-slips.txt`. Nothing left running; nothing staged or committed.
+- **Commit description:** Record the WP5-UX5-AUDIT-INT2 integration recheck: F-UX5I-1 closed, FIX REQUIRED for a pre-existing Day editor
+  overwrite after session writes and the digest script buffer.
+
+Status: done

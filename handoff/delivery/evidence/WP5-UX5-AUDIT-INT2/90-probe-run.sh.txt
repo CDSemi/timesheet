@@ -1,0 +1,37 @@
+# Probe runs (real clock), one after another, each with its own output folder. Usage: bash probe-run.sh
+. <task>/env.sh
+O=$T/out
+P=$T/logs/probe-run-progress.txt
+step() { echo "$1 $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $P; }
+run() {
+  # run <label> <export dir> <playwright args...>
+  label=$1; dir=$2; shift 2
+  mkdir -p $T/pw-$label $T/shots-$label
+  export E2E_SCREENSHOT_DIR="$TW\\shots-$label"
+  cd $T/$dir || return 2
+  { echo "== $label in $dir: start $(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "\$ node node_modules/@playwright/test/cli.js test $* --output=<task>/pw-$label"; } > $T/logs/probe-$label.txt
+  NODE_OPTIONS="--trace-deprecation" node.exe node_modules/@playwright/test/cli.js test "$@" --output="$TW\\pw-$label" >> $T/logs/probe-$label.txt 2>&1
+  echo "exit=$?" >> $T/logs/probe-$label.txt
+  echo "== $label end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $T/logs/probe-$label.txt
+  step "$label done"
+}
+cp $T/probes/zz-int2-follow.spec.ts $T/probes/zz-int2-admin.spec.ts $T/probes/zz-int2-axe.spec.ts $T/export-probe/tests/e2e/
+cp $REPO/handoff/delivery/evidence/WP5-UX5-AUDIT-INT/90-zz-int-clock-editor.spec.ts.txt $T/export-probe/tests/e2e/zz-int-clock-editor.spec.ts
+cp $T/probes/zz-int2-follow.spec.ts $T/probes/zz-int2-admin.spec.ts $T/export-prev-probe/tests/e2e/
+cp $REPO/handoff/delivery/evidence/WP5-UX5-AUDIT-INT/90-zz-int-clock-editor.spec.ts.txt $T/export-prev-probe/tests/e2e/zz-int-clock-editor.spec.ts
+bash $T/cens.sh pre-probes > $T/logs/cens-pre-probes.log 2>&1
+# 1. The AUDIT-INT probe on the target (desktop), observations to its own file.
+INT_OUT="$TW\\out\\44-auditint-probe-target.txt" run auditint-target export-probe tests/e2e/zz-int-clock-editor.spec.ts --project=desktop --workers=1
+# 2. My follow probe on the target, both projects.
+INT2_OUT="$TW\\out\\45-obs-follow-target.txt" run follow-target export-probe tests/e2e/zz-int2-follow.spec.ts --workers=2
+# 3. The admin probe on the target (private servers).
+INT2_OUT="$TW\\out\\46-obs-admin-target.txt" run admin-target export-probe tests/e2e/zz-int2-admin.spec.ts --project=desktop --workers=1
+# 4. axe on the target, both projects.
+AXE_PATH="$TW\\axe\\axe.min.js" AXE_OUT="$TW\\out\\47-axe-lines.txt" run axe-target export-probe tests/e2e/zz-int2-axe.spec.ts --workers=1
+bash $T/cens.sh mid-probes > $T/logs/cens-mid-probes.log 2>&1
+# 5. The same AUDIT-INT probe and the comparison probes on a5cbc91 (before FIX18): F (tab return), G (saved() path), A, B, D and E.
+INT_OUT="$TW\\out\\44-auditint-probe-prev.txt" run auditint-prev export-prev-probe tests/e2e/zz-int-clock-editor.spec.ts --project=desktop --workers=1
+INT2_OUT="$TW\\out\\45-obs-follow-prev.txt" run follow-prev export-prev-probe tests/e2e/zz-int2-follow.spec.ts --project=desktop --workers=2 -g "int2-A 1440|int2-B|int2-D|int2-F|int2-G|int2-N|int2-O"
+INT2_OUT="$TW\\out\\46-obs-admin-prev.txt" run admin-prev export-prev-probe tests/e2e/zz-int2-admin.spec.ts --project=desktop --workers=1
+bash $T/cens.sh post-probes > $T/logs/cens-post-probes.log 2>&1
+step "probe-run done"

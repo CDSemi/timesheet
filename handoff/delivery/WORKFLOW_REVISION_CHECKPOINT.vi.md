@@ -3083,8 +3083,69 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - `npm test`: 2.397. e2e đầy đủ: 473/36/0 và 408/101/0. Lượt chạy qua nửa đêm: 0 lỗi.
   - Công cụ: `npm run digest` báo lỗi ENOBUFS khi trong `handoff/` có nhiều file git chưa
     theo dõi. Việc này đưa vào backlog.
-- **Đang chạy:** WP5-UX5-FIX18-FREEZE (committer). Committer stage trước rồi mới tính D_PRE.
-  Coordinator không ghi file nào trong lúc committer chạy.
+- **WP5-UX5-FIX18-FREEZE xong.**
+  - Commit d96df5daa25b44b156354bc96605e13e94e44396 trên main, đã push dạng fast-forward từ
+    a5cbc91.
+  - `npm run digest` vẫn gặp lỗi ENOBUFS, nên D_PRE được tính bằng cách dùng `git ls-tree`
+    trên cây đã stage. Kết quả trùng digest của HEAD, 6937d79c.
+  - Đã stage 558 đường dẫn. Mọi kiểm tra đều exit 0.
+- **WP5-UX5-REGATE13 ĐẠT (PASS)** (verifier, tự báo claude-sonnet-5-5) trên d96df5d /
+  6937d79c. Lần đo tải đầu vào khoảng 1 lõi. Không có lỗi nào.
+  - Chỉ `dist/client` thay đổi, nên giữ kết quả drill và `npm audit`.
+  - Lượt cốt lõi ×3: 2.397 test.
+  - e2e đầy đủ: 473/36/0 và 408/101/0.
+  - Sáu lượt quét: 0 lỗi. Chạy dồn: 0 lỗi.
+  - Các mutant M1 đến M3 đều bị bắt.
+  - M6 không bị bắt, đúng như FIX18 đã ghi. Brief của gate liệt M6 vào nhóm bắt buộc phải
+    bị bắt; coordinator ghi nhận dòng đó đặt quá chặt, và để AUDIT-INT2 đánh giá thiết kế.
+  - axe: 12 lượt quét, 0 vi phạm.
+- **WP5-UX5-AUDIT-INT2: CẦN SỬA (FIX REQUIRED)** (auditor, tự báo claude-opus-5-5) trên
+  d96df5d.
+  - F-UX5I-1 đã đóng.
+  - Các lớp bảo vệ của FIX18 và việc đọc lại khi quay lại tab được đánh giá là đúng:
+    docs/03:24 và :40 cho mục nhập của ngày một phiên bản riêng.
+  - **F-UX5I2-1 (Medium; có từ WP2-T10).** Giả sử một thiết bị khác vừa sửa các trường của
+    ngày. Sau đó, trong editor đang mở, bạn lưu phiên, bấm "Confirm breaks" hoặc xóa phiên.
+    Lúc này editor nhận phiên bản mục nhập mới hơn, nhưng form vẫn giữ bản nháp cũ. Lần
+    "Save day fields" kế tiếp vì vậy âm thầm ghi đè thay đổi của thiết bị kia.
+  - **F-UX5I2-2 (Low).** `scripts/source-digest.mjs` không đặt `maxBuffer`, nên
+    `npm run digest` lỗi trên mọi bản checkout kể từ d96df5d. docs/12:7 lại dùng chính lệnh
+    này để ghi định danh bản phát hành.
+  - Mọi mục khác đều giữ: e2e đầy đủ 0 lỗi, axe 16 lượt quét 0 vi phạm, AC-13.
+  - Rủi ro tùy chọn mới: R-UX5I2-1..3.
+- **Coordinator.**
+  - RECHECK-A2 và RECHECK-B3 giờ ghi `superseded_by: WP5-UX5-AUDIT-INT3`.
+  - Đã đăng ký bốn task, mỗi task kèm brief riêng:
+    - FIX19 (worker-high, sonnet):
+      - thêm lớp bảo vệ `sameDayFields` cho `saved()`. Nếu form chưa có thay đổi nào chưa
+        lưu, form nạp lại từ dữ liệu ngày trên server. Nếu có thay đổi chưa lưu, lần lưu bị
+        từ chối và "Reload day" đọc lại thay đổi;
+      - thêm `maxBuffer` cho script digest;
+      - các test G1, G2 và một trường hợp đã gõ ghi chú;
+      - các test ghim hành vi cho các lớp bảo vệ của FIX18;
+      - một mệnh đề trong docs/04 về việc đọc lại khi quay lại tab.
+
+      R-UX5I2-3 vẫn để trong backlog vì cần chọn hành vi.
+    - FIX19-FREEZE.
+    - REGATE14.
+    - AUDIT-INT3.
+- **WP5-UX5-FIX19 xong** (worker-high, tự báo claude-sonnet-5-5). Chưa commit. Digest
+  67aa715c.
+  - Đã tái hiện lỗi trước khi sửa: G1 và G2 ghi đè thay đổi của thiết bị kia, và lệnh
+    digest trên bản clone sạch bị lỗi.
+  - `sessionWritten()` trong `DayEditor.tsx`: khi các trường ngày trong phản hồi khác với
+    giá trị editor đang giữ, nếu người dùng đã gõ vào một trường thì editor giữ nguyên các
+    trường và mục nhập cũ, nên lần lưu bị từ chối và "Reload day" đọc lại thay đổi. Nếu
+    chưa gõ gì, form nạp lại từ phản hồi.
+  - `source-digest.mjs` được thêm `maxBuffer`.
+  - 11 test mới: G1 đến G3, trường hợp đã gõ ghi chú, và B, N, O.
+  - docs/04 thêm mệnh đề về việc đọc lại khi quay lại tab, cả EN lẫn VI.
+  - Mọi mutant đều bị bắt.
+  - Chỉ `dist/client` thay đổi.
+  - `npm test`: 2.397. e2e đầy đủ: 484/36/0 và 408/112/0. Lượt chạy qua nửa đêm: 0 lỗi.
+  - `npm run digest` chạy lại được.
+- **Đang chạy:** WP5-UX5-FIX19-FREEZE (committer). Coordinator không ghi file nào trong lúc
+  committer chạy.
 - **Tiếp theo:**
   - REGATE13 và AUDIT-INT2;
   - ACCEPT-DOCS: backlog trong bàn giao WP5, định danh bản phát hành trong gói pilot, và bước

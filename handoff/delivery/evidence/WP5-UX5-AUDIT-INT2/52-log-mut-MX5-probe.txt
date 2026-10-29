@@ -1,0 +1,48 @@
+
+Running 7 tests using 1 worker
+
+(node:60536) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [desktop] › tests\e2e\zz-int2-follow.spec.ts:127:3 › int2-A 1440: a day with saved fields; the typed note survives the page's Check in and Check out, focus stays, the guard still asks (2.5s)
+  ok 2 [desktop] › tests\e2e\zz-int2-follow.spec.ts:227:3 › int2-B notes only: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten (1.2s)
+  ok 3 [desktop] › tests\e2e\zz-int2-follow.spec.ts:227:3 › int2-B WFH only: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten (1.0s)
+  ok 4 [desktop] › tests\e2e\zz-int2-follow.spec.ts:227:3 › int2-B partial leave only: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten (1.0s)
+  ok 5 [desktop] › tests\e2e\zz-int2-follow.spec.ts:227:3 › int2-B category only: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten (957ms)
+  x  6 [desktop] › tests\e2e\zz-int2-follow.spec.ts:627:1 › int2-N delete confirmation open: a session changed elsewhere, the tab returns, then "Delete session"; the delete is refused (878ms)
+(node:90952) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 7 [desktop] › tests\e2e\zz-int2-follow.spec.ts:661:1 › int2-O overtaken read: the follow read answers after the editor's own save; a second save still succeeds (2.9s)
+
+
+  1) [desktop] › tests\e2e\zz-int2-follow.spec.ts:627:1 › int2-N delete confirmation open: a session changed elsewhere, the tab returns, then "Delete session"; the delete is refused 
+
+    Error: the delete of a session changed elsewhere is refused
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 409
+    Received: 200
+
+      650 |     const server = await employeeSeed.dayView(date);
+      651 |     log(tag, `${date}: DELETE answered ${answer.status()} (sent version ${(answer.request().postDataJSON() as { expected_version?: number }).expected_version}, elsewhere version ${(session?.version ?? 0) + 1}); stale alert ${await staleAlert(editor).count()}; server sessions ${server.sessions.length}`);
+    > 652 |     expect(answer.status(), 'the delete of a session changed elsewhere is refused').toBe(409);
+          |                                                                                     ^
+      653 |     expect(server.sessions).toHaveLength(1);
+      654 |   } finally {
+      655 |     await employeeSeed.clearSessions(date);
+        at <task>\export-mut\tests\e2e\zz-int2-follow.spec.ts:652:85
+
+    Error Context: ..\pw-mut-MX5-probe\zz-int2-follow-int2-N-dele-30393-ssion-the-delete-is-refused-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-MX5-probe\zz-int2-follow-int2-N-dele-30393-ssion-the-delete-is-refused-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-MX5-probe\zz-int2-follow-int2-N-dele-30393-ssion-the-delete-is-refused-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\zz-int2-follow.spec.ts:627:1 › int2-N delete confirmation open: a session changed elsewhere, the tab returns, then "Delete session"; the delete is refused 
+  6 passed (14.7s)
+exit=1

@@ -41,6 +41,23 @@ function sameDayFields(held: DayView, fresh: DayView): boolean {
   );
 }
 
+/**
+ * The answer of a session write for a day whose fields changed elsewhere while the day fields form holds an unsaved edit: the answer's
+ * sessions and figures, but the day fields and the entry (and so its version) as the form was seeded with them. The form's save then
+ * carries the old version, is refused and ends in "Reload day", which reads the change.
+ */
+function withHeldDayFields(held: DayView, answer: DayView): DayView {
+  return {
+    ...answer,
+    category: held.category,
+    category_source: held.category_source,
+    leave_minutes: held.leave_minutes,
+    leave_kind: held.leave_kind,
+    wfh: held.wfh,
+    entry: held.entry,
+  };
+}
+
 /** True while a modal dialog other than the editor itself is open (it owns focus and Escape). */
 function otherModalOpen(editor: HTMLDialogElement): boolean {
   return [...document.querySelectorAll('dialog:modal')].some((open) => open !== editor);
@@ -153,6 +170,10 @@ export function DayEditor({
   const firstFollow = useRef(follow);
   /** Counts the days put on screen; a follow read that was overtaken by a newer day (a save, a reload, a later read) is dropped. */
   const dayStamp = useRef(0);
+  /** The day the editor holds and whether the day fields form holds an unsaved edit, as of the latest render: a session write's answer is judged against them (see sessionWritten). */
+  const heldDay = useRef<DayView | null>(null);
+  heldDay.current = day;
+  const fieldsDirtyRef = useRef(false);
   /** The foot of the phone's bottom sheet, where the day fields form draws "Save day fields" (null until it is mounted, and off the phone). */
   const [foot, setFoot] = useState<HTMLElement | null>(null);
 
@@ -270,6 +291,7 @@ export function DayEditor({
 
   // Unsaved edits (U4-05): the day fields form reports its own; a typed reason counts until a write has used it.
   const [fieldsDirty, setFieldsDirty] = useState(false);
+  fieldsDirtyRef.current = fieldsDirty;
   const [usedReason, setUsedReason] = useState('');
   const dirty = fieldsDirty || (reason.trim() !== '' && reason !== usedReason);
   useEffect(() => {
@@ -285,6 +307,27 @@ export function DayEditor({
     setActionError(null);
     setNotice(text);
     onChanged();
+  }
+
+  /**
+   * A session write (a session save, "Confirm breaks", a delete) answers with the whole day, which carries the day fields as the server holds
+   * them now and their entry version. That version may be taken only together with the fields it belongs to, or the day fields form would send
+   * the fields it was seeded with under a newer version and overwrite, silently, a change made elsewhere:
+   * - the fields are the ones held (sameDayFields): take the answer; the forms keep what was typed;
+   * - they differ and nothing is typed in the day fields: take the answer and restart the form from it (nothing is lost);
+   * - they differ and a field holds an unsaved edit: take the sessions and figures but keep the day fields and the entry held, so the form's save
+   *   carries the old version, is refused and ends in "Reload day" (the stale notice). The session list always shows the answer.
+   */
+  function sessionWritten(next: DayView, text: string) {
+    const held = heldDay.current;
+    if (held === null || sameDayFields(held, next)) {
+      saved(next, text);
+    } else if (fieldsDirtyRef.current) {
+      saved(withHeldDayFields(held, next), text);
+    } else {
+      saved(next, text);
+      setGeneration((value) => value + 1);
+    }
   }
 
   function startEditing(next: Editing) {
@@ -325,7 +368,7 @@ export function DayEditor({
       if (reason.trim() !== '') body.reason = reason.trim();
       const response = await request<{ deleted: boolean; day: DayView }>('DELETE', `/sessions/${session.id}`, body);
       setDeleting(null);
-      saved(response.day, 'Session deleted.');
+      sessionWritten(response.day, 'Session deleted.');
       setFocusTimes((value) => value + 1);
     } catch (caught) {
       setDeleting(null);
@@ -561,7 +604,7 @@ export function DayEditor({
           reasonRequired={reasonRequired}
           onReasonChange={setReason}
           onSaved={(next) => {
-            saved(next, 'Session saved.');
+            sessionWritten(next, 'Session saved.');
             setFocusTimes((value) => value + 1);
           }}
           onStale={() => {

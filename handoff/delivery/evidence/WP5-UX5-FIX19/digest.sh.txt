@@ -1,0 +1,44 @@
+# Usage: bash digest.sh <tag>
+# The source digest of the working tree in three forms, which must agree:
+#  (1) the export form: a clean export of the working tree (git archive of HEAD with the working tree's tracked files outside handoff/ copied over it),
+#      the blob hashes of its files outside handoff/ (git hash-object --no-filters), sorted, SHA-256 of the lines;
+#  (2) `npm run digest` in a clean clone of d96df5d with the working tree's owned files copied over it (the fixed script);
+#  (3) `npm run digest` in the repository itself (tracked + untracked, handoff/ excluded by the script).
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX19/env.sh.txt
+TAG=$1
+cd $REPO
+OUT=$E/01-digest-$TAG.txt
+{
+  echo "digest forms $TAG, taken $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "HEAD $(git rev-parse HEAD)"
+  echo "paths changed outside handoff/ (git status --short):"
+  git status --short -- . ':!handoff'
+} > $OUT 2>&1
+# (1) export form
+mkdir -p $T/export-digest-$TAG
+tar -xf $T/head.tar -C $T/export-digest-$TAG
+for f in $(git status --short -- . ':!handoff' | awk '{print $2}'); do cp $REPO/$f $T/export-digest-$TAG/$f; done
+cd $T/export-digest-$TAG
+find . -type f -not -path './handoff/*' -not -path './node_modules/*' -not -path './dist/*' -not -path './.git/*' | sed 's|^\./||' | LC_ALL=C sort > $T/dg-files-$TAG.txt
+git hash-object --no-filters --stdin-paths < $T/dg-files-$TAG.txt > $T/dg-blobs-$TAG.txt
+paste -d' ' $T/dg-files-$TAG.txt $T/dg-blobs-$TAG.txt | LC_ALL=C sort > $T/dg-sorted-$TAG.txt
+echo "(1) export form: $(sha256sum $T/dg-sorted-$TAG.txt | cut -d' ' -f1)  lines $(wc -l < $T/dg-sorted-$TAG.txt)" >> $OUT
+# (2) a clean clone of d96df5d with the owned files copied over it
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0=$T/clone-$TAG
+git clone --quiet --shared --no-checkout $REPO $T/clone-$TAG
+cd $T/clone-$TAG
+git checkout --quiet $BASE
+for f in $(cd $REPO && git status --short -- . ':!handoff' | awk '{print $2}'); do cp $REPO/$f $T/clone-$TAG/$f; done
+echo "(2) clone at $(git rev-parse HEAD), tracked files changed by the copy: $(git status --short | wc -l); untracked: $(git status --short | grep -c '^??')" >> $OUT
+echo "git ls-files -z bytes in the clone: $(git ls-files --cached --others --exclude-standard -z | wc -c)" >> $OUT
+echo "\$ npm run digest (clone):" >> $OUT
+npmx run digest >> $OUT 2>&1; echo "npm run digest (clone) exit=$?" >> $OUT
+# Mutant: the digest fix reverted in the same clone (the script as committed at d96df5d) must fail there.
+git checkout --quiet -- scripts/source-digest.mjs
+npmx run digest > $T/digest-reverted-$TAG.txt 2>&1; echo "mutant, digest fix reverted: npm run digest (clone) exit=$? (1 expected); lines mentioning ENOBUFS: $(grep -c ENOBUFS $T/digest-reverted-$TAG.txt)" >> $OUT
+unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+# (3) the repository
+cd $REPO
+echo "git ls-files -z bytes in the repository: $(git ls-files --cached --others --exclude-standard -z | wc -c)" >> $OUT
+echo "\$ npm run digest (repository):" >> $OUT
+npmx run digest >> $OUT 2>&1; echo "npm run digest (repository) exit=$?" >> $OUT

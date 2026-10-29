@@ -1,0 +1,12 @@
+# Usage: bash mutrun.sh <label>
+# In the scratch copy export-mut (made after the export build): rebuild the client, then run the FIX18 desktop tests once (real clock, one worker).
+. <task>/env.sh
+L=$1
+export GIT_CONFIG_VALUE_0=$T/export-mut
+cd $T/export-mut
+npm run build:client > $T/logs/mut-build-$L.txt 2>&1
+echo "$L client build exit=$?"
+cd $T
+SHIFT_EXPORT=$T/export-mut bash run-shift.sh mut-$L real tests/e2e/day-editor.spec.ts --project=desktop --workers=1 --grep "WP5-UX5-FIX18 \(F-UX5I-1\)" > logs/mut-$L.txt 2>&1
+node counts.mjs logs/mut-$L.txt
+bash cens.sh mut-$L

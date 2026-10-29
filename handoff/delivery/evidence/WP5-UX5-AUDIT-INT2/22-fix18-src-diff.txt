@@ -1,0 +1,150 @@
+diff --git a/src/client/DayEditor.tsx b/src/client/DayEditor.tsx
+index 006e5852..26dee99e 100644
+--- a/src/client/DayEditor.tsx
++++ b/src/client/DayEditor.tsx
+@@ -23,6 +23,24 @@ type Editing =
+ 
+ const LEAVE_KIND_TEXT = { vacation: 'vacation', sick: 'sick', ot: 'OT' } as const;
+ 
++/**
++ * True when two reads of one day hold the same day fields: the category and where it came from, the partial leave, WFH and the notes.
++ * A Check in or a Check out changes the sessions of the day and, for a day with no entry, creates the entry with its calendar defaults; it
++ * changes none of these. So after the page's own clock action the fresh read passes, and the editor may take it with its newer entry
++ * version while the forms keep what was typed. A change made elsewhere to a field differs here; the editor then keeps the day it holds, so
++ * a later save still carries the old version, is refused and ends in "Reload day" (stale fields are never sent with a fresh version).
++ */
++function sameDayFields(held: DayView, fresh: DayView): boolean {
++  return (
++    held.category === fresh.category &&
++    held.category_source === fresh.category_source &&
++    held.leave_minutes === fresh.leave_minutes &&
++    held.leave_kind === fresh.leave_kind &&
++    held.wfh === fresh.wfh &&
++    (held.entry?.notes ?? '') === (fresh.entry?.notes ?? '')
++  );
++}
++
+ /** True while a modal dialog other than the editor itself is open (it owns focus and Escape). */
+ function otherModalOpen(editor: HTMLDialogElement): boolean {
+   return [...document.querySelectorAll('dialog:modal')].some((open) => open !== editor);
+@@ -66,6 +84,7 @@ export function DayEditor({
+   bottomSheet,
+   dockSide = 'right',
+   refresh = 0,
++  follow = 0,
+   periodPill,
+   onChanged,
+   onClose,
+@@ -85,6 +104,11 @@ export function DayEditor({
+   onDirtyChange?: (dirty: boolean) => void;
+   /** Raised by the page after it changed this day elsewhere (the label picker or a batch): the editor reloads. */
+   refresh?: number;
++  /**
++   * Raised by the page when the clock version changes (the page's own Check in or Check out): the drawer reads its day again and keeps its forms,
++   * so a note typed first stays. The phone's modal sheet leaves the page inert, so it never follows.
++   */
++  follow?: number;
+   /** The pill of the shown period as the period bar draws it (it can say "in progress"); the day's own relation when absent. */
+   periodPill?: PeriodPillKind;
+   /** Called after every successful write so the period behind the editor can refresh. */
+@@ -112,6 +136,9 @@ export function DayEditor({
+   const [deleting, setDeleting] = useState<string | null>(null);
+   const [deleteOpener, setDeleteOpener] = useState<HTMLElement | null>(null);
+   const [deleteBusy, setDeleteBusy] = useState(false);
++  /** The latest "a session dialog or the delete confirmation is open": a follow read that arrives meanwhile is dropped (see the follow effect). */
++  const nestedOpen = useRef(false);
++  nestedOpen.current = editing.kind !== 'none' || deleting !== null;
+   const [reason, setReason] = useState('');
+   const [notice, setNotice] = useState<string | null>(null);
+   const [staleNotice, setStaleNotice] = useState(false);
+@@ -123,6 +150,9 @@ export function DayEditor({
+   /** Remounts the forms after a reload, so they start from the reloaded day. */
+   const [generation, setGeneration] = useState(0);
+   const firstRefresh = useRef(refresh);
++  const firstFollow = useRef(follow);
++  /** Counts the days put on screen; a follow read that was overtaken by a newer day (a save, a reload, a later read) is dropped. */
++  const dayStamp = useRef(0);
+   /** The foot of the phone's bottom sheet, where the day fields form draws "Save day fields" (null until it is mounted, and off the phone). */
+   const [foot, setFoot] = useState<HTMLElement | null>(null);
+ 
+@@ -179,6 +209,7 @@ export function DayEditor({
+         request<DayView>('GET', `/days/${workDate}`),
+         request<{ policies: PolicyVersion[] }>('GET', '/policies'),
+       ]);
++      dayStamp.current += 1;
+       setDay(loaded);
+       setPolicies(policyList.policies);
+       setLoadError(null);
+@@ -211,6 +242,26 @@ export function DayEditor({
+     void load().then(() => setGeneration((value) => value + 1));
+   }, [refresh, load]);
+ 
++  // The page's own Check in or Check out changed the sessions of this day behind the drawer (the drawer is not modal): read the day again
++  // and take it as `saved()` does, without a new generation, so the forms keep what was typed. The page raises `follow` for every change of
++  // the clock version, so the read is also made when the tab comes back into view; it is therefore taken only when it cannot hide a change
++  // made elsewhere: the day's fields are as held (see sameDayFields) and no session dialog or delete confirmation is open on the day as
++  // held (their save carries the version they loaded, so an elsewhere change still ends in the stale notice). A failed read changes nothing.
++  useEffect(() => {
++    if (follow === firstFollow.current) return;
++    firstFollow.current = follow;
++    if (modal) return;
++    dayStamp.current += 1;
++    const stamp = dayStamp.current;
++    request<DayView>('GET', `/days/${workDate}`).then(
++      (fresh) => {
++        if (stamp !== dayStamp.current || nestedOpen.current) return;
++        setDay((held) => (held !== null && sameDayFields(held, fresh) ? fresh : held));
++      },
++      () => undefined,
++    );
++  }, [follow, modal, workDate, request]);
++
+   // R-07: a new session is typed in the current display zone unless the user picks another.
+   const zones = useMemo(() => inputZoneChoices(displayZone, reportingZone), [displayZone, reportingZone]);
+   const policy = policyOn(policies, workDate);
+@@ -227,6 +278,7 @@ export function DayEditor({
+ 
+   function saved(next: DayView, text: string) {
+     setUsedReason(reason);
++    dayStamp.current += 1;
+     setDay(next);
+     setEditing({ kind: 'none' });
+     setStaleNotice(false);
+diff --git a/src/client/TimesheetScreen.tsx b/src/client/TimesheetScreen.tsx
+index 4b6491ab..4dd820de 100644
+--- a/src/client/TimesheetScreen.tsx
++++ b/src/client/TimesheetScreen.tsx
+@@ -181,6 +181,8 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+   const [labelBusy, setLabelBusy] = useState<string | null>(null);
+   /** Raised after a label or batch commit changed the day open in the editor, so the editor reloads it. */
+   const [editorRefresh, setEditorRefresh] = useState(0);
++  /** Raised with every change of the clock version (the page's own Check in and Check out): the open editor reads its day again without restarting its forms. */
++  const [editorFollow, setEditorFollow] = useState(0);
+   /** The element that opened the day editor, and the date whose button gets focus back when it closes. */
+   const editorOpener = useRef<Element | null>(null);
+   const returnFocusTo = useRef<string | null>(null);
+@@ -302,13 +304,15 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+     return () => reportView(null);
+   }, [own, view, reportView]);
+ 
+-  // An action of the clock (check in, check out) reloads the period; the check-out confirmation shows as this page's saved notice.
++  // An action of the clock (check in, check out) reloads the period; the check-out confirmation shows as this page's saved notice. The drawer
++  // is not modal, so the open Day editor stays beside the action: it reads its day again (the forms and what was typed in them stay).
+   const seenVersion = useRef(clock?.version ?? 0);
+   const clockVersion = clock?.version;
+   useEffect(() => {
+     if (clockVersion === undefined || clockVersion === seenVersion.current) return;
+     seenVersion.current = clockVersion;
+     load();
++    setEditorFollow((value) => value + 1);
+   }, [clockVersion, load]);
+   const clockNotice = clock?.notice ?? null;
+   const seenNotice = useRef(clockNotice?.id ?? 0);
+@@ -826,6 +830,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+               bottomSheet={!desktop}
+               dockSide={beside ? 'right' : dockSide}
+               refresh={editorRefresh}
++              follow={editorFollow}
+               periodPill={dayPeriodPill(editDate, view.period, periods)}
+               onChanged={load}
+               onClose={requestClose}

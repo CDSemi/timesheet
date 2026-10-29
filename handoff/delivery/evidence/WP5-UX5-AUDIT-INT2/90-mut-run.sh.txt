@@ -1,0 +1,42 @@
+# Own mutants of FIX18's change in export-mut (a clean archive of the target with its own npm ci). Usage: bash mut-run.sh MX1 MX2 ...
+# Per mutant: apply, rebuild the client, run FIX18's tests and the two stale-version tests (desktop) and, on a survivor, the whole
+# day-editor spec (desktop); then the probe cases aimed at it; restore byte-equal. At the end the client is rebuilt and dist compared.
+. <task>/env.sh
+O=$T/out
+P=$T/logs/mut-progress.txt
+M=$T/export-mut
+cp $T/probes/zz-int2-follow.spec.ts $M/tests/e2e/zz-int2-follow.spec.ts
+pw() {
+  # pw <label> <args...>
+  label=$1; shift
+  mkdir -p $T/pw-mut-$label
+  cd $M
+  NODE_OPTIONS="--trace-deprecation" node.exe node_modules/@playwright/test/cli.js test "$@" --output="$TW\\pw-mut-$label" > $T/logs/mut-$label.txt 2>&1
+  code=$?
+  echo "exit=$code" >> $T/logs/mut-$label.txt
+  return $code
+}
+for id in "$@"; do
+  echo "== $id start $(date -u +%H:%M:%SZ)" >> $P
+  node.exe $T/mutate.mjs $M $T/export $id apply >> $O/50-mut-apply.txt 2>&1 || { echo "$id apply FAILED" >> $O/50-mut-apply.txt; continue; }
+  (cd $M && node.exe node_modules/vite/bin/vite.js build > $T/logs/mut-build-$id.txt 2>&1); echo "$id client build exit $?" >> $O/50-mut-exits.txt
+  pw $id-fix18 tests/e2e/day-editor.spec.ts --project=desktop --workers=4 -g "WP5-UX5-FIX18|a day changed elsewhere reports a stale version|a stale session version at save"
+  code=$?
+  echo "$id FIX18 tests and stale-version tests exit $code" >> $O/50-mut-exits.txt
+  if [ $code -eq 0 ]; then
+    pw $id-wholefile tests/e2e/day-editor.spec.ts tests/e2e/controls.spec.ts tests/e2e/focus-ring.spec.ts tests/e2e/keyboard-access.spec.ts tests/e2e/sharing.spec.ts tests/e2e/today.spec.ts --project=desktop --workers=6
+    echo "$id the six spec files that touch both the clock and the Day editor (desktop) exit $?" >> $O/50-mut-exits.txt
+  fi
+  pw $id-probe tests/e2e/zz-int2-follow.spec.ts --project=desktop --workers=2 -g "int2-A 1440|int2-B|int2-N|int2-O"
+  echo "$id probe cases A 1440, B, N, O exit $?" >> $O/50-mut-exits.txt
+  node.exe $T/mutate.mjs $M $T/export $id restore >> $O/50-mut-apply.txt 2>&1
+  echo "== $id end $(date -u +%H:%M:%SZ)" >> $P
+  bash $T/cens.sh mut-$id > $T/logs/cens-mut-$id.log 2>&1
+done
+(cd $M && node.exe node_modules/vite/bin/vite.js build > $T/logs/mut-build-restored.txt 2>&1); echo "restored client build exit $?" >> $O/50-mut-exits.txt
+rm -f $M/tests/e2e/zz-int2-follow.spec.ts
+cd $M && find dist -type f | LC_ALL=C sort | while IFS= read -r f; do printf '%s %s\n' "$f" "$(sha256sum "$f" | cut -d' ' -f1)"; done > $O/51-dist-mut-restored.txt
+cmp $O/41-dist-target.txt $O/51-dist-mut-restored.txt > $O/51-mut-dist-restored-vs-target.txt 2>&1; echo "restored dist vs target dist cmp exit $?" >> $O/51-mut-dist-restored-vs-target.txt
+diff -r -q $T/export/src $M/src > $O/51-mut-src-restored-vs-export.txt 2>&1; echo "src tree diff exit $?" >> $O/51-mut-src-restored-vs-export.txt
+diff -r -q $T/export/tests $M/tests > $O/51-mut-tests-restored-vs-export.txt 2>&1; echo "tests tree diff exit $?" >> $O/51-mut-tests-restored-vs-export.txt
+echo "mut-run done $(date -u +%H:%M:%SZ)" >> $P

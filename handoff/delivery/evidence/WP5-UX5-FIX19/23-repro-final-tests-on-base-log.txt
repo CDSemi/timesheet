@@ -1,0 +1,130 @@
+== repro-final: real start 2026-10-29T14:29:38Z, simulated start real, AB8_SHIFT_MS=0, export export-base
+process clock 2026-10-29T14:29:38.834Z (Date.now 1793284178843); America/Los_Angeles Thu, 2026-10-29, 07:29; shift ms 0; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts --project=desktop --workers=1 -g FIX19 --output=<task>/pw-repro-final
+
+Running 11 tests using 1 worker
+
+  x   1 [desktop] › tests\e2e\day-editor.spec.ts:2725:3 › WP5-UX5-FIX19 (F-UX5I2-1): a session write in the open Day editor never lets "Save day fields" overwrite a day field changed elsewhere › G1: after a session is saved with nothing typed in the fields, the form shows the day fields changed on another device and "Save day fields" keeps them (8.3s)
+  x   2 [desktop] › tests\e2e\day-editor.spec.ts:2754:3 › WP5-UX5-FIX19 (F-UX5I2-1): a session write in the open Day editor never lets "Save day fields" overwrite a day field changed elsewhere › G2: after a session is deleted with nothing typed in the fields, the form shows the day fields changed on another device and "Save day fields" keeps them (8.2s)
+  x   3 [desktop] › tests\e2e\day-editor.spec.ts:2785:3 › WP5-UX5-FIX19 (F-UX5I2-1): a session write in the open Day editor never lets "Save day fields" overwrite a day field changed elsewhere › G3: a note typed before a session is saved stays; "Save day fields" is then refused, nothing is overwritten, and "Reload day" shows the change made on another device (8.4s)
+  ok  4 [desktop] › tests\e2e\day-editor.spec.ts:2817:3 › WP5-UX5-FIX19 (F-UX5I2-1): a session write in the open Day editor never lets "Save day fields" overwrite a day field changed elsewhere › G4: with no change made elsewhere, a note typed before a session is saved stays and "Save day fields" saves it (1.4s)
+  ok  5 [desktop] › tests\e2e\day-editor.spec.ts:2868:5 › WP5-UX5-FIX19 (F-UX5I2-1): a session write in the open Day editor never lets "Save day fields" overwrite a day field changed elsewhere › B: the notes changed on another device, then the tab comes back into view: the save is refused and the value is kept (1.0s)
+  ok  6 [desktop] › tests\e2e\day-editor.spec.ts:2868:5 › WP5-UX5-FIX19 (F-UX5I2-1): a session write in the open Day editor never lets "Save day fields" overwrite a day field changed elsewhere › B: the WFH changed on another device, then the tab comes back into view: the save is refused and the value is kept (1.0s)
+  ok  7 [desktop] › tests\e2e\day-editor.spec.ts:2868:5 › WP5-UX5-FIX19 (F-UX5I2-1): a session write in the open Day editor never lets "Save day fields" overwrite a day field changed elsewhere › B: the partial leave minutes changed on another device, then the tab comes back into view: the save is refused and the value is kept (1.0s)
+  ok  8 [desktop] › tests\e2e\day-editor.spec.ts:2868:5 › WP5-UX5-FIX19 (F-UX5I2-1): a session write in the open Day editor never lets "Save day fields" overwrite a day field changed elsewhere › B: the partial leave kind changed on another device, then the tab comes back into view: the save is refused and the value is kept (1.0s)
+  ok  9 [desktop] › tests\e2e\day-editor.spec.ts:2868:5 › WP5-UX5-FIX19 (F-UX5I2-1): a session write in the open Day editor never lets "Save day fields" overwrite a day field changed elsewhere › B: the category changed on another device, then the tab comes back into view: the save is refused and the value is kept (1.0s)
+  ok 10 [desktop] › tests\e2e\day-editor.spec.ts:2895:3 › WP5-UX5-FIX19 (F-UX5I2-1): a session write in the open Day editor never lets "Save day fields" overwrite a day field changed elsewhere › N: a session changed on another device behind an open delete confirmation: after the tab comes back, "Delete session" is refused (1.0s)
+  ok 11 [desktop] › tests\e2e\day-editor.spec.ts:2929:3 › WP5-UX5-FIX19 (F-UX5I2-1): a session write in the open Day editor never lets "Save day fields" overwrite a day field changed elsewhere › O: a read of the day that answers after the editor's own save is dropped; the next "Save day fields" still succeeds (928ms)
+
+
+  1) [desktop] › tests\e2e\day-editor.spec.ts:2725:3 › WP5-UX5-FIX19 (F-UX5I2-1): a session write in the open Day editor never lets "Save day fields" overwrite a day field changed elsewhere › G1: after a session is saved with nothing typed in the fields, the form shows the day fields changed on another device and "Save day fields" keeps them 
+
+    Error: expect(locator).toHaveValue(expected) failed
+
+    Locator:  getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'Day fields' }).getByLabel('Notes')
+    Expected: "Synthetic note saved on another device"
+    Received: "Synthetic note saved before the editor opened"
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveValue" getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'Day fields' }).getByLabel('Notes') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'Day fields' }).getByLabel('Notes')
+        18 × locator resolved to <textarea rows="2" maxlength="2000">Synthetic note saved before the editor opened</textarea>
+           - unexpected value "Synthetic note saved before the editor opened"
+
+
+      2741 |     await saveSessionEnd(page, editor);
+      2742 |     // Nothing was typed: the day fields form restarts from the answer, which carries what the other device saved.
+    > 2743 |     await expect(notes).toHaveValue(ELSEWHERE);
+           |                         ^
+      2744 |     await expect(wfh).toBeChecked();
+      2745 |
+      2746 |     await editor.getByRole('button', { name: 'Save day fields' }).click();
+        at D:\.claude-tmp\timesheet\WP5-UX5-FIX19\export-base\tests\e2e\day-editor.spec.ts:2743:25
+
+    Error Context: ..\pw-repro-final\day-editor-WP5-UX5-FIX19-F-d7f7b--Save-day-fields-keeps-them-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-repro-final\day-editor-WP5-UX5-FIX19-F-d7f7b--Save-day-fields-keeps-them-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-repro-final\day-editor-WP5-UX5-FIX19-F-d7f7b--Save-day-fields-keeps-them-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [desktop] › tests\e2e\day-editor.spec.ts:2754:3 › WP5-UX5-FIX19 (F-UX5I2-1): a session write in the open Day editor never lets "Save day fields" overwrite a day field changed elsewhere › G2: after a session is deleted with nothing typed in the fields, the form shows the day fields changed on another device and "Save day fields" keeps them 
+
+    Error: expect(locator).toHaveValue(expected) failed
+
+    Locator:  getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'Day fields' }).getByLabel('Notes')
+    Expected: "Synthetic note saved on another device"
+    Received: "Synthetic note saved before the editor opened"
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveValue" getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'Day fields' }).getByLabel('Notes') with timeout 7000ms
+      - waiting for getByRole('dialog', { name: /Day editor/ }).getByRole('form', { name: 'Day fields' }).getByLabel('Notes')
+        18 × locator resolved to <textarea rows="2" maxlength="2000">Synthetic note saved before the editor opened</textarea>
+           - unexpected value "Synthetic note saved before the editor opened"
+
+
+      2772 |     await confirm.getByRole('button', { name: 'Delete session' }).click();
+      2773 |     await expect(editor.getByRole('status').filter({ hasText: 'Session deleted.' })).toBeVisible();
+    > 2774 |     await expect(notes).toHaveValue(ELSEWHERE);
+           |                         ^
+      2775 |     await expect(wfh).toBeChecked();
+      2776 |
+      2777 |     await editor.getByRole('button', { name: 'Save day fields' }).click();
+        at D:\.claude-tmp\timesheet\WP5-UX5-FIX19\export-base\tests\e2e\day-editor.spec.ts:2774:25
+
+    Error Context: ..\pw-repro-final\day-editor-WP5-UX5-FIX19-F-9efab--Save-day-fields-keeps-them-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-repro-final\day-editor-WP5-UX5-FIX19-F-9efab--Save-day-fields-keeps-them-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-repro-final\day-editor-WP5-UX5-FIX19-F-9efab--Save-day-fields-keeps-them-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [desktop] › tests\e2e\day-editor.spec.ts:2785:3 › WP5-UX5-FIX19 (F-UX5I2-1): a session write in the open Day editor never lets "Save day fields" overwrite a day field changed elsewhere › G3: a note typed before a session is saved stays; "Save day fields" is then refused, nothing is overwritten, and "Reload day" shows the change made on another device 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: /Day editor/ }).getByRole('alert').filter({ hasText: 'This day changed since it was loaded' })
+    Expected: visible
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: /Day editor/ }).getByRole('alert').filter({ hasText: 'This day changed since it was loaded' }) with timeout 7000ms
+      - waiting for getByRole('dialog', { name: /Day editor/ }).getByRole('alert').filter({ hasText: 'This day changed since it was loaded' })
+
+
+      2803 |
+      2804 |     await editor.getByRole('button', { name: 'Save day fields' }).click();
+    > 2805 |     await expect(staleOf(editor)).toBeVisible();
+           |                                   ^
+      2806 |     await expect(staleOf(editor)).toContainText('Nothing was saved');
+      2807 |     const server = await seed.dayView(date);
+      2808 |     expect(server.entry?.notes, 'the other device\'s note is not overwritten').toBe(ELSEWHERE);
+        at D:\.claude-tmp\timesheet\WP5-UX5-FIX19\export-base\tests\e2e\day-editor.spec.ts:2805:35
+
+    Error Context: ..\pw-repro-final\day-editor-WP5-UX5-FIX19-F-e3e81-ange-made-on-another-device-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-repro-final\day-editor-WP5-UX5-FIX19-F-e3e81-ange-made-on-another-device-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-repro-final\day-editor-WP5-UX5-FIX19-F-e3e81-ange-made-on-another-device-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:2725:3 › WP5-UX5-FIX19 (F-UX5I2-1): a session write in the open Day editor never lets "Save day fields" overwrite a day field changed elsewhere › G1: after a session is saved with nothing typed in the fields, the form shows the day fields changed on another device and "Save day fields" keeps them 
+    [desktop] › tests\e2e\day-editor.spec.ts:2754:3 › WP5-UX5-FIX19 (F-UX5I2-1): a session write in the open Day editor never lets "Save day fields" overwrite a day field changed elsewhere › G2: after a session is deleted with nothing typed in the fields, the form shows the day fields changed on another device and "Save day fields" keeps them 
+    [desktop] › tests\e2e\day-editor.spec.ts:2785:3 › WP5-UX5-FIX19 (F-UX5I2-1): a session write in the open Day editor never lets "Save day fields" overwrite a day field changed elsewhere › G3: a note typed before a session is saved stays; "Save day fields" is then refused, nothing is overwritten, and "Reload day" shows the change made on another device 
+  8 passed (42.1s)
+exit=1
+process clock 2026-10-29T14:30:21.343Z (Date.now 1793284221353); America/Los_Angeles Thu, 2026-10-29, 07:30; shift ms 0; instanceof true
+== repro-final real end 2026-10-29T14:30:21Z

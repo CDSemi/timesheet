@@ -1,0 +1,18 @@
+# Second pass of the heavy runs in export-proof, one after another, with a census before and after each: npm test once, the real-clock FULL e2e (desktop, then
+# mobile), then the seven-file run at 2026-10-27T06:58:30Z through the FIX10 clock wrapper (--workers=6, both projects).
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX19/env.sh.txt
+SEVEN="tests/e2e/day-editor.spec.ts tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/review.spec.ts tests/e2e/submission.spec.ts tests/e2e/settings-transfer.spec.ts tests/e2e/profile.spec.ts"
+bash $E/census.sh.txt pre-npmtest-p2
+cd $T/export-proof
+npmx test > $E/75-npmtest.txt 2>&1; echo "npm test exit=$?" > $E/76-heavy-exits.txt
+bash $E/census.sh.txt post-npmtest-p2
+bash $E/census.sh.txt pre-full-desktop-p2
+bash $E/run-pw.sh.txt full-desktop-p2 export-proof real --project=desktop > $E/77-full-desktop-log.txt 2>&1; echo "full desktop done" >> $E/76-heavy-exits.txt
+bash $E/census.sh.txt post-full-desktop-p2
+bash $E/run-pw.sh.txt full-mobile-p2 export-proof real --project=mobile > $E/78-full-mobile-log.txt 2>&1; echo "full mobile done" >> $E/76-heavy-exits.txt
+bash $E/census.sh.txt post-full-mobile-p2
+bash $E/census.sh.txt pre-seven-1026-p2
+bash $E/run-pw.sh.txt seven-1026-p2 export-proof 2026-10-27T06:58:30Z $SEVEN --workers=6 > $E/79-seven-1026-log.txt 2>&1; echo "seven 1026 done" >> $E/76-heavy-exits.txt
+bash $E/census.sh.txt post-seven-1026-p2
+node.exe $T/counts.mjs $E/77-full-desktop-log.txt $E/78-full-mobile-log.txt $E/79-seven-1026-log.txt > $E/80-counts.txt 2>&1
+echo heavy-done >> $E/76-heavy-exits.txt

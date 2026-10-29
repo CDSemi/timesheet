@@ -1,0 +1,48 @@
+
+Running 7 tests using 1 worker
+
+(node:47056) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [desktop] › tests\e2e\zz-int2-follow.spec.ts:127:3 › int2-A 1440: a day with saved fields; the typed note survives the page's Check in and Check out, focus stays, the guard still asks (1.6s)
+  ok 2 [desktop] › tests\e2e\zz-int2-follow.spec.ts:227:3 › int2-B notes only: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten (949ms)
+  x  3 [desktop] › tests\e2e\zz-int2-follow.spec.ts:227:3 › int2-B WFH only: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten (903ms)
+(node:87392) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 4 [desktop] › tests\e2e\zz-int2-follow.spec.ts:227:3 › int2-B partial leave only: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten (1.2s)
+  ok 5 [desktop] › tests\e2e\zz-int2-follow.spec.ts:227:3 › int2-B category only: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten (989ms)
+  ok 6 [desktop] › tests\e2e\zz-int2-follow.spec.ts:627:1 › int2-N delete confirmation open: a session changed elsewhere, the tab returns, then "Delete session"; the delete is refused (929ms)
+  ok 7 [desktop] › tests\e2e\zz-int2-follow.spec.ts:661:1 › int2-O overtaken read: the follow read answers after the editor's own save; a second save still succeeds (2.9s)
+
+
+  1) [desktop] › tests\e2e\zz-int2-follow.spec.ts:227:3 › int2-B WFH only: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten 
+
+    Error: the save is refused
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      255 |       const kept = (fieldCase.holds as (d: unknown) => boolean)(server);
+      256 |       log(tag, `Save day fields: ${refused ? 'REFUSED (stale)' : 'ACCEPTED'}; the elsewhere value ${kept ? 'kept' : 'OVERWRITTEN'}; server notes "${server.entry?.notes}" wfh ${server.wfh} leave ${server.leave_minutes}/${server.leave_kind} category ${server.category}`);
+    > 257 |       expect(refused, 'the save is refused').toBe(true);
+          |                                              ^
+      258 |       expect(kept, 'the value written elsewhere is kept').toBe(true);
+      259 |       await reloadDay(page, editor, date);
+      260 |       log(tag, `Reload day: note "${await notes.inputValue()}" wfh ${await wfh.isChecked()} category ${await fieldsOf(editor).category.inputValue()}`);
+        at <task>\export-mut\tests\e2e\zz-int2-follow.spec.ts:257:46
+
+    Error Context: ..\pw-mut-MX3-probe\zz-int2-follow-int2-B-WFH--cce45--and-nothing-is-overwritten-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-MX3-probe\zz-int2-follow-int2-B-WFH--cce45--and-nothing-is-overwritten-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-MX3-probe\zz-int2-follow-int2-B-WFH--cce45--and-nothing-is-overwritten-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\zz-int2-follow.spec.ts:227:3 › int2-B WFH only: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten 
+  6 passed (14.0s)
+exit=1

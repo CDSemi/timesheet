@@ -1,0 +1,26 @@
+# Start state: HEAD, status outside handoff/, the digest (ls-tree form), a census, head.tar, the base export with its own npm ci and build.
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX19/env.sh.txt
+cd $REPO
+{
+  echo "start (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "HEAD: $(git rev-parse HEAD)"
+  echo "origin/main: $(git rev-parse origin/main)"
+  echo "branch: $(git branch --show-current)"
+  echo "expected base: $BASE"
+  echo "node: $(node.exe --version)"
+  echo "npm: $(npmx --version)"
+  echo "git status --short outside handoff/ (lines follow, then the count):"
+  git status --short -- . ':!handoff'
+  echo "status lines outside handoff/: $(git status --short -- . ':!handoff' | wc -l)"
+  git ls-tree -r --format="%(path) %(objectname)" HEAD | grep -v '^handoff/' | LC_ALL=C sort > $T/lstree-head.txt
+  echo "digest, ls-tree form of HEAD: $(sha256sum $T/lstree-head.txt | cut -d' ' -f1) ($(wc -l < $T/lstree-head.txt) files)"
+  echo "git ls-files -z bytes (tracked + untracked, Node default maxBuffer is 1048576): $(git ls-files --cached --others --exclude-standard -z | wc -c)"
+} > $E/00-start-state.txt 2>&1
+bash $E/census.sh.txt entry
+git archive HEAD -o $T/head.tar
+mkdir -p $T/export-base
+tar -xf $T/head.tar -C $T/export-base
+cd $T/export-base
+npmx ci > $E/02-ci-base.txt 2>&1; echo "export-base ci=$?" > $E/02-base-exits.txt
+npmx run build > $E/02-build-base.txt 2>&1; echo "export-base build=$?" >> $E/02-base-exits.txt
+echo "start-done" >> $E/02-base-exits.txt

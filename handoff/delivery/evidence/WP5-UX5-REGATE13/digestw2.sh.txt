@@ -1,0 +1,12 @@
+# Usage: bash digestw.sh <count> - export-form digest repeated, private temp files (waiting aid and drift check); appends to logs/digestw2-series.txt
+. <task>/env.sh
+W=$T/tmp/dgw2
+mkdir -p $W
+cd $T/export
+for n in $(seq 1 $1); do
+  find . -type f -not -path './handoff/*' -not -path './node_modules/*' -not -path './dist/*' -not -path './.git/*' -not -path './test-results/*' -not -path './playwright-report/*' | sed 's|^\./||' | LC_ALL=C sort > $W/files.txt
+  rm -f $W/hashes.txt
+  while IFS= read -r f; do printf '%s %s\n' "$f" "$(git hash-object --no-filters -- "$f")" >> $W/hashes.txt; done < $W/files.txt
+  LC_ALL=C sort $W/hashes.txt > $W/sorted.txt
+  echo "$(date -u +%H:%M:%SZ) export form: $(sha256sum $W/sorted.txt | cut -d' ' -f1) lines $(wc -l < $W/sorted.txt)" >> $T/logs/digestw2-series.txt
+done

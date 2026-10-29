@@ -1,0 +1,9 @@
+# Normalises the shell-written evidence text files in place: LF line ends (the PowerShell census wrote CRLF), no ANSI colour codes (npm and vite output),
+# the user profile name masked as <user>, no trailing blank lines, exactly one newline at the end. Empty files are left alone. Scripts are not touched.
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX19/env.sh.txt
+USERNAME_MASK=$(basename "$(cygpath -u "$USERPROFILE")")
+for f in $E/*.txt; do
+  case "$f" in *.sh.txt|*.mjs.txt|*.ts.txt) continue ;; esac
+  [ -s "$f" ] || continue
+  awk -v u="$USERNAME_MASK" '{ sub(/\r$/, ""); gsub(/\033\[[0-9;]*m/, ""); gsub(u, "<user>"); a[NR] = $0; if ($0 != "") last = NR } END { for (i = 1; i <= last; i++) print a[i] }' "$f" > "$f.norm" && mv "$f.norm" "$f"
+done

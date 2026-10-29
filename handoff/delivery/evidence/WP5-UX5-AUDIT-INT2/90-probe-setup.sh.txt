@@ -1,0 +1,30 @@
+# Probe exports: npm ci and build in export-probe (target), export-prev-probe (a5cbc91) and export-mut (target); dist comparison.
+. <task>/env.sh
+O=$T/out
+P=$T/logs/probe-setup-progress.txt
+for d in export-probe export-prev-probe export-mut; do
+  cd $T/$d
+  npm ci > $T/logs/ci-$d.txt 2>&1; echo "$d npm ci exit $?" >> $O/40-probe-setup-exits.txt
+  npm run build > $T/logs/build-$d.txt 2>&1; echo "$d build exit $?" >> $O/40-probe-setup-exits.txt
+  echo "$d done $(date -u +%H:%M:%SZ)" >> $P
+done
+# dist identity: the target (clean export built by chain-main) against a5cbc91 (export-prev-probe), file by file
+hashdist() {
+  cd $T/$1
+  find dist -type f | LC_ALL=C sort | while IFS= read -r f; do printf '%s %s\n' "$f" "$(sha256sum "$f" | cut -d' ' -f1)"; done > $O/41-dist-$2.txt
+}
+hashdist export target
+hashdist export-prev-probe prev
+hashdist export-probe probe
+hashdist export-mut mut
+{
+  echo "files: target $(wc -l < $O/41-dist-target.txt), a5cbc91 $(wc -l < $O/41-dist-prev.txt), export-probe $(wc -l < $O/41-dist-probe.txt), export-mut $(wc -l < $O/41-dist-mut.txt)"
+  echo "dist/server and dist/domain, target vs a5cbc91:"
+  diff <(grep -E '^dist/(server|domain)/' $O/41-dist-prev.txt) <(grep -E '^dist/(server|domain)/' $O/41-dist-target.txt) > $O/41-diff-server-domain.txt; echo "  diff exit $? ($(wc -l < $O/41-diff-server-domain.txt) lines; $(grep -cE '^dist/(server|domain)/' $O/41-dist-target.txt) files)"
+  echo "dist/client, target vs a5cbc91 (names that differ):"
+  diff <(grep '^dist/client/' $O/41-dist-prev.txt) <(grep '^dist/client/' $O/41-dist-target.txt) | grep '^[<>]' | sed 's/ [0-9a-f]\{64\}$//'
+  echo "export-probe and export-mut builds equal to the target build:"
+  cmp $O/41-dist-target.txt $O/41-dist-probe.txt && echo "  export-probe: identical"
+  cmp $O/41-dist-target.txt $O/41-dist-mut.txt && echo "  export-mut: identical"
+} > $O/41-dist-compare.txt 2>&1
+echo "probe-setup done $(date -u +%H:%M:%SZ)" >> $P

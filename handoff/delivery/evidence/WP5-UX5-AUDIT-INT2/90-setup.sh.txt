@@ -1,0 +1,31 @@
+# Usage: bash setup.sh  (read-only on the repository; writes only into the task folder)
+. <task>/env.sh
+mkdir -p $T/out $T/logs $T/tmp $T/data $T/export $T/export-prev
+cd $REPO
+{
+  echo "start (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "HEAD: $(git rev-parse HEAD)"
+  echo "origin/main: $(git rev-parse origin/main)"
+  echo "branch: $(git branch --show-current)"
+  echo "reviewed_commit: $TARGET"
+  echo "node: $(node.exe --version)"
+  echo "npm: $(npm --version)"
+} > $T/out/00-head-before.txt 2>&1
+git status --short -- . ':!handoff' > $T/out/00-nonhandoff-status-before.txt 2>&1
+echo "lines: $(wc -l < $T/out/00-nonhandoff-status-before.txt)" >> $T/out/00-nonhandoff-status-before.txt
+git diff --name-status $PREV..$TARGET -- . ':!handoff' > $T/out/20-namestatus-prev-target.txt 2>&1
+git diff --stat $PREV..$TARGET -- . ':!handoff' > $T/out/20-diffstat-prev-target.txt 2>&1
+git diff $PREV..$TARGET -- src > $T/out/22-fix18-src-diff.txt 2>&1
+git diff $PREV..$TARGET -- tests > $T/out/22-fix18-tests-diff.txt 2>&1
+git diff $PREV..$TARGET -- docs > $T/out/22-fix18-docs-diff.txt 2>&1
+git diff --name-status $ACCEPTED..$TARGET -- . ':!handoff' > $T/out/20-namestatus-accepted-target.txt 2>&1
+echo "lines: $(wc -l < $T/out/20-namestatus-accepted-target.txt)" >> $T/out/20-namestatus-accepted-target.txt
+git diff --name-status $TARGET..HEAD -- . ':!handoff' > $T/out/20-namestatus-target-head.txt 2>&1
+echo "lines: $(wc -l < $T/out/20-namestatus-target-head.txt)" >> $T/out/20-namestatus-target-head.txt
+git archive $TARGET | tar -x -C $T/export
+git archive $PREV | tar -x -C $T/export-prev
+GIT_CONFIG_VALUE_0=$T/clone git clone --quiet --shared --no-checkout $REPO $T/clone
+cd $T/clone && GIT_CONFIG_VALUE_0=$T/clone git checkout --quiet $TARGET && echo "clone at $(GIT_CONFIG_VALUE_0=$T/clone git rev-parse HEAD)"
+cd $REPO
+echo "export top-level entries: $(ls $T/export | wc -l)"
+cat $T/out/00-head-before.txt $T/out/20-namestatus-prev-target.txt $T/out/00-nonhandoff-status-before.txt $T/out/20-namestatus-target-head.txt

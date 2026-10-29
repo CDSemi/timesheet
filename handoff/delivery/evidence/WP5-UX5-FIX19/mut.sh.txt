@@ -1,0 +1,17 @@
+# Usage: bash mut.sh <label> <file relative to the export> <from> <to> <playwright -g pattern>
+# In the scratch export export-fix (the mutation lab): apply one mutation, rebuild the client, run the matching desktop tests once (real clock, one
+# worker), then restore the file from the working tree and compare it byte for byte.
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX19/env.sh.txt
+L=$1; F=$2; FROM=$3; TO=$4; G=$5
+cd $T/export-fix
+{
+  node.exe $T/mutate.mjs "$F" "$FROM" "$TO"
+  echo "mutation applied: $?"
+} > $E/50-mut-$L-log.txt 2>&1
+npmx run build:client > $T/mut-build-$L.txt 2>&1
+echo "$L client build exit=$?" >> $E/50-mut-$L-log.txt
+bash $E/census.sh.txt pre-mut-$L
+bash $E/run-pw.sh.txt mut-$L export-fix real tests/e2e/day-editor.spec.ts --project=desktop --workers=1 -g "$G" >> $E/50-mut-$L-log.txt 2>&1
+cp $REPO/$F $T/export-fix/$F
+if cmp $REPO/$F $T/export-fix/$F; then echo "$L restored byte-equal: $F" >> $E/50-mut-$L-log.txt; else echo "$L RESTORE DIFFERS: $F" >> $E/50-mut-$L-log.txt; fi
+echo "$L done" >> $E/50-mut-$L-log.txt

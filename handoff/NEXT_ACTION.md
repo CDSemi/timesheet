@@ -162,8 +162,17 @@ Current route:
      is refused on save and has to be typed again. Everything else passed.
    - WP5-UX5-FIX18 fixed it: the editor now follows, and keeps what was typed. Digest
      6937d79c.
-   - Running now: WP5-UX5-FIX18-FREEZE commits and pushes it.
-   - Then a regate (WP5-UX5-REGATE13), the integration recheck
+   - It is frozen in d96df5d (digest 6937d79c) and pushed.
+   - WP5-UX5-REGATE13, a regate on d96df5d, passed.
+   - The integration recheck WP5-UX5-AUDIT-INT2 closed that gap and found two more.
+     - Medium, and older than these rounds: saving or deleting a session in the open Day
+       editor can let a later "Save day fields" silently overwrite a change made on another
+       device.
+     - Low: the release digest command fails.
+   - WP5-UX5-FIX19 fixed both (digest 67aa715c).
+   - Running now: WP5-UX5-FIX19-FREEZE commits and pushes the fix.
+   - Then a regate (WP5-UX5-REGATE14), the integration recheck
+     (WP5-UX5-AUDIT-INT3), the integration recheck
      (WP5-UX5-AUDIT-INT2), a fresh
      area-B recheck (WP5-UX5-RECHECK-B3), fresh rechecks of the two fixed findings, the Day editor
      change and the theme change, the integration audit, ACCEPT-DOCS and the WP5 re-accept.

@@ -1,0 +1,22 @@
+# Third mutation round: the first round's session-write and follow-read mutants (MA, MB, ME, MF) again, against the final tests (each restored byte-equal; see mut.sh.txt).
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX19/env.sh.txt
+G='FIX18|FIX19'
+F=src/client/DayEditor.tsx
+cp $REPO/tests/e2e/day-editor.spec.ts $T/export-fix/tests/e2e/day-editor.spec.ts
+M() { bash $E/mut.sh.txt "$@"; }
+# PA: a session write's answer is taken without the sameDayFields judgement (every branch takes the answer, the form is never restarted).
+M PA "$F" 'if (held === null || sameDayFields(held, next)) {' 'if (true) {' "$G"
+# PB: the unsaved-edit branch removed (the form always restarts when the fields differ).
+M PB "$F" '} else if (fieldsDirtyRef.current) {' '} else if (false) {' "$G"
+# PE: the open delete confirmation no longer holds the follow read off.
+M PE "$F" "nestedOpen.current = editing.kind !== 'none' || deleting !== null;" "nestedOpen.current = editing.kind !== 'none';" "$G"
+# PF: an overtaken follow read is no longer dropped.
+M PF "$F" 'if (stamp !== dayStamp.current || nestedOpen.current) return;' 'if (nestedOpen.current) return;' "$G"
+# PS: saved() no longer marks a newer day (the auditor's MX7).
+M PS "$F" '    setUsedReason(reason);
+    dayStamp.current += 1;' '    setUsedReason(reason);' "$G"
+# Rebuild the unmutated client, so export-fix ends as the working tree.
+cd $T/export-fix
+npmx run build:client > $T/mut-build-clean3.txt 2>&1
+echo "export-fix client rebuilt clean: exit=$?" > $E/50-mut-clean3-log.txt
+echo "muts3-done" > $T/muts3.done

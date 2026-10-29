@@ -1,0 +1,20 @@
+# In the repository (no npm ci), one after another: lint, typecheck, build, the dist/ comparison against the build of d96df5d (export-base) and against the
+# build of export-final, then verify (typecheck, lint, test, build, smoke on SMOKE_PORT), npm run digest, then git diff --check.
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX19/env.sh.txt
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+cd $REPO
+npmx run lint > $E/60-repo-lint.txt 2>&1; echo "lint=$?" > $E/60-repo-exits.txt
+npmx run typecheck > $E/60-repo-typecheck.txt 2>&1; echo "typecheck=$?" >> $E/60-repo-exits.txt
+npmx run build > $E/60-repo-build.txt 2>&1; echo "build=$?" >> $E/60-repo-exits.txt
+cd $T
+diff -rq export-base/dist/server $REPO/dist/server > $E/61-dist-server-vs-base.txt 2>&1; echo "dist/server repo vs d96df5d build: diff exit=$? (0 = identical)" >> $E/60-repo-exits.txt
+diff -rq export-base/dist/domain $REPO/dist/domain > $E/61-dist-domain-vs-base.txt 2>&1; echo "dist/domain repo vs d96df5d build: diff exit=$? (0 = identical)" >> $E/60-repo-exits.txt
+diff -rq export-base/dist/client $REPO/dist/client > $E/61-dist-client-vs-base-raw.txt 2>&1; echo "dist/client repo vs d96df5d build: diff exit=$? (1 = differs, listed in the file)" >> $E/60-repo-exits.txt
+node.exe $T/normcmp.mjs "$(cygpath -w $T/export-base/dist/client)" "$(cygpath -w $REPO/dist/client)" > $E/61-dist-client-normcmp.txt 2>&1; echo "dist/client normcmp exit=$?" >> $E/60-repo-exits.txt
+diff -rq export-final/dist $REPO/dist > $E/62-dist-repo-vs-export-final.txt 2>&1; echo "repo dist vs export-final dist: diff exit=$? (0 = identical)" >> $E/60-repo-exits.txt
+cd $REPO
+npmx run verify > $E/63-repo-verify.txt 2>&1; echo "verify=$?" >> $E/60-repo-exits.txt
+cd $T && diff -rq export-final/dist $REPO/dist > $E/64-dist-after-verify.txt 2>&1; echo "repo dist after verify vs export-final dist: diff exit=$? (0 = identical)" >> $E/60-repo-exits.txt
+cd $REPO
+git diff --check -- . ':!handoff' > $E/65-git-diff-check.txt 2>&1; echo "git diff --check=$?" >> $E/60-repo-exits.txt
+echo repo-checks-done >> $E/60-repo-exits.txt

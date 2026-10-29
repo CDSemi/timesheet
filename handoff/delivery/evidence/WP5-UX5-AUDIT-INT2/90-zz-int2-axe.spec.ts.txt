@@ -1,0 +1,122 @@
+// WP5-UX5-AUDIT-INT2 probe (the auditor's own, never part of the repository): axe-core 4.14.0 from the task folder (no dependency added)
+// on the Timesheet with the Day editor open on today, a typed note in it: before a Check in, after the page's Check in (the drawer has
+// followed: Running card) and after the Check out (ended card), light and dark, at 1440 (beside) and 1280 (floating); on the phone (390)
+// the modal sheet before, and reopened after, a Check in. Tags WCAG 2.0 to 2.2 A and AA. Synthetic data only.
+import { appendFileSync, readFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
+
+const AXE_PATH = process.env.AXE_PATH ?? '';
+const OUT = process.env.AXE_OUT ?? '';
+const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+let axeSource = '';
+const note = (line: string) => {
+  if (OUT !== '') appendFileSync(OUT, `${line}\n`);
+};
+const frames = (page: Page) => page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+
+async function scan(page: Page, label: string): Promise<number> {
+  if (axeSource === '') axeSource = readFileSync(AXE_PATH, 'utf8');
+  // Let the colour transitions settle (reduced motion is emulated, so this is a frame or two).
+  await frames(page);
+  await page.waitForTimeout(400);
+  if (!(await page.evaluate<boolean>("typeof window.axe !== 'undefined'"))) await page.evaluate(axeSource);
+  const result = await page.evaluate<{ version: string; violations: Array<{ id: string; impact: string | null; nodes: string[] }>; incomplete: string[] }, string[]>(async (tags) => {
+    const axe = (window as unknown as { axe: { run: (c: unknown, o: unknown) => Promise<unknown>; version: string } }).axe;
+    const r = (await axe.run(document, { runOnly: { type: 'tag', values: tags }, resultTypes: ['violations', 'incomplete'] })) as {
+      violations: Array<{ id: string; impact: string | null; nodes: Array<{ target: unknown }> }>;
+      incomplete: Array<{ id: string }>;
+    };
+    return { version: axe.version, violations: r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.map((n) => JSON.stringify(n.target)) })), incomplete: [...new Set(r.incomplete.map((i) => i.id))] };
+  }, TAGS);
+  note(`${label}: axe ${result.version} violations=${result.violations.length} [${result.violations.map((v) => `${v.id}(${v.impact}) ${v.nodes.join(' ')}`).join('; ')}] incomplete=[${result.incomplete.join(',')}]`);
+  return result.violations.length;
+}
+
+async function openToday(page: Page, todayLocal: string) {
+  if ((await page.locator(`[data-day="${todayLocal}"]`).count()) === 0) {
+    await page.locator('.period-bar').getByRole('button', { name: 'Today', exact: true }).click();
+    await expect(page.locator(`[data-day="${todayLocal}"]`)).toHaveCount(1);
+  }
+  await page.getByLabel('Open a day').fill(todayLocal);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('heading', { name: 'Times', exact: true })).toBeVisible();
+  return editor;
+}
+
+async function pressClock(page: Page, name: 'Check in' | 'Check out') {
+  const button = page.getByRole('region', { name: 'Check in and out' }).getByRole('button', { name, exact: true });
+  await button.focus();
+  await button.click();
+}
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`int2-J axe: Timesheet with the Day editor open on today, before and after a Check in and a Check out - ${scheme}`, async ({ page, employeeSeed, signInThroughUi, isMobile }, testInfo) => {
+    test.setTimeout(300_000);
+    const project = testInfo.project.name;
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    const { todayLocal } = await employeeSeed.today();
+    const before = await employeeSeed.dayView(todayLocal);
+    const widths = isMobile ? [390] : [1440, 1280];
+    let total = 0;
+    let scans = 0;
+    try {
+      for (const [index, width] of widths.entries()) {
+        await employeeSeed.clearSessions(todayLocal);
+        await page.setViewportSize({ width, height: 800 });
+        if (index === 0) await signInThroughUi();
+        else await page.reload();
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+        await expect.poll(() => page.evaluate<number>('window.innerWidth')).toBe(width);
+        const tag = `[${project} ${scheme} ${width}]`;
+        let editor = await openToday(page, todayLocal);
+        await editor.getByRole('form', { name: 'Day fields' }).getByLabel('Notes').fill('Synthetic note typed before the Check in');
+        await expect(editor.locator('.session-card')).toHaveCount(0);
+        total += await scan(page, `${tag} editor open on today, a typed note, no session (before)`);
+        scans += 1;
+        if (isMobile) {
+          await page.keyboard.press('Escape');
+          const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+          await expect(discard).toBeVisible();
+          await discard.getByRole('button', { name: 'Discard' }).click();
+          await expect(editor).toHaveCount(0);
+          await page.getByRole('button', { name: 'Check in', exact: true }).first().click();
+          await expect(page.getByRole('button', { name: 'Check out', exact: true }).first()).toBeVisible();
+          editor = await openToday(page, todayLocal);
+          await expect(editor.locator('.session-card[data-state="running"]')).toHaveCount(1);
+          total += await scan(page, `${tag} sheet reopened on today after a Check in (Running)`);
+          scans += 1;
+          continue;
+        }
+        await pressClock(page, 'Check in');
+        await expect(editor.locator('.session-card[data-state="running"]')).toHaveCount(1);
+        total += await scan(page, `${tag} editor followed the page's Check in (Running card, note kept)`);
+        scans += 1;
+        const started = (await employeeSeed.dayView(todayLocal)).sessions.find((s) => s.end_utc === null);
+        await expect.poll(() => Date.now(), { intervals: [100] }).toBeGreaterThanOrEqual(Date.parse(started?.start_utc ?? '') + 1_000);
+        await pressClock(page, 'Check out');
+        const dialog = page.getByRole('dialog', { name: 'Check out' });
+        await expect(dialog).toBeVisible();
+        await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+        await dialog.getByRole('button', { name: 'Check out, no breaks taken' }).click();
+        await expect(dialog).toHaveCount(0);
+        await expect(editor.locator('.session-card:not([data-state="running"])')).toHaveCount(1);
+        total += await scan(page, `${tag} editor followed the page's Check out (ended card, note kept)`);
+        scans += 1;
+        // Leave the drawer without saving before the next width (the note is discarded on purpose).
+        await page.keyboard.press('Escape');
+        const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+        await expect(discard).toBeVisible();
+        await discard.getByRole('button', { name: 'Discard' }).click();
+        await expect(editor).toHaveCount(0);
+      }
+      note(`[${project} ${scheme}] TOTAL violations ${total} in ${scans} scans`);
+      expect(total).toBe(0);
+    } finally {
+      await employeeSeed.clearSessions(todayLocal);
+      if ((await employeeSeed.dayView(todayLocal)).entry !== null) await employeeSeed.putDay(todayLocal, { category: before.category ?? 'Worked' });
+    }
+  });
+}

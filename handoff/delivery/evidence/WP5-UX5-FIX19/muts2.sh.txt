@@ -1,0 +1,18 @@
+# Second mutation round, after the partial-leave B case was split into "minutes" and "kind" (the first round's MD and MD2 survived because the single
+# partial-leave case changed both values): the new spec is copied over export-fix, then the leave-minutes (ND), leave-kind (ND2), notes (NG), category (NH)
+# and WFH (NC) comparisons are each removed in turn and run against the final tests, each restored byte-equal (see mut.sh.txt).
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX19/env.sh.txt
+G='FIX18|FIX19'
+F=src/client/DayEditor.tsx
+cp $REPO/tests/e2e/day-editor.spec.ts $T/export-fix/tests/e2e/day-editor.spec.ts
+M() { bash $E/mut.sh.txt "$@"; }
+M ND "$F" 'held.leave_minutes === fresh.leave_minutes &&' 'true &&' "$G"
+M ND2 "$F" 'held.leave_kind === fresh.leave_kind &&' 'true &&' "$G"
+M NG "$F" "(held.entry?.notes ?? '') === (fresh.entry?.notes ?? '')" 'true' "$G"
+M NH "$F" 'held.category === fresh.category &&' 'true &&' "$G"
+M NC "$F" 'held.wfh === fresh.wfh &&' 'true &&' "$G"
+# The unmutated final build on the final spec, once, for the record.
+cd $T/export-fix
+npmx run build:client > $T/mut-build-clean.txt 2>&1
+bash $E/run-pw.sh.txt clean-fix export-fix real tests/e2e/day-editor.spec.ts --project=desktop --workers=1 -g "$G" > $E/50-mut-clean-log.txt 2>&1
+echo "muts2-done" > $T/muts2.done

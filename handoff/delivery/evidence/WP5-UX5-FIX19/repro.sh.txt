@@ -1,0 +1,25 @@
+# Reproduction on the unchanged product (d96df5d): the clean-clone digest failure, the auditor's G1 and G2 probes, then the new tests.
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX19/env.sh.txt
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0=$T/clone
+cd $REPO
+git clone --quiet --shared --no-checkout $REPO $T/clone
+cd $T/clone
+git checkout --quiet $BASE
+{
+  echo "scratch clone HEAD: $(git rev-parse HEAD); status lines: $(git status --short | wc -l)"
+  echo "git ls-files -z bytes in the clean clone: $(git ls-files --cached --others --exclude-standard -z | wc -c) (Node's default execFileSync maxBuffer is 1048576)"
+  echo "\$ npm run digest (clean clone of d96df5d, unchanged script)"
+  npmx run digest
+  echo "npm run digest exit=$?"
+} > $E/20-repro-digest-clean-clone.txt 2>&1
+unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+bash $E/census.sh.txt pre-repro
+# The auditor's probe (G1, G2, observations to the INT2_OUT file) on the unchanged product.
+cp $REPO/handoff/delivery/evidence/WP5-UX5-AUDIT-INT2/90-zz-int2-follow.spec.ts.txt $T/export-base/tests/e2e/zz-int2-follow.spec.ts
+INT2_OUT="$(cygpath -w $E)\\21-repro-probe-base-obs.txt" bash $E/run-pw.sh.txt repro-probe export-base real tests/e2e/zz-int2-follow.spec.ts --project=desktop --workers=1 -g "int2-G" > $E/21-repro-probe-base-log.txt 2>&1
+# The new tests on the unchanged product (the working tree's spec over the base export).
+cp $REPO/tests/e2e/day-editor.spec.ts $T/export-base/tests/e2e/day-editor.spec.ts
+bash $E/census.sh.txt pre-repro-new
+bash $E/run-pw.sh.txt repro-new export-base real tests/e2e/day-editor.spec.ts --project=desktop --workers=1 -g "FIX19" > $E/22-repro-newtests-on-base-log.txt 2>&1
+bash $E/census.sh.txt post-repro-new
+echo "repro-done" > $T/repro.done

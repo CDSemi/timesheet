@@ -1,0 +1,8 @@
+npm run digest in the repository, run before (10:23Z) and after (11:44Z) the checks, exited with the same failure both times:
+  Error: spawnSync git ENOBUFS (git ls-files --cached --others --exclude-standard -z, scripts/source-digest.mjs:13)
+Cause: many untracked handoff/ files make the listing larger than the script's buffer (about 1 MB). This is the known backlog item named in the brief, recorded as a note, not a gate failure.
+The raw error dumps (22128 bytes each, a list of repository paths) are not kept.
+The digest was computed in the other two forms, which agree with each other and with TARGET_DIGEST:
+  clean export of d96df5da (own file list, git hash-object): 6937d79ccce4447a30123a52e0cc6c1ede828994186407028acfce74fc2961cb, 882 files (01-digest-export-before.txt, 01-digest-export-after.txt)
+  git ls-tree -r of d96df5da outside handoff/:               6937d79ccce4447a30123a52e0cc6c1ede828994186407028acfce74fc2961cb, 882 files (01-digest-lstree-before.txt, 01-digest-lstree-after.txt)
+The export file list is byte-identical to the ls-tree list, before and after.

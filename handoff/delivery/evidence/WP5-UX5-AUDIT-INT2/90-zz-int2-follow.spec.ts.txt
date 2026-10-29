@@ -1,0 +1,769 @@
+// WP5-UX5-AUDIT-INT2 probe (the auditor's own, never part of the repository). FIX18 (F-UX5I-1): the open desktop Day editor reads its
+// day again when the clock version changes (the page's own Check in or Check out, and the tab coming back into view), and takes the
+// fresh day only when the day fields equal the held ones and no session dialog or delete confirmation is open. This file checks the
+// follow, the version check against changes made elsewhere, the tab-return case, the saved() path, and the regressions named in the
+// brief. Synthetic data only; observations go to INT2_OUT.
+import { appendFileSync } from 'node:fs';
+import type { Locator, Page } from '@playwright/test';
+import { expect, newPerson, openAccount, type SeedClient, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+const OUT = process.env.INT2_OUT ?? '';
+function log(tag: string, line: string): void {
+  if (OUT !== '') appendFileSync(OUT, `[${tag}] ${line}\n`);
+}
+const flat = (text: string) => text.replace(/\s+/g, ' ').trim();
+const frames = (page: Page) => page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+const TYPED = 'Typed in this editor, not saved (synthetic)';
+const BASE = 'Saved before the editor opened (synthetic)';
+const ELSEWHERE = 'Changed on another device (synthetic)';
+
+test.beforeEach(({ page }, testInfo) => {
+  page.on('console', (message) => {
+    if (message.type() === 'error' && !/status of (401|409|422)/.test(message.text())) log(`console ${testInfo.title.slice(0, 24)}`, `console error: ${message.text()}`);
+  });
+  page.on('pageerror', (error) => log(`pageerror ${testInfo.title.slice(0, 24)}`, String(error)));
+});
+
+/** Every GET of one day (own or shared route) the page sends, by time. */
+function dayReads(page: Page, date: string): string[] {
+  const reads: string[] = [];
+  page.on('request', (request) => {
+    if (request.method() === 'GET' && new URL(request.url()).pathname.endsWith(`/days/${date}`)) reads.push(new Date().toISOString());
+  });
+  return reads;
+}
+
+/**
+ * Waits for the editor's read of its day after a trigger. With INT2_NO_FOLLOW=1 (the comparison run on a5cbc91, which has no follow
+ * read) it waits instead for the period read that the page makes on the same trigger, then for the network to be idle.
+ */
+const NO_FOLLOW = process.env.INT2_NO_FOLLOW === '1';
+function dayRead(page: Page, date: string): Promise<unknown> {
+  if (NO_FOLLOW) {
+    return page
+      .waitForResponse((response) => response.request().method() === 'GET' && /\/api\/timesheets\//.test(new URL(response.url()).pathname), { timeout: 10_000 })
+      .then(() => page.waitForLoadState('networkidle'));
+  }
+  return page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/days/${date}`), { timeout: 10_000 });
+}
+
+/** "Reload day", waiting until the reloaded day is on screen (the read, then two frames twice). */
+async function reloadDay(page: Page, editor: Locator, date: string): Promise<void> {
+  const read = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname.endsWith(`/days/${date}`), { timeout: 10_000 });
+  await staleAlert(editor).getByRole('button', { name: 'Reload day' }).click();
+  await read;
+  await expect(staleAlert(editor)).toHaveCount(0);
+  await frames(page);
+  await frames(page);
+}
+
+async function showDay(page: Page, date: string): Promise<void> {
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  if ((await page.locator(`[data-day="${date}"]`).count()) === 0) {
+    await page.locator('.period-bar').getByRole('button', { name: 'Today', exact: true }).click();
+    await expect(page.locator(`[data-day="${date}"]`)).toHaveCount(1);
+  }
+}
+
+async function openDay(page: Page, date: string): Promise<Locator> {
+  await page.getByLabel('Open a day').fill(date);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('heading', { name: 'Times', exact: true })).toBeVisible();
+  return editor;
+}
+
+function fieldsOf(editor: Locator) {
+  const form = editor.getByRole('form', { name: 'Day fields' });
+  return { form, notes: form.getByLabel('Notes'), wfh: form.getByLabel('Worked from home (WFH)'), category: form.getByLabel('Category') };
+}
+
+const discardQuestion = (page: Page) => page.getByRole('alertdialog', { name: 'Discard your changes?' });
+const staleAlert = (editor: Locator) => editor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' });
+const savedStatus = (editor: Locator) => editor.getByRole('status').filter({ hasText: 'Day fields saved.' });
+
+async function pressClock(page: Page, name: 'Check in' | 'Check out'): Promise<void> {
+  const button = page.getByRole('region', { name: 'Check in and out' }).getByRole('button', { name, exact: true });
+  await button.focus();
+  await button.click();
+}
+
+async function wholeSecondPast(seed: SeedClient, date: string): Promise<void> {
+  const started = (await seed.dayView(date)).sessions.find((session) => session.end_utc === null);
+  expect(started, 'a running session').toBeDefined();
+  await expect.poll(() => Date.now(), { intervals: [100] }).toBeGreaterThanOrEqual(Date.parse(started?.start_utc ?? '') + 1_000);
+}
+
+async function checkOutNoBreaks(page: Page): Promise<void> {
+  await pressClock(page, 'Check out');
+  const dialog = page.getByRole('dialog', { name: 'Check out' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+  await dialog.getByRole('button', { name: 'Check out, no breaks taken' }).click();
+  await expect(dialog).toHaveCount(0);
+}
+
+async function cards(editor: Locator): Promise<string> {
+  const list = await editor.locator('.session-card').allInnerTexts();
+  return list.length === 0 ? '(no session card)' : list.map((text) => flat(text).slice(0, 120)).join(' || ');
+}
+
+function activeText(page: Page): Promise<string> {
+  return page.evaluate<string>(
+    "(() => { const a = document.activeElement; if (a === null || a === document.body) return 'BODY'; const name = a.getAttribute('aria-label') ?? (a.textContent ?? '').trim(); return a.tagName + ' \"' + name.slice(0, 40) + '\"' + (a.closest('dialog') ? ' in dialog' : ''); })()",
+  );
+}
+
+async function liveTexts(editor: Locator): Promise<string> {
+  return (await editor.locator('[role="alert"], [role="status"], [aria-live]').allInnerTexts()).map(flat).join(' | ');
+}
+
+/* ---- A: F-UX5I-1 on a day that already has saved fields, both layouts, keyboard and guard ----------------------------------- */
+
+for (const width of [1440, 1280]) {
+  test(`int2-A ${width}: a day with saved fields; the typed note survives the page's Check in and Check out, focus stays, the guard still asks`, async ({
+    page,
+    employeeSeed,
+    signInThroughUi,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the desktop drawer');
+    const tag = `A ${width}`;
+    const { todayLocal } = await employeeSeed.today();
+    const before = await employeeSeed.dayView(todayLocal);
+    await employeeSeed.clearSessions(todayLocal);
+    await employeeSeed.putDay(todayLocal, { category: before.category ?? 'Worked', wfh: true, notes: BASE });
+    const seeded = await employeeSeed.dayView(todayLocal);
+    log(tag, `today ${todayLocal}; seeded entry v${seeded.entry?.version} wfh ${seeded.wfh} notes "${seeded.entry?.notes}" category ${seeded.category}/${seeded.category_source}`);
+    try {
+      await page.setViewportSize({ width, height: 800 });
+      await signInThroughUi();
+      await showDay(page, todayLocal);
+      const reads = dayReads(page, todayLocal);
+      const editor = await openDay(page, todayLocal);
+      log(tag, `layout ${await page.locator('[data-editor-layout]').getAttribute('data-editor-layout')}; side ${await editor.getAttribute('data-side')}`);
+      const { notes, wfh } = fieldsOf(editor);
+      await expect(wfh).toBeChecked();
+      await expect(notes).toHaveValue(BASE);
+      await notes.fill(TYPED);
+      const liveBefore = await liveTexts(editor);
+      const atOpen = reads.length;
+
+      // Check in from the keyboard: focus the page's button and press Enter.
+      const checkIn = page.getByRole('region', { name: 'Check in and out' }).getByRole('button', { name: 'Check in', exact: true });
+      await checkIn.focus();
+      const read1 = dayRead(page, todayLocal);
+      await page.keyboard.press('Enter');
+      await read1;
+      const running = editor.locator('.session-card[data-state="running"]');
+      if (!NO_FOLLOW) await expect(running).toHaveCount(1);
+      await frames(page);
+      const focus1 = await activeText(page);
+      log(
+        tag,
+        `after Check in (Enter): day reads ${reads.length - atOpen}; editor cards ${await cards(editor)}; note "${await notes.inputValue()}"; wfh ${await wfh.isChecked()}; question ${await discardQuestion(page).count()}; focus ${focus1}; editor live regions before [${liveBefore}] after [${await liveTexts(editor)}]`,
+      );
+      await expect(notes).toHaveValue(TYPED);
+      await expect(wfh).toBeChecked();
+      await expect(discardQuestion(page)).toHaveCount(0);
+      expect(focus1, 'focus is not dropped to the body').not.toBe('BODY');
+
+      // The unsaved-changes guard still asks after the follow (Escape, Keep editing keeps the note).
+      await page.keyboard.press('Escape');
+      await expect(discardQuestion(page)).toBeVisible();
+      await discardQuestion(page).getByRole('button', { name: 'Keep editing' }).click();
+      await expect(discardQuestion(page)).toHaveCount(0);
+      await expect(editor).toBeVisible();
+      await expect(notes).toHaveValue(TYPED);
+      log(tag, 'Escape after the follow asked "Discard your changes?"; Keep editing kept the note');
+
+      await wholeSecondPast(employeeSeed, todayLocal);
+      const read2 = dayRead(page, todayLocal);
+      await checkOutNoBreaks(page);
+      await read2;
+      const ended = editor.locator('.session-card:not([data-state="running"])');
+      if (!NO_FOLLOW) {
+        await expect(ended).toHaveCount(1);
+        await expect(running).toHaveCount(0);
+      }
+      await frames(page);
+      log(
+        tag,
+        `after Check out: day reads ${reads.length - atOpen}; editor cards ${await cards(editor)}; note "${await notes.inputValue()}"; wfh ${await wfh.isChecked()}; question ${await discardQuestion(page).count()}; focus ${await activeText(page)}; figures ${flat(await editor.locator('[data-figure]').allInnerTexts().then((t) => t.join(' / '))).slice(0, 200)}`,
+      );
+      await expect(notes).toHaveValue(TYPED);
+
+      await editor.getByRole('button', { name: 'Save day fields' }).click();
+      await expect(staleAlert(editor).or(savedStatus(editor))).toBeVisible();
+      const outcome = (await staleAlert(editor).count()) === 1 ? 'REFUSED (stale)' : 'ACCEPTED';
+      const saved = await employeeSeed.dayView(todayLocal);
+      log(tag, `Save day fields: ${outcome}; server notes "${saved.entry?.notes}" wfh ${saved.wfh} category ${saved.category}/${saved.category_source} entry v${saved.entry?.version}; sessions ${saved.sessions.map((s) => (s.end_utc === null ? 'running' : 'ended')).join(',')}`);
+      expect(saved.entry?.notes).toBe(TYPED);
+      expect(saved.wfh).toBe(true);
+    } finally {
+      await employeeSeed.clearSessions(todayLocal);
+      await employeeSeed.putDay(todayLocal, { category: before.category ?? 'Worked' });
+    }
+  });
+}
+
+/* ---- B: a change made elsewhere to ONE day field, then the tab comes back into view (the follow); the save must be refused ---- */
+
+const FIELD_CASES = [
+  { name: 'notes only', elsewhere: { notes: ELSEWHERE }, holds: (d: { entry: { notes: string } | null }) => d.entry?.notes === ELSEWHERE, typeWfh: true },
+  { name: 'WFH only', elsewhere: { notes: BASE, wfh: true }, holds: (d: { wfh: boolean }) => d.wfh === true, typeWfh: false },
+  {
+    name: 'partial leave only',
+    elsewhere: { notes: BASE, leave_minutes: 60, leave_kind: 'vacation' },
+    holds: (d: { leave_minutes: number; leave_kind: string | null }) => d.leave_minutes === 60 && d.leave_kind === 'vacation',
+    typeWfh: false,
+  },
+  { name: 'category only', elsewhere: { notes: BASE, category: 'Off' }, holds: (d: { category: string | null }) => d.category === 'Off', typeWfh: false },
+] as const;
+
+for (const fieldCase of FIELD_CASES) {
+  test(`int2-B ${fieldCase.name}: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten`, async ({
+    page,
+    employeeSeed,
+    signInThroughUi,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the desktop drawer');
+    const tag = `B ${fieldCase.name}`;
+    const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+    expect(date).not.toBe('');
+    await employeeSeed.putDay(date, { notes: BASE });
+    try {
+      await page.setViewportSize({ width: 1440, height: 800 });
+      await signInThroughUi();
+      const editor = await openDay(page, date);
+      const { notes, wfh } = fieldsOf(editor);
+      if (fieldCase.typeWfh) await wfh.check();
+      else await notes.fill(TYPED);
+      await employeeSeed.putDay(date, fieldCase.elsewhere);
+      const after = await employeeSeed.dayView(date);
+      const read = dayRead(page, date);
+      await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
+      await read;
+      await frames(page);
+      log(tag, `${date}: elsewhere entry v${after.entry?.version}; after the tab return the form shows note "${await notes.inputValue()}" wfh ${await wfh.isChecked()}`);
+      await editor.getByRole('button', { name: 'Save day fields' }).click();
+      await expect(staleAlert(editor).or(savedStatus(editor))).toBeVisible();
+      const refused = (await staleAlert(editor).count()) === 1;
+      const server = await employeeSeed.dayView(date);
+      const kept = (fieldCase.holds as (d: unknown) => boolean)(server);
+      log(tag, `Save day fields: ${refused ? 'REFUSED (stale)' : 'ACCEPTED'}; the elsewhere value ${kept ? 'kept' : 'OVERWRITTEN'}; server notes "${server.entry?.notes}" wfh ${server.wfh} leave ${server.leave_minutes}/${server.leave_kind} category ${server.category}`);
+      expect(refused, 'the save is refused').toBe(true);
+      expect(kept, 'the value written elsewhere is kept').toBe(true);
+      await reloadDay(page, editor, date);
+      log(tag, `Reload day: note "${await notes.inputValue()}" wfh ${await wfh.isChecked()} category ${await fieldsOf(editor).category.inputValue()}`);
+    } finally {
+      await employeeSeed.resetDay(date);
+    }
+  });
+}
+
+/* ---- C: another session (a grantee with edit rights) changes the owner's notes; the owner's own Check in; the save is refused -- */
+
+test('int2-C share: a grantee changes the notes of the day open in the owner\'s editor, the owner checks in from the page; the save is refused', async ({
+  page,
+  adminSeed,
+  builtServer,
+  signInPageAs,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'the desktop drawer');
+  const tag = 'C share';
+  const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner', signature: 'none' });
+  const grantee = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Grantee', signature: 'none' });
+  await owner.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: 'edit', ot_read: false, pdf_download: false } }, 201);
+  const today = owner.todayLocal;
+  const first = await owner.api.dayView(today);
+  await owner.api.putDay(today, { category: first.category ?? 'Worked', notes: BASE });
+  try {
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await signInPageAs(owner.account);
+    await showDay(page, today);
+    const editor = await openDay(page, today);
+    const { notes, wfh } = fieldsOf(editor);
+    await wfh.check();
+    const seen = await owner.api.dayView(today);
+    await grantee.api.call('PUT', `/api/shared/${owner.account.id}/days/${today}`, {
+      category: seen.category ?? 'Worked',
+      leave_minutes: 0,
+      leave_kind: null,
+      wfh: false,
+      notes: 'Changed by the grantee through the share (synthetic)',
+      expected_version: seen.entry?.version ?? null,
+    });
+    const read = dayRead(page, today);
+    await pressClock(page, 'Check in');
+    await read;
+    await frames(page);
+    log(tag, `after the owner's Check in: editor cards ${await cards(editor)}; note "${await notes.inputValue()}" wfh ${await wfh.isChecked()}`);
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    await expect(staleAlert(editor).or(savedStatus(editor))).toBeVisible();
+    const refused = (await staleAlert(editor).count()) === 1;
+    const server = await owner.api.dayView(today);
+    log(tag, `Save day fields: ${refused ? 'REFUSED (stale)' : 'ACCEPTED'}; server notes "${server.entry?.notes}" wfh ${server.wfh}`);
+    expect(refused).toBe(true);
+    expect(server.entry?.notes).toBe('Changed by the grantee through the share (synthetic)');
+    expect(server.wfh).toBe(false);
+    await staleAlert(editor).getByRole('button', { name: 'Reload day' }).click();
+    await expect(notes).toHaveValue('Changed by the grantee through the share (synthetic)');
+    await expect(editor.locator('.session-card[data-state="running"]')).toHaveCount(1);
+    log(tag, `Reload day: note "${await notes.inputValue()}"; cards ${await cards(editor)}`);
+  } finally {
+    await owner.api.clearSessions(today);
+  }
+});
+
+/* ---- D: another tab of the same browser saves the day through its own editor; the first tab's Check in; the save is refused ---- */
+
+test('int2-D tab: a second tab saves a note on the open day, the first tab checks in from the page; the save is refused', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'the desktop drawer');
+  const tag = 'D tab';
+  const { todayLocal } = await employeeSeed.today();
+  const before = await employeeSeed.dayView(todayLocal);
+  await employeeSeed.clearSessions(todayLocal);
+  await employeeSeed.putDay(todayLocal, { category: before.category ?? 'Worked', notes: BASE });
+  try {
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await signInThroughUi();
+    await showDay(page, todayLocal);
+    const editor = await openDay(page, todayLocal);
+    const { wfh } = fieldsOf(editor);
+    await wfh.check();
+
+    const second = await page.context().newPage();
+    await second.setViewportSize({ width: 1440, height: 800 });
+    await second.goto('/');
+    await showDay(second, todayLocal);
+    const editor2 = await openDay(second, todayLocal);
+    await fieldsOf(editor2).notes.fill('Saved in the second tab (synthetic)');
+    await editor2.getByRole('button', { name: 'Save day fields' }).click();
+    await expect(savedStatus(editor2)).toBeVisible();
+    await second.close();
+
+    await page.bringToFront();
+    const read = dayRead(page, todayLocal);
+    await pressClock(page, 'Check in');
+    await read;
+    await frames(page);
+    log(tag, `after the first tab's Check in: editor cards ${await cards(editor)}; note "${await fieldsOf(editor).notes.inputValue()}" wfh ${await wfh.isChecked()}`);
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    await expect(staleAlert(editor).or(savedStatus(editor))).toBeVisible();
+    const refused = (await staleAlert(editor).count()) === 1;
+    const server = await employeeSeed.dayView(todayLocal);
+    log(tag, `Save day fields: ${refused ? 'REFUSED (stale)' : 'ACCEPTED'}; server notes "${server.entry?.notes}" wfh ${server.wfh}`);
+    expect(refused).toBe(true);
+    expect(server.entry?.notes).toBe('Saved in the second tab (synthetic)');
+    expect(server.wfh).toBe(false);
+  } finally {
+    await employeeSeed.clearSessions(todayLocal);
+    await employeeSeed.putDay(todayLocal, { category: before.category ?? 'Worked' });
+  }
+});
+
+/* ---- F: the tab-return case (FIX18 mutant M6): a SESSION changed elsewhere, day fields unchanged ------------------------------- */
+
+test('int2-F1 tab return: a session of a day with an entry changed elsewhere; the drawer shows it, the typed note stays; the save outcome', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'the desktop drawer');
+  const tag = 'F1 tab return, entry exists';
+  const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+  await employeeSeed.seedCompleteDay(date);
+  await employeeSeed.putDay(date, { notes: BASE });
+  try {
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await signInThroughUi();
+    const reads = dayReads(page, date);
+    const editor = await openDay(page, date);
+    const { notes } = fieldsOf(editor);
+    await notes.fill(TYPED);
+    const cardsBefore = await cards(editor);
+    const session = (await employeeSeed.dayView(date)).sessions[0];
+    const end = new Date(Date.parse(session?.end_utc ?? '') - 30 * 60_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    await employeeSeed.call('PUT', `/api/sessions/${session?.id}`, { start: session?.start_utc, end, input_zone: session?.input_zone, breaks: [], breaks_confirmed: true, expected_version: session?.version });
+    const entryVersion = (await employeeSeed.dayView(date)).entry?.version;
+    const atReturn = reads.length;
+    const read = dayRead(page, date);
+    await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
+    await read;
+    await frames(page);
+    const cardsAfter = await cards(editor);
+    log(tag, `${date}: entry v${entryVersion} (the session change does not touch it); day reads on the tab return ${reads.length - atReturn}; cards changed ${cardsBefore !== cardsAfter}; before [${cardsBefore}] after [${cardsAfter}]; note "${await notes.inputValue()}"`);
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    await expect(staleAlert(editor).or(savedStatus(editor))).toBeVisible();
+    const server = await employeeSeed.dayView(date);
+    log(tag, `Save day fields: ${(await staleAlert(editor).count()) === 1 ? 'REFUSED (stale)' : 'ACCEPTED'}; server notes "${server.entry?.notes}"; session end ${server.sessions[0]?.end_utc} (elsewhere ${end})`);
+  } finally {
+    await employeeSeed.clearSessions(date);
+    await employeeSeed.resetDay(date);
+  }
+});
+
+test('int2-F2 tab return: a day with no entry gets a session elsewhere (which creates the entry); the drawer shows it; the save outcome', async ({
+  page,
+  adminSeed,
+  builtServer,
+  signInPageAs,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'the desktop drawer');
+  const tag = 'F2 tab return, no entry before';
+  const person = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Fresh Person', signature: 'none' });
+  const [date = ''] = await person.api.displayedPeriodFreeWorkdays();
+  expect((await person.api.dayView(date)).entry, 'no entry yet').toBeNull();
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await signInPageAs(person.account);
+  const reads = dayReads(page, date);
+  const editor = await openDay(page, date);
+  const { notes, category } = fieldsOf(editor);
+  await notes.fill(TYPED);
+  const shownCategory = await category.inputValue();
+  await person.api.createSession(date, '09:00', '17:00', []);
+  const created = await person.api.dayView(date);
+  const atReturn = reads.length;
+  const read = dayRead(page, date);
+  await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
+  await read;
+  await frames(page);
+  log(tag, `${date}: elsewhere entry v${created.entry?.version} source ${created.category_source} category ${created.category} (shown ${shownCategory}); day reads ${reads.length - atReturn}; cards ${await cards(editor)}; note "${await notes.inputValue()}"`);
+  await editor.getByRole('button', { name: 'Save day fields' }).click();
+  await expect(staleAlert(editor).or(savedStatus(editor))).toBeVisible();
+  const server = await person.api.dayView(date);
+  log(tag, `Save day fields: ${(await staleAlert(editor).count()) === 1 ? 'REFUSED (stale)' : 'ACCEPTED'}; server notes "${server.entry?.notes}" category ${server.category}/${server.category_source} entry v${server.entry?.version}; sessions ${server.sessions.length}`);
+});
+
+/* ---- G: the saved() path of a session write (not FIX18's code; the path FIX18 was told to copy) ---------------------------------- */
+
+test('int2-G1 saved() path: day fields changed elsewhere, then a session is saved in the drawer, then "Save day fields"', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'the desktop drawer');
+  const tag = 'G1 session save';
+  const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+  await employeeSeed.seedCompleteDay(date);
+  await employeeSeed.putDay(date, { notes: BASE });
+  try {
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await signInThroughUi();
+    const editor = await openDay(page, date);
+    const { notes, wfh } = fieldsOf(editor);
+    await employeeSeed.putDay(date, { notes: ELSEWHERE, wfh: true });
+    const elsewhere = await employeeSeed.dayView(date);
+    await editor.getByRole('button', { name: /^Edit session/ }).click();
+    const edit = page.getByRole('dialog', { name: 'Edit session', exact: true });
+    await expect(edit).toBeVisible();
+    await edit.getByLabel('End time', { exact: true }).fill('17:45');
+    await edit.getByRole('button', { name: 'Save', exact: true }).click();
+    const confirm = page.getByRole('alertdialog', { name: 'Save this session?' });
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(editor.getByText('Session saved.')).toBeVisible();
+    log(tag, `${date}: elsewhere notes "${elsewhere.entry?.notes}" wfh ${elsewhere.wfh} entry v${elsewhere.entry?.version}; after the session save the form shows note "${await notes.inputValue()}" wfh ${await wfh.isChecked()}; stale alert ${await staleAlert(editor).count()}`);
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    await expect(staleAlert(editor).or(savedStatus(editor))).toBeVisible();
+    const server = await employeeSeed.dayView(date);
+    log(tag, `Save day fields (nothing typed in the fields): ${(await staleAlert(editor).count()) === 1 ? 'REFUSED (stale)' : 'ACCEPTED'}; server notes "${server.entry?.notes}" wfh ${server.wfh} entry v${server.entry?.version}; the elsewhere change ${server.entry?.notes === ELSEWHERE && server.wfh ? 'kept' : 'OVERWRITTEN'}`);
+  } finally {
+    await employeeSeed.clearSessions(date);
+    await employeeSeed.resetDay(date);
+  }
+});
+
+test('int2-G2 saved() path: day fields changed elsewhere, then a session is deleted in the drawer, then "Save day fields"', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'the desktop drawer');
+  const tag = 'G2 session delete';
+  const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+  await employeeSeed.createSession(date, '09:00', '12:00', []);
+  await employeeSeed.createSession(date, '13:00', '17:00', []);
+  await employeeSeed.putDay(date, { notes: BASE });
+  try {
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await signInThroughUi();
+    const editor = await openDay(page, date);
+    const { notes } = fieldsOf(editor);
+    await employeeSeed.putDay(date, { notes: ELSEWHERE });
+    await editor.getByRole('button', { name: /^Delete session/ }).first().click();
+    const confirm = page.getByRole('alertdialog', { name: 'Delete this session?' });
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole('button', { name: 'Delete session' }).click();
+    await expect(editor.getByText('Session deleted.')).toBeVisible();
+    log(tag, `${date}: after the delete the form shows note "${await notes.inputValue()}"`);
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    await expect(staleAlert(editor).or(savedStatus(editor))).toBeVisible();
+    const server = await employeeSeed.dayView(date);
+    log(tag, `Save day fields (nothing typed): ${(await staleAlert(editor).count()) === 1 ? 'REFUSED (stale)' : 'ACCEPTED'}; server notes "${server.entry?.notes}"; the elsewhere note ${server.entry?.notes === ELSEWHERE ? 'kept' : 'OVERWRITTEN'}`);
+  } finally {
+    await employeeSeed.clearSessions(date);
+    await employeeSeed.resetDay(date);
+  }
+});
+
+/* ---- H: the U4-05 guard routes after a follow (1440px beside) ------------------------------------------------------------------ */
+
+test('int2-H guard after a follow: Close, a press on the title, another day and Next period all ask; Keep editing keeps the note', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'the desktop drawer');
+  const tag = 'H guard';
+  const { todayLocal } = await employeeSeed.today();
+  const before = await employeeSeed.dayView(todayLocal);
+  await employeeSeed.clearSessions(todayLocal);
+  try {
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await signInThroughUi();
+    await showDay(page, todayLocal);
+    const editor = await openDay(page, todayLocal);
+    const { notes } = fieldsOf(editor);
+    await notes.fill(TYPED);
+    const read = dayRead(page, todayLocal);
+    await pressClock(page, 'Check in');
+    await read;
+    await expect(editor.locator('.session-card[data-state="running"]')).toHaveCount(1);
+    const other = (await page.locator('[data-day]').evaluateAll((cells) => cells.map((cell) => cell.getAttribute('data-day') ?? ''))).find((d) => d !== todayLocal) ?? '';
+    const routes: Array<[string, () => Promise<void>]> = [
+      ['Close', () => editor.getByRole('button', { name: 'Close', exact: true }).click()],
+      ['title press', () => page.getByRole('heading', { name: 'Timesheet', level: 1 }).click()],
+      [`another day (${other})`, () => page.locator(`[data-day="${other}"] [data-day-button]`).first().click()],
+      ['Next period', () => page.getByRole('button', { name: 'Next period' }).click()],
+    ];
+    for (const [name, act] of routes) {
+      await act();
+      await expect(discardQuestion(page)).toBeVisible();
+      await discardQuestion(page).getByRole('button', { name: 'Keep editing' }).click();
+      await expect(discardQuestion(page)).toHaveCount(0);
+      await expect(editor).toBeVisible();
+      await expect(notes).toHaveValue(TYPED);
+      await expect(editor).toHaveAttribute('data-day-editor', todayLocal);
+      log(tag, `${name}: asked; Keep editing kept the drawer on ${todayLocal} and the note`);
+    }
+    await wholeSecondPast(employeeSeed, todayLocal);
+    await checkOutNoBreaks(page);
+    await expect(editor.locator('.session-card:not([data-state="running"])')).toHaveCount(1);
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    await expect(savedStatus(editor)).toBeVisible();
+    log(tag, `saved; server notes "${(await employeeSeed.dayView(todayLocal)).entry?.notes}"`);
+  } finally {
+    await employeeSeed.clearSessions(todayLocal);
+    if ((await employeeSeed.dayView(todayLocal)).entry !== null) await employeeSeed.putDay(todayLocal, { category: before.category ?? 'Worked' });
+  }
+});
+
+/* ---- I: the cross-tab theme after a follow ------------------------------------------------------------------------------------- */
+
+test('int2-I theme: after a follow, Dark chosen in another tab paints this tab; the note stays, nothing asks', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'the desktop drawer');
+  const tag = 'I theme';
+  const { todayLocal } = await employeeSeed.today();
+  const before = await employeeSeed.dayView(todayLocal);
+  await employeeSeed.clearSessions(todayLocal);
+  try {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await signInThroughUi();
+    await showDay(page, todayLocal);
+    const editor = await openDay(page, todayLocal);
+    const { notes } = fieldsOf(editor);
+    await notes.fill(TYPED);
+    const read = dayRead(page, todayLocal);
+    await pressClock(page, 'Check in');
+    await read;
+    await expect(editor.locator('.session-card[data-state="running"]')).toHaveCount(1);
+    const second = await page.context().newPage();
+    await second.goto('/');
+    await expect(second.locator('[data-day]')).toHaveCount(14);
+    const panel = await openAccount(second);
+    await panel.getByRole('radiogroup', { name: 'Theme', exact: true }).getByRole('radio', { name: 'Dark', exact: true }).click();
+    await page.bringToFront();
+    await expect.poll(() => page.evaluate<string | null>("document.documentElement.getAttribute('data-theme')")).toBe('dark');
+    await frames(page);
+    log(tag, `first tab data-theme ${await page.evaluate<string | null>("document.documentElement.getAttribute('data-theme')")}; editor open ${await editor.isVisible()}; note "${await notes.inputValue()}"; question ${await discardQuestion(page).count()}; running cards ${await editor.locator('.session-card[data-state="running"]').count()}`);
+    await expect(notes).toHaveValue(TYPED);
+    await expect(discardQuestion(page)).toHaveCount(0);
+    const panel2 = await openAccount(second);
+    await panel2.getByRole('radiogroup', { name: 'Theme', exact: true }).getByRole('radio', { name: 'Light', exact: true }).click();
+    await second.close();
+    await page.bringToFront();
+    await expect.poll(() => page.evaluate<string | null>("document.documentElement.getAttribute('data-theme')")).toBe('light');
+  } finally {
+    await employeeSeed.clearSessions(todayLocal);
+    if ((await employeeSeed.dayView(todayLocal)).entry !== null) await employeeSeed.putDay(todayLocal, { category: before.category ?? 'Worked' });
+  }
+});
+
+/* ---- K: the phone's bottom sheet (modal) sends no follow read; the note stays and saves ---------------------------------------- */
+
+test('int2-K phone: the bottom sheet sends no read on a tab return, keeps the note, asks on Escape and saves', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile', 'the phone project');
+  const tag = 'K phone';
+  const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+  try {
+    await signInThroughUi();
+    const reads = dayReads(page, date);
+    const editor = await openDay(page, date);
+    const { notes } = fieldsOf(editor);
+    await notes.fill(TYPED);
+    const atReturn = reads.length;
+    const period = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname.startsWith('/api/timesheets/'), { timeout: 10_000 });
+    await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
+    await period;
+    await frames(page);
+    log(tag, `${date}: day reads after the tab return ${reads.length - atReturn}; note "${await notes.inputValue()}"`);
+    expect(reads.length - atReturn).toBe(0);
+    await page.keyboard.press('Escape');
+    await expect(discardQuestion(page)).toBeVisible();
+    await discardQuestion(page).getByRole('button', { name: 'Keep editing' }).click();
+    await expect(notes).toHaveValue(TYPED);
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    await expect(savedStatus(editor)).toBeVisible();
+    log(tag, `Escape asked, Keep editing kept the note; saved; server notes "${(await employeeSeed.dayView(date)).entry?.notes}"`);
+  } finally {
+    await employeeSeed.resetDay(date);
+  }
+});
+
+/* ---- N: the delete confirmation is open when the follow read arrives (the session changed elsewhere) ---------------------------- */
+
+test('int2-N delete confirmation open: a session changed elsewhere, the tab returns, then "Delete session"; the delete is refused', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'the desktop drawer');
+  const tag = 'N delete confirmation';
+  const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+  await employeeSeed.createSession(date, '09:00', '12:00', []);
+  try {
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await signInThroughUi();
+    const editor = await openDay(page, date);
+    await editor.getByRole('button', { name: /^Delete session/ }).click();
+    const confirm = page.getByRole('alertdialog', { name: 'Delete this session?' });
+    await expect(confirm).toBeVisible();
+    const session = (await employeeSeed.dayView(date)).sessions[0];
+    const end = new Date(Date.parse(session?.end_utc ?? '') - 30 * 60_000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    await employeeSeed.call('PUT', `/api/sessions/${session?.id}`, { start: session?.start_utc, end, input_zone: session?.input_zone, breaks: [], breaks_confirmed: true, expected_version: session?.version });
+    const read = dayRead(page, date);
+    await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
+    await read;
+    await frames(page);
+    const del = page.waitForResponse((response) => response.request().method() === 'DELETE' && new URL(response.url()).pathname.startsWith('/api/sessions/'), { timeout: 10_000 });
+    await confirm.getByRole('button', { name: 'Delete session' }).click();
+    const answer = await del;
+    await expect(confirm).toHaveCount(0);
+    const server = await employeeSeed.dayView(date);
+    log(tag, `${date}: DELETE answered ${answer.status()} (sent version ${(answer.request().postDataJSON() as { expected_version?: number }).expected_version}, elsewhere version ${(session?.version ?? 0) + 1}); stale alert ${await staleAlert(editor).count()}; server sessions ${server.sessions.length}`);
+    expect(answer.status(), 'the delete of a session changed elsewhere is refused').toBe(409);
+    expect(server.sessions).toHaveLength(1);
+  } finally {
+    await employeeSeed.clearSessions(date);
+  }
+});
+
+/* ---- O: a follow read overtaken by the editor's own save is dropped (no stale version taken back) ------------------------------ */
+
+test('int2-O overtaken read: the follow read answers after the editor\'s own save; a second save still succeeds', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'the desktop drawer');
+  const tag = 'O overtaken read';
+  const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+  await employeeSeed.putDay(date, { notes: BASE });
+  try {
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await signInThroughUi();
+    const editor = await openDay(page, date);
+    let armed = true;
+    await page.route(`**/api/days/${date}`, async (route) => {
+      if (route.request().method() === 'GET' && armed) {
+        armed = false;
+        const response = await route.fetch();
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 2_000));
+        await route.fulfill({ response });
+        return;
+      }
+      await route.continue();
+    });
+    const delayed = dayRead(page, date);
+    const sent = page.waitForRequest((request) => request.method() === 'GET' && new URL(request.url()).pathname === `/api/days/${date}`, { timeout: 10_000 });
+    await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
+    await sent;
+    const put1 =page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname === `/api/days/${date}`, { timeout: 10_000 });
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    const first = await put1;
+    await delayed;
+    await frames(page);
+    const put2 = page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname === `/api/days/${date}`, { timeout: 10_000 });
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    const second = await put2;
+    log(
+      tag,
+      `${date}: first save ${first.status()} (sent v${(first.request().postDataJSON() as { expected_version?: number }).expected_version}); the delayed follow read answered after it; second save ${second.status()} (sent v${(second.request().postDataJSON() as { expected_version?: number }).expected_version}); stale alert ${await staleAlert(editor).count()}`,
+    );
+    expect(second.status(), 'the second save carries the version of the first save').toBe(200);
+  } finally {
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
+    await employeeSeed.resetDay(date);
+  }
+});
+
+/* ---- P: the label refresh path after a follow (docs/04:69: the form follows the new saved version, typed fields are dropped) ---- */
+
+test('int2-P label refresh after a follow: a sheet label pick on the open day reloads the editor and restarts its forms, nothing asks; a later save succeeds', async ({
+  page,
+  employeeSeed,
+  signInThroughUi,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'the desktop drawer');
+  const tag = 'P label refresh';
+  const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+  await employeeSeed.putDay(date, { notes: BASE });
+  try {
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await signInThroughUi();
+    const editor = await openDay(page, date);
+    const { notes, category } = fieldsOf(editor);
+    await notes.fill(TYPED);
+    const read = dayRead(page, date);
+    await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
+    await read;
+    await frames(page);
+    const reread = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname === `/api/days/${date}`, { timeout: 10_000 });
+    await page.getByRole('button', { name: new RegExp(`^Category for ${date}`) }).click();
+    await page.getByRole('listbox', { name: `Category for ${date}` }).getByRole('option', { name: 'Vacation', exact: true }).click();
+    await reread;
+    await expect(category).toHaveValue('Vacation');
+    await frames(page);
+    log(tag, `${date}: after the follow and a label pick on the open day: question ${await discardQuestion(page).count()}; form category ${await category.inputValue()}; note "${await notes.inputValue()}"; editor open ${await editor.isVisible()}`);
+    await notes.fill('Typed after the label pick (synthetic)');
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    await expect(staleAlert(editor).or(savedStatus(editor))).toBeVisible();
+    const server = await employeeSeed.dayView(date);
+    log(tag, `Save day fields: ${(await staleAlert(editor).count()) === 1 ? 'REFUSED (stale)' : 'ACCEPTED'}; server category ${server.category}, notes "${server.entry?.notes}"`);
+    expect(server.category).toBe('Vacation');
+    expect(server.entry?.notes).toBe('Typed after the label pick (synthetic)');
+  } finally {
+    await employeeSeed.resetDay(date);
+  }
+});
+
+/* ---- L: a shared edit view has no clock; a tab return sends no read of the open day ------------------------------------------- */
+
+test('int2-L shared: a grantee\'s drawer on a shared edit view sends no day read on a tab return and keeps a typed note', async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'the desktop drawer');
+  const tag = 'L shared';
+  const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner', signature: 'none' });
+  const grantee = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Grantee', signature: 'none' });
+  await owner.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: 'edit', ot_read: false, pdf_download: false } }, 201);
+  const [date = ''] = await owner.api.displayedPeriodFreeWorkdays();
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await signInPageAs(grantee.account, `#/shared/${owner.account.id}/timesheet`);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const reads = dayReads(page, date);
+  const editor = await openDay(page, date);
+  const { notes } = fieldsOf(editor);
+  await notes.fill(TYPED);
+  const clockButtons = await page.getByRole('region', { name: 'Check in and out' }).count();
+  const atReturn = reads.length;
+  const period = page.waitForResponse((response) => response.request().method() === 'GET' && /\/timesheets\/|\/periods\/current/.test(new URL(response.url()).pathname), { timeout: 10_000 }).catch(() => null);
+  await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
+  const answered = await period;
+  await frames(page);
+  log(tag, `${date}: clock regions ${clockButtons}; a period read after the tab return ${answered === null ? 'none within 10 s' : new URL(answered.url()).pathname}; day reads ${reads.length - atReturn}; note "${await notes.inputValue()}"`);
+  expect(reads.length - atReturn).toBe(0);
+  await expect(notes).toHaveValue(TYPED);
+});

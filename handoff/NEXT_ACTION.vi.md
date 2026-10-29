@@ -168,8 +168,17 @@ Luồng hiện tại:
      gõ từ trước bị từ chối khi lưu và phải gõ lại. Mọi mục khác đều đạt.
    - WP5-UX5-FIX18 đã sửa lỗi này: editor giờ cập nhật theo, và giữ nguyên những gì đã gõ.
      Digest 6937d79c.
-   - Đang chạy: WP5-UX5-FIX18-FREEZE commit và push bản sửa.
-   - Sau đó là gate lại (WP5-UX5-REGATE13), kiểm tra lại tích hợp
+   - Bản sửa đã được freeze trong d96df5d (digest 6937d79c) và đã push.
+   - WP5-UX5-REGATE13, gate lại trên d96df5d, đã đạt.
+   - Lần kiểm tra lại tích hợp WP5-UX5-AUDIT-INT2 xác nhận lỗ hổng đó đã đóng, nhưng tìm thêm
+     hai lỗi mới.
+     - Medium, có từ trước các vòng này: lưu hoặc xóa một phiên trong Day editor đang mở có
+       thể khiến lần "Save day fields" sau đó âm thầm ghi đè thay đổi làm từ thiết bị khác.
+     - Low: lệnh tính digest cho bản phát hành bị lỗi.
+   - WP5-UX5-FIX19 đã sửa cả hai (digest 67aa715c).
+   - Đang chạy: WP5-UX5-FIX19-FREEZE commit và push bản sửa.
+   - Sau đó là gate lại (WP5-UX5-REGATE14), kiểm tra lại tích hợp
+     (WP5-UX5-AUDIT-INT3), kiểm tra lại tích hợp
      (WP5-UX5-AUDIT-INT2), một lượt kiểm
      tra lại độc lập mới cho vùng B (WP5-UX5-RECHECK-B3), kiểm tra lại độc lập hai lỗi đã sửa, thay đổi
      Day editor và thay đổi giao diện, audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.

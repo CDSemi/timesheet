@@ -1,0 +1,13 @@
+# Second proof pass, after the new tests were moved to a person of their own each (the first pass, 40-42 and 70-71, ran the first version of the tests, which
+# saved day entries on the shared employee's newest free workday and so collided with the calendar-default test at day-editor.spec.ts "partial leave 240").
+# A fresh export of the working tree (export-proof, its own npm ci, lint, typecheck, build), the new tests --repeat-each=20 --workers=6, then FIX18's and the
+# new tests and the whole Day editor spec on both projects.
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX19/env.sh.txt
+bash $E/mkfix.sh.txt export-proof
+bash $E/census.sh.txt pre-repeat20-p2
+bash $E/run-pw.sh.txt repeat20-p2 export-proof real tests/e2e/day-editor.spec.ts --project=desktop --workers=6 --repeat-each=20 -g "FIX19" > $E/43-newtests-repeat20-log.txt 2>&1
+bash $E/census.sh.txt post-repeat20-p2
+bash $E/run-pw.sh.txt fix18-both-p2 export-proof real tests/e2e/day-editor.spec.ts --workers=2 -g "FIX18|FIX19" > $E/44-fix18-fix19-both-log.txt 2>&1
+bash $E/census.sh.txt pre-dayeditor-p2
+bash $E/run-pw.sh.txt dayeditor-both-p2 export-proof real tests/e2e/day-editor.spec.ts --workers=3 > $E/45-dayeditor-both-log.txt 2>&1
+bash $E/census.sh.txt post-dayeditor-p2

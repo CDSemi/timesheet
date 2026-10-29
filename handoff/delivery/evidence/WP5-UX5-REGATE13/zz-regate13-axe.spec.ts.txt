@@ -1,0 +1,102 @@
+import { appendFileSync, readFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
+
+/*
+ * WP5-UX5-REGATE13 probe (the verifier's own, never part of the repository): axe-core 4.14.0 (loaded from the task folder; no dependency added)
+ * on the Timesheet page with the Day editor open on today, before and after a Check in, light and dark, at 1440, 1280 and 390px.
+ * 1440 and 1280: the drawer (beside / floating) stays open while the page's own Check in is pressed. 390: the modal bottom sheet makes the
+ * page inert, so "after" is the sheet reopened on today once the Check in was made from the page. Tags WCAG 2.0 to 2.2 A and AA. Synthetic data only.
+ */
+const AXE_PATH = process.env.AXE_PATH ?? '';
+const OUT = process.env.AXE_OUT ?? '';
+const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+let axeSource = '';
+function note(line: string): void {
+  if (OUT !== '') appendFileSync(OUT, `${line}\n`);
+}
+const frames = (page: Page) => page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+
+interface Result {
+  version: string;
+  violations: Array<{ id: string; impact: string | null; nodes: string[] }>;
+  incomplete: string[];
+}
+
+async function scan(page: Page, label: string): Promise<number> {
+  if (axeSource === '') axeSource = readFileSync(AXE_PATH, 'utf8');
+  await frames(page);
+  if (!(await page.evaluate<boolean>(`typeof window.axe !== 'undefined'`))) await page.evaluate(axeSource);
+  const result = await page.evaluate<Result, string[]>(async (tags) => {
+    const axe = (window as unknown as { axe: { run: (c: unknown, o: unknown) => Promise<Record<string, unknown>>; version: string } }).axe;
+    const r = (await axe.run(document, { runOnly: { type: 'tag', values: tags }, resultTypes: ['violations', 'incomplete'] })) as {
+      violations: Array<{ id: string; impact: string | null; nodes: Array<{ target: unknown }> }>;
+      incomplete: Array<{ id: string }>;
+    };
+    return { version: axe.version, violations: r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.map((n) => JSON.stringify(n.target)) })), incomplete: [...new Set(r.incomplete.map((i) => i.id))] };
+  }, TAGS);
+  note(`${label}: axe ${result.version} violations=${result.violations.length} [${result.violations.map((v) => `${v.id}(${v.impact}) ${v.nodes.join(' ')}`).join('; ')}] incomplete=[${result.incomplete.join(',')}]`);
+  return result.violations.length;
+}
+
+async function openToday(page: Page, todayLocal: string) {
+  if ((await page.locator(`[data-day="${todayLocal}"]`).count()) === 0) {
+    await page.locator('.period-bar').getByRole('button', { name: 'Today', exact: true }).click();
+    await expect(page.locator(`[data-day="${todayLocal}"]`)).toHaveCount(1);
+  }
+  await page.getByLabel('Open a day').fill(todayLocal);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('heading', { name: 'Times', exact: true })).toBeVisible();
+  return editor;
+}
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`axe Timesheet with the Day editor open on today, before and after a Check in - ${scheme}`, async ({ page, employeeSeed, signInThroughUi, isMobile }, testInfo) => {
+    test.setTimeout(240_000);
+    const project = testInfo.project.name;
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    const { todayLocal } = await employeeSeed.today();
+    const before = await employeeSeed.dayView(todayLocal);
+    const widths = isMobile ? [390] : [1440, 1280];
+    let total = 0;
+    let scans = 0;
+    try {
+      for (const width of widths) {
+        await employeeSeed.clearSessions(todayLocal);
+        await page.setViewportSize({ width, height: 800 });
+        if (scans === 0) await signInThroughUi();
+        else await page.reload();
+        await expect(page.locator('[data-day]')).toHaveCount(14);
+        await expect.poll(() => page.evaluate<number>('window.innerWidth')).toBe(width);
+        const tag = `[${project} ${scheme} ${width}]`;
+        let editor = await openToday(page, todayLocal);
+        await expect(editor.locator('.session-card')).toHaveCount(0);
+        total += await scan(page, `${tag} Day editor open on today, no session (before a Check in)`);
+        scans += 1;
+        if (isMobile) {
+          // The modal bottom sheet makes the page inert: close it, Check in from the page, open the sheet again on today.
+          await page.keyboard.press('Escape');
+          await expect(editor).toHaveCount(0);
+        }
+        const button = page.getByRole('region', { name: 'Check in and out' }).getByRole('button', { name: 'Check in', exact: true });
+        await button.focus();
+        await button.click();
+        if (isMobile) {
+          await expect(page.getByRole('region', { name: 'Check in and out' }).getByRole('button', { name: 'Check out', exact: true })).toBeVisible();
+          editor = await openToday(page, todayLocal);
+        }
+        const running = editor.locator('.session-card[data-state="running"]');
+        await expect(running).toHaveCount(1);
+        total += await scan(page, `${tag} Day editor open on today, Running session (after a Check in)`);
+        scans += 1;
+      }
+      note(`[${project} ${scheme}] Day editor TOTAL violations ${total} in ${scans} scans`);
+      expect(total).toBe(0);
+    } finally {
+      await employeeSeed.clearSessions(todayLocal);
+      if ((await employeeSeed.dayView(todayLocal)).entry !== null) await employeeSeed.putDay(todayLocal, { category: before.category });
+    }
+  });
+}

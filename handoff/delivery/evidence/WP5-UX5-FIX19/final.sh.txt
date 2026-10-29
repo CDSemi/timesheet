@@ -1,0 +1,12 @@
+# The proof exports and runs, one after another: a fresh export of the working tree (export-final, its own npm ci, lint, typecheck, build), the new tests
+# --repeat-each=20 --workers=6, then the whole Day editor spec on both projects (FIX18's tests, the version tests, the U4-05 guard, the same-task Escape test).
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX19/env.sh.txt
+bash $E/mkfix.sh.txt export-final
+bash $E/census.sh.txt pre-repeat20
+bash $E/run-pw.sh.txt repeat20 export-final real tests/e2e/day-editor.spec.ts --project=desktop --workers=6 --repeat-each=20 -g "FIX19" > $E/40-newtests-repeat20-log.txt 2>&1
+bash $E/census.sh.txt post-repeat20
+bash $E/run-pw.sh.txt fix18-both export-final real tests/e2e/day-editor.spec.ts --workers=2 -g "FIX18|FIX19" > $E/41-fix18-fix19-both-log.txt 2>&1
+bash $E/census.sh.txt pre-dayeditor
+bash $E/run-pw.sh.txt dayeditor-both export-final real tests/e2e/day-editor.spec.ts --workers=3 > $E/42-dayeditor-both-log.txt 2>&1
+bash $E/census.sh.txt post-dayeditor
+echo "final-done" > $T/final.done

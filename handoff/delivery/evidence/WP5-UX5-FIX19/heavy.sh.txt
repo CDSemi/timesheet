@@ -1,0 +1,13 @@
+# The heavy runs in export-final, one after another, with a census before and after each: npm test once, the real-clock FULL e2e (desktop, then mobile),
+# then the seven-file run at 2026-10-27T06:58:30Z through the FIX10 clock wrapper (--workers=6, both projects).
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX19/env.sh.txt
+SEVEN="tests/e2e/day-editor.spec.ts tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/review.spec.ts tests/e2e/submission.spec.ts tests/e2e/settings-transfer.spec.ts tests/e2e/profile.spec.ts"
+bash $E/census.sh.txt pre-npmtest
+cd $T/export-final
+npmx test > $E/70-npmtest.txt 2>&1; echo "npm test exit=$?" > $E/70-heavy-exits.txt
+bash $E/census.sh.txt post-npmtest
+bash $E/census.sh.txt pre-full-desktop
+bash $E/run-pw.sh.txt full-desktop export-final real --project=desktop > $E/71-full-desktop-log.txt 2>&1; echo "full desktop done" >> $E/70-heavy-exits.txt
+bash $E/census.sh.txt post-full-desktop
+echo "first pass stopped after the desktop FULL run: the new tests used the shared employee's newest free workday and collided with the calendar-default test; superseded by the second pass" >> $E/70-heavy-exits.txt
+exit 0

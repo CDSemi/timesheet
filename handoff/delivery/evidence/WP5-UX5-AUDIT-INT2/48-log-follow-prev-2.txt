@@ -1,0 +1,49 @@
+== follow-prev-2 in export-prev-probe: start 2026-10-29T12:30:18Z
+$ node node_modules/@playwright/test/cli.js test tests/e2e/zz-int2-follow.spec.ts --project=desktop --workers=2 -g int2-A |int2-B |int2-C |int2-D |int2-F1 |int2-F2 |int2-N |int2-O  --output=<task>/pw-follow-prev-2
+
+Running 12 tests using 1 worker
+
+(node:8444) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok  1 [desktop] › tests\e2e\zz-int2-follow.spec.ts:127:3 › int2-A 1440: a day with saved fields; the typed note survives the page's Check in and Check out, focus stays, the guard still asks (2.3s)
+  ok  2 [desktop] › tests\e2e\zz-int2-follow.spec.ts:127:3 › int2-A 1280: a day with saved fields; the typed note survives the page's Check in and Check out, focus stays, the guard still asks (1.9s)
+  ok  3 [desktop] › tests\e2e\zz-int2-follow.spec.ts:227:3 › int2-B notes only: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten (1.4s)
+  ok  4 [desktop] › tests\e2e\zz-int2-follow.spec.ts:227:3 › int2-B WFH only: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten (1.4s)
+  ok  5 [desktop] › tests\e2e\zz-int2-follow.spec.ts:227:3 › int2-B partial leave only: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten (1.4s)
+  ok  6 [desktop] › tests\e2e\zz-int2-follow.spec.ts:227:3 › int2-B category only: a change made elsewhere, then the tab comes back into view; the save is refused and nothing is overwritten (1.4s)
+  ok  7 [desktop] › tests\e2e\zz-int2-follow.spec.ts:269:1 › int2-C share: a grantee changes the notes of the day open in the owner's editor, the owner checks in from the page; the save is refused (1.7s)
+  ok  8 [desktop] › tests\e2e\zz-int2-follow.spec.ts:323:1 › int2-D tab: a second tab saves a note on the open day, the first tab checks in from the page; the save is refused (1.5s)
+  ok  9 [desktop] › tests\e2e\zz-int2-follow.spec.ts:370:1 › int2-F1 tab return: a session of a day with an entry changed elsewhere; the drawer shows it, the typed note stays; the save outcome (1.4s)
+  ok 10 [desktop] › tests\e2e\zz-int2-follow.spec.ts:409:1 › int2-F2 tab return: a day with no entry gets a session elsewhere (which creates the entry); the drawer shows it; the save outcome (1.4s)
+  ok 11 [desktop] › tests\e2e\zz-int2-follow.spec.ts:627:1 › int2-N delete confirmation open: a session changed elsewhere, the tab returns, then "Delete session"; the delete is refused (1.3s)
+  x  12 [desktop] › tests\e2e\zz-int2-follow.spec.ts:661:1 › int2-O overtaken read: the follow read answers after the editor's own save; a second save still succeeds (10.8s)
+
+
+  1) [desktop] › tests\e2e\zz-int2-follow.spec.ts:661:1 › int2-O overtaken read: the follow read answers after the editor's own save; a second save still succeeds 
+
+    TimeoutError: page.waitForRequest: Timeout 10000ms exceeded while waiting for event "request"
+
+      680 |     });
+      681 |     const delayed = dayRead(page, date);
+    > 682 |     const sent = page.waitForRequest((request) => request.method() === 'GET' && new URL(request.url()).pathname === `/api/days/${date}`, { timeout: 10_000 });
+          |                       ^
+      683 |     await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
+      684 |     await sent;
+      685 |     const put1 =page.waitForResponse((response) => response.request().method() === 'PUT' && new URL(response.url()).pathname === `/api/days/${date}`, { timeout: 10_000 });
+        at <task>\export-prev-probe\tests\e2e\zz-int2-follow.spec.ts:682:23
+
+    Error Context: ..\pw-follow-prev-2\zz-int2-follow-int2-O-over-fa732--second-save-still-succeeds-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-follow-prev-2\zz-int2-follow-int2-O-over-fa732--second-save-still-succeeds-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-follow-prev-2\zz-int2-follow-int2-O-over-fa732--second-save-still-succeeds-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\zz-int2-follow.spec.ts:661:1 › int2-O overtaken read: the follow read answers after the editor's own save; a second save still succeeds 
+  11 passed (30.1s)
+exit=1
+== follow-prev-2 end 2026-10-29T12:30:48Z

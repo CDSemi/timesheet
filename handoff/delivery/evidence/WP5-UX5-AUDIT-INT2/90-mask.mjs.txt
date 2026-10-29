@@ -1,0 +1,29 @@
+// Copies task-folder outputs into the evidence folder as masked LF text. Usage: node mask.mjs <evidenceDir> <src>[=<destName>] ...
+// Masks: ANSI colour codes, CR, user-profile paths (<user>), the task folder (<task>), the repository path (<repo>), and any
+// email address that is not a full synthetic @example.invalid one. Every file ends with exactly one newline.
+import { readFileSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
+
+const [dest, ...sources] = process.argv.slice(2);
+const rules = [
+  [/\u001b\[[0-9;]*[A-Za-z]/g, ''],
+  [/\r/g, ''],
+  [/[A-Za-z]:[\\/]+Users[\\/]+[^\\/\s"'`]+/gi, '<user>'],
+  [/\/[a-z]\/Users\/[^/\s"'`]+/gi, '<user>'],
+  [/[Dd]:[\\/]+\.claude-tmp[\\/]+timesheet[\\/]+WP5-UX5-AUDIT-INT2/g, '<task>'],
+  [/\/d\/\.claude-tmp\/timesheet\/WP5-UX5-AUDIT-INT2/g, '<task>'],
+  [/[Dd]:[\\/]+Dropbox[\\/]+Work\.CDSemi[\\/]+timesheet/g, '<repo>'],
+  [/\/d\/Dropbox\/Work\.CDSemi\/timesheet/g, '<repo>'],
+  [/[Dd]:[\\/]+\.claude-tmp[\\/]+claude[^\s"'`]*/g, '<claude-tmp>'],
+];
+const emailOk = /@example\.invalid$/i;
+for (const spec of sources) {
+  const [src, name] = spec.includes('=') ? spec.split('=') : [spec, basename(spec)];
+  let text = readFileSync(src, 'utf8');
+  for (const [pattern, replacement] of rules) text = text.replace(pattern, replacement);
+  text = text.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, (address) => (emailOk.test(address) ? address : '<email>'));
+  text = `${text.replace(/\n+$/, '')}\n`;
+  const out = join(dest, name.endsWith('.txt') ? name : `${name}.txt`);
+  writeFileSync(out, text);
+  console.log(`${src} -> ${out} (${text.length} chars)`);
+}

@@ -1,0 +1,22 @@
+# The mutants, one after another, each restored byte-equal (see mut.sh.txt). The pattern after -g selects the new tests and FIX18's.
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX19/env.sh.txt
+G='FIX18|FIX19'
+F=src/client/DayEditor.tsx
+M() { bash $E/mut.sh.txt "$@"; }
+# MA: a session write's answer is taken without the sameDayFields judgement (every branch takes the answer, the form is never restarted).
+M MA "$F" 'if (held === null || sameDayFields(held, next)) {' 'if (true) {' "$G"
+# MB: the unsaved-edit branch removed (the form always restarts when the fields differ).
+M MB "$F" '} else if (fieldsDirtyRef.current) {' '} else if (false) {' "$G"
+# MC: FIX18's WFH comparison removed.
+M MC "$F" 'held.wfh === fresh.wfh &&' 'true &&' "$G"
+# MD: FIX18's partial-leave comparison removed (minutes and kind).
+M MD "$F" 'held.leave_minutes === fresh.leave_minutes &&' 'true &&' "$G"
+M MD2 "$F" 'held.leave_kind === fresh.leave_kind &&' 'true &&' "$G"
+# ME: the open delete confirmation no longer holds the follow read off.
+M ME "$F" "nestedOpen.current = editing.kind !== 'none' || deleting !== null;" "nestedOpen.current = editing.kind !== 'none';" "$G"
+# MF: an overtaken follow read is no longer dropped.
+M MF "$F" 'if (stamp !== dayStamp.current || nestedOpen.current) return;' 'if (nestedOpen.current) return;' "$G"
+# MG: FIX18's other guards, for completeness: the notes comparison and the category comparison.
+M MG "$F" "(held.entry?.notes ?? '') === (fresh.entry?.notes ?? '')" 'true' "$G"
+M MH "$F" 'held.category === fresh.category &&' 'true &&' "$G"
+echo "muts-done" > $T/muts.done

@@ -1,0 +1,54 @@
+
+Running 7 tests using 1 worker
+
+(node:16772) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [desktop] › tests\e2e\day-editor.spec.ts:2501:5 › WP5-UX5-FIX18 (F-UX5I-1): the open Day editor follows the page's own Check in and Check out › at 1440px a Check in and a Check out of the page update the open editor, the note typed first stays and saves (1.5s)
+  ok 2 [desktop] › tests\e2e\day-editor.spec.ts:2501:5 › WP5-UX5-FIX18 (F-UX5I-1): the open Day editor follows the page's own Check in and Check out › at 1280px a Check in and a Check out of the page update the open editor, the note typed first stays and saves (2.0s)
+  x  3 [desktop] › tests\e2e\day-editor.spec.ts:2563:3 › WP5-UX5-FIX18 (F-UX5I-1): the open Day editor follows the page's own Check in and Check out › at 1440px a change made elsewhere to the day fields still ends in the refused save and "Reload day", also after the page's own Check in (8.0s)
+(node:71168) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 4 [desktop] › tests\e2e\day-editor.spec.ts:2600:3 › WP5-UX5-FIX18 (F-UX5I-1): the open Day editor follows the page's own Check in and Check out › at 1440px a session dialog that is open keeps what was typed when the tab comes back into view after the session changed elsewhere; its save is refused (1.3s)
+  -  5 [desktop] › tests\e2e\day-editor.spec.ts:2643:1 › WP5-UX5-FIX18 (F-UX5I-1): the phone's modal bottom sheet does not read its day again when the clock version changes
+  ok 6 [desktop] › tests\e2e\day-editor.spec.ts:2895:1 › a day changed elsewhere reports a stale version and reloads (846ms)
+  ok 7 [desktop] › tests\e2e\day-editor.spec.ts:2919:1 › a stale session version at save reports the conflict (806ms)
+
+
+  1) [desktop] › tests\e2e\day-editor.spec.ts:2563:3 › WP5-UX5-FIX18 (F-UX5I-1): the open Day editor follows the page's own Check in and Check out › at 1440px a change made elsewhere to the day fields still ends in the refused save and "Reload day", also after the page's own Check in 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: /Day editor/ }).getByRole('alert').filter({ hasText: 'This day changed since it was loaded' })
+    Expected: visible
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: /Day editor/ }).getByRole('alert').filter({ hasText: 'This day changed since it was loaded' }) with timeout 7000ms
+      - waiting for getByRole('dialog', { name: /Day editor/ }).getByRole('alert').filter({ hasText: 'This day changed since it was loaded' })
+
+
+      2582 |       await editor.getByRole('button', { name: 'Save day fields' }).click();
+      2583 |       const stale = editor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' });
+    > 2584 |       await expect(stale).toBeVisible();
+           |                           ^
+      2585 |       await expect(stale).toContainText('Nothing was saved');
+      2586 |       expect((await employeeSeed.dayView(todayLocal)).entry?.notes, 'the other device\'s note is not overwritten').toBe('changed on another device');
+      2587 |
+        at <task>\export-mut\tests\e2e\day-editor.spec.ts:2584:27
+
+    Error Context: ..\pw-mut-MX1-fix18\day-editor-WP5-UX5-FIX18-F-7a2ba-ter-the-page-s-own-Check-in-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-MX1-fix18\day-editor-WP5-UX5-FIX18-F-7a2ba-ter-the-page-s-own-Check-in-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-MX1-fix18\day-editor-WP5-UX5-FIX18-F-7a2ba-ter-the-page-s-own-Check-in-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:2563:3 › WP5-UX5-FIX18 (F-UX5I-1): the open Day editor follows the page's own Check in and Check out › at 1440px a change made elsewhere to the day fields still ends in the refused save and "Reload day", also after the page's own Check in 
+  1 skipped
+  5 passed (19.3s)
+exit=1

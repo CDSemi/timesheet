@@ -1,0 +1,11 @@
+WP5-UX5-AUDIT-INT2 rule slips and probe defects (recorded as they happened; none changed a result)
+- 2026-10-29 ~12:00Z: one read-only grep of tests/e2e/theme.spec.ts in the export was piped into `head -20` (the brief forbids pipes into
+  head). Output went to a task-folder file; nothing else affected.
+- Probe defect: the first a5cbc91 run of the follow probe waited for the editor's follow read, which a5cbc91 does not make, so 14 cases
+  timed out at that wait (kept as 48-log-follow-prev-run1-probe-defect.txt; only G1, G2 and L are used). Its `-g` pattern also matched the
+  file name case-insensitively ("int2-F" in "zz-int2-follow"), so every case of the file ran; the second run uses patterns with a space.
+- Probe defect: the first target run read the form right after "Reload day" before the reload answered (B and E reload lines); rerun with
+  a wait (45-obs-follow-target-B2.txt, 46-obs-admin-target-2.txt). The defective admin file is kept under a name that says so.
+- Two evidence copies I had just written were replaced by renamed copies with `rm -f` of the single file (no recursive delete).
+- No heredoc, no stdin to node or python, no sleep or polling, no PID kill, no git configuration change, no detached shell. Every run ended
+  through its own handle; the final census shows the host back at 0.73 busy cores.

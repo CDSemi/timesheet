@@ -2665,6 +2665,317 @@ test('WP5-UX5-FIX18 (F-UX5I-1): the phone\'s modal bottom sheet does not read it
   expect(dayReads, 'the bottom sheet sent no read of its day').toHaveLength(0);
 });
 
+/*
+ * WP5-UX5-FIX19 (F-UX5I2-1, R-UX5I2-1): a change made elsewhere to the day's fields is never dropped silently. A session write in the open
+ * editor (a session save, "Confirm breaks", a delete) answers with the whole day, which carries the day fields as the server holds them now
+ * and their newer entry version. The editor takes that version only together with the fields it belongs to: when the fields are the ones
+ * the editor holds it takes the answer and the forms keep what was typed; when they differ and nothing is typed it restarts the day fields
+ * form from the answer; when they differ and a field holds an unsaved edit it keeps the day fields form on the day it holds, so "Save day
+ * fields" carries the old version, is refused and ends in "Reload day". The B, N and O cases pin the guards of the follow read (FIX18).
+ * Every test works on a person of its own: a saved day entry stays on its day, and the other tests of this file read the newest free workday
+ * of the shared employee for its calendar default.
+ */
+test.describe('WP5-UX5-FIX19 (F-UX5I2-1): a session write in the open Day editor never lets "Save day fields" overwrite a day field changed elsewhere', () => {
+  test.skip(({ isMobile }) => isMobile, 'The follow read and the shared answer path are checked on the desktop drawer; the phone sheet has no follow read');
+
+  type SeededDayView = Awaited<ReturnType<SeedClient['dayView']>>;
+  const SAVED = 'Synthetic note saved before the editor opened';
+  const ELSEWHERE = 'Synthetic note saved on another device';
+  const TYPED = 'Synthetic note typed here and not saved';
+
+  const fieldsOf = (editor: Locator) => {
+    const form = editor.getByRole('form', { name: 'Day fields' });
+    return { notes: form.getByLabel('Notes'), wfh: form.getByLabel('Worked from home (WFH)') };
+  };
+  const staleOf = (editor: Locator) => editor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' });
+  const fieldsSavedOf = (editor: Locator) => editor.getByRole('status').filter({ hasText: 'Day fields saved.' });
+  const dayAnswer = (page: Page, date: string, method: 'GET' | 'PUT') =>
+    page.waitForResponse((response) => response.request().method() === method && new URL(response.url()).pathname === `/api/days/${date}`, { timeout: 7_000 });
+  const twoFrames = (page: Page) => page.evaluate('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+
+  /** A person of this test alone and the newest past workday of the displayed period without a session. */
+  async function freshDay(adminSeed: SeedClient, server: BuiltServer, name: string): Promise<{ seed: SeedClient; account: Person['account']; date: string }> {
+    const person = await newPerson(adminSeed, server, { displayName: `Synthetic ${name}`, signature: 'none' });
+    const [date = ''] = need(await person.api.displayedPeriodFreeWorkdays(), 1);
+    return { seed: person.api, account: person.account, date };
+  }
+  /** Signs in at 1440px, where the drawer stands beside the sheet, and opens the day. */
+  async function openWide(page: Page, signInPageAs: (account: Person['account'], startHash?: string) => Promise<void>, account: Person['account'], date: string): Promise<Locator> {
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await signInPageAs(account, '#/timesheet');
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    return openEditor(page, date);
+  }
+  /** The tab comes back into view: the clock version changes, the sheet reloads and the open editor reads its day again; resolves once that read is on screen. */
+  async function tabReturn(page: Page, date: string): Promise<void> {
+    const read = dayAnswer(page, date, 'GET');
+    await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
+    await read;
+    await twoFrames(page);
+  }
+  /** Edit session, End time 17:45, Save, Save in "Save this session?": the answer of a session write that is not the day fields form's own. */
+  async function saveSessionEnd(page: Page, editor: Locator): Promise<void> {
+    await editor.getByRole('button', { name: /^Edit session/ }).click();
+    const edit = sessionDialog(page, 'Edit session');
+    await edit.getByLabel('End time', { exact: true }).fill('17:45');
+    await saveSession(page, edit);
+    await expect(editor.getByRole('status').filter({ hasText: 'Session saved.' })).toBeVisible();
+  }
+
+  test('G1: after a session is saved with nothing typed in the fields, the form shows the day fields changed on another device and "Save day fields" keeps them', async ({
+    page,
+    adminSeed,
+    builtServer,
+    signInPageAs,
+  }) => {
+    const { seed, account, date } = await freshDay(adminSeed, builtServer, 'Session Save');
+    await seed.seedCompleteDay(date);
+    await seed.putDay(date, { notes: SAVED });
+    const editor = await openWide(page, signInPageAs, account, date);
+    const { notes, wfh } = fieldsOf(editor);
+    await expect(notes).toHaveValue(SAVED);
+    await expect(wfh).not.toBeChecked();
+    // Another device saves the note and WFH after the editor loaded the day.
+    await seed.putDay(date, { notes: ELSEWHERE, wfh: true });
+
+    await saveSessionEnd(page, editor);
+    // Nothing was typed: the day fields form restarts from the answer, which carries what the other device saved.
+    await expect(notes).toHaveValue(ELSEWHERE);
+    await expect(wfh).toBeChecked();
+
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    await expect(fieldsSavedOf(editor)).toBeVisible();
+    const server = await seed.dayView(date);
+    expect(server.entry?.notes, 'the other device\'s note is not overwritten').toBe(ELSEWHERE);
+    expect(server.wfh, 'the other device\'s WFH is not overwritten').toBe(true);
+    expect(server.sessions[0]?.end_utc, 'the session edit was saved').not.toBeNull();
+  });
+
+  test('G2: after a session is deleted with nothing typed in the fields, the form shows the day fields changed on another device and "Save day fields" keeps them', async ({
+    page,
+    adminSeed,
+    builtServer,
+    signInPageAs,
+  }) => {
+    const { seed, account, date } = await freshDay(adminSeed, builtServer, 'Session Delete');
+    await seed.createSession(date, '09:00', '12:00', []);
+    await seed.createSession(date, '13:00', '17:00', []);
+    await seed.putDay(date, { notes: SAVED });
+    const editor = await openWide(page, signInPageAs, account, date);
+    const { notes, wfh } = fieldsOf(editor);
+    await expect(notes).toHaveValue(SAVED);
+    await seed.putDay(date, { notes: ELSEWHERE, wfh: true });
+
+    await editor.getByRole('button', { name: /^Delete session/ }).first().click();
+    const confirm = page.getByRole('alertdialog', { name: 'Delete this session?' });
+    await expect(confirm).toBeVisible();
+    await confirm.getByRole('button', { name: 'Delete session' }).click();
+    await expect(editor.getByRole('status').filter({ hasText: 'Session deleted.' })).toBeVisible();
+    await expect(notes).toHaveValue(ELSEWHERE);
+    await expect(wfh).toBeChecked();
+
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    await expect(fieldsSavedOf(editor)).toBeVisible();
+    const server = await seed.dayView(date);
+    expect(server.entry?.notes, 'the other device\'s note is not overwritten').toBe(ELSEWHERE);
+    expect(server.wfh, 'the other device\'s WFH is not overwritten').toBe(true);
+    expect(server.sessions, 'one session is left').toHaveLength(1);
+  });
+
+  test('G3: a note typed before a session is saved stays; "Save day fields" is then refused, nothing is overwritten, and "Reload day" shows the change made on another device', async ({
+    page,
+    adminSeed,
+    builtServer,
+    signInPageAs,
+  }) => {
+    const { seed, account, date } = await freshDay(adminSeed, builtServer, 'Typed Note');
+    await seed.seedCompleteDay(date);
+    await seed.putDay(date, { notes: SAVED });
+    const editor = await openWide(page, signInPageAs, account, date);
+    const { notes, wfh } = fieldsOf(editor);
+    await notes.fill(TYPED);
+    await seed.putDay(date, { notes: ELSEWHERE, wfh: true });
+
+    await saveSessionEnd(page, editor);
+    // The typed note is an unsaved edit: the form is not restarted.
+    await expect(notes).toHaveValue(TYPED);
+    await expect(wfh).not.toBeChecked();
+
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    await expect(staleOf(editor)).toBeVisible();
+    await expect(staleOf(editor)).toContainText('Nothing was saved');
+    const server = await seed.dayView(date);
+    expect(server.entry?.notes, 'the other device\'s note is not overwritten').toBe(ELSEWHERE);
+    expect(server.wfh, 'the other device\'s WFH is not overwritten').toBe(true);
+
+    await staleOf(editor).getByRole('button', { name: 'Reload day' }).click();
+    await expect(staleOf(editor)).toHaveCount(0);
+    await expect(notes).toHaveValue(ELSEWHERE);
+    await expect(wfh).toBeChecked();
+  });
+
+  test('G4: with no change made elsewhere, a note typed before a session is saved stays and "Save day fields" saves it', async ({
+    page,
+    adminSeed,
+    builtServer,
+    signInPageAs,
+  }) => {
+    const { seed, account, date } = await freshDay(adminSeed, builtServer, 'Nothing Elsewhere');
+    await seed.seedCompleteDay(date);
+    await seed.putDay(date, { notes: SAVED });
+    const editor = await openWide(page, signInPageAs, account, date);
+    const { notes } = fieldsOf(editor);
+    await notes.fill(TYPED);
+
+    await saveSessionEnd(page, editor);
+    await expect(notes).toHaveValue(TYPED);
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    await expect(fieldsSavedOf(editor)).toBeVisible();
+    await expect(staleOf(editor)).toHaveCount(0);
+    expect((await seed.dayView(date)).entry?.notes).toBe(TYPED);
+  });
+
+  // B: each day field the follow read compares. The tab returns after a change made elsewhere to that one field; the drawer keeps the day it holds
+  // (the typed edit stays), so the save is refused and the value written elsewhere is kept.
+  // `initial` is the day as saved before the editor opens; a leave case starts from a saved partial leave so that only one of its two values changes.
+  const SAVED_LEAVE = { notes: SAVED, leave_minutes: 60, leave_kind: 'vacation' };
+  const FIELD_CASES: ReadonlyArray<{
+    name: string;
+    initial?: Record<string, unknown>;
+    elsewhere: Record<string, unknown>;
+    holds: (day: SeededDayView) => boolean;
+    typeWfh: boolean;
+  }> = [
+    { name: 'notes', elsewhere: { notes: ELSEWHERE }, holds: (day) => day.entry?.notes === ELSEWHERE, typeWfh: true },
+    { name: 'WFH', elsewhere: { notes: SAVED, wfh: true }, holds: (day) => day.wfh, typeWfh: false },
+    {
+      name: 'partial leave minutes',
+      initial: SAVED_LEAVE,
+      elsewhere: { ...SAVED_LEAVE, leave_minutes: 120 },
+      holds: (day) => day.leave_minutes === 120 && day.leave_kind === 'vacation',
+      typeWfh: false,
+    },
+    {
+      name: 'partial leave kind',
+      initial: SAVED_LEAVE,
+      elsewhere: { ...SAVED_LEAVE, leave_kind: 'sick' },
+      holds: (day) => day.leave_minutes === 60 && day.leave_kind === 'sick',
+      typeWfh: false,
+    },
+    { name: 'category', elsewhere: { notes: SAVED, category: 'Off' }, holds: (day) => day.category === 'Off', typeWfh: false },
+  ];
+  for (const fieldCase of FIELD_CASES) {
+    test(`B: the ${fieldCase.name} changed on another device, then the tab comes back into view: the save is refused and the value is kept`, async ({
+      page,
+      adminSeed,
+      builtServer,
+      signInPageAs,
+    }) => {
+      const { seed, account, date } = await freshDay(adminSeed, builtServer, 'Tab Return');
+      await seed.putDay(date, fieldCase.initial ?? { notes: SAVED });
+      const editor = await openWide(page, signInPageAs, account, date);
+      const { notes, wfh } = fieldsOf(editor);
+      if (fieldCase.typeWfh) await wfh.check();
+      else await notes.fill(TYPED);
+      await seed.putDay(date, fieldCase.elsewhere);
+
+      await tabReturn(page, date);
+      await editor.getByRole('button', { name: 'Save day fields' }).click();
+      await expect(staleOf(editor)).toBeVisible();
+      expect(fieldCase.holds(await seed.dayView(date)), `the ${fieldCase.name} written elsewhere is not overwritten`).toBe(true);
+
+      await staleOf(editor).getByRole('button', { name: 'Reload day' }).click();
+      await expect(staleOf(editor)).toHaveCount(0);
+      await expect(notes).toHaveValue((await seed.dayView(date)).entry?.notes ?? '');
+    });
+  }
+
+  // N: the delete confirmation is open on the session as held; a follow read that arrives meanwhile must not replace it, so the delete still
+  // carries the version the confirmation loaded and a session changed elsewhere is not deleted.
+  test('N: a session changed on another device behind an open delete confirmation: after the tab comes back, "Delete session" is refused', async ({
+    page,
+    adminSeed,
+    builtServer,
+    signInPageAs,
+  }) => {
+    const { seed, account, date } = await freshDay(adminSeed, builtServer, 'Delete Guard');
+    await seed.createSession(date, '09:00', '12:00', []);
+    const editor = await openWide(page, signInPageAs, account, date);
+    await editor.getByRole('button', { name: /^Delete session/ }).click();
+    const confirm = page.getByRole('alertdialog', { name: 'Delete this session?' });
+    await expect(confirm).toBeVisible();
+    const session = (await seed.dayView(date)).sessions[0];
+    await seed.call('PUT', `/api/sessions/${session?.id}`, {
+      start: session?.start_utc,
+      end: new Date(Date.parse(session?.end_utc ?? '') - 30 * 60_000).toISOString().replace(/\.\d{3}Z$/, 'Z'),
+      input_zone: session?.input_zone,
+      breaks: [],
+      breaks_confirmed: true,
+      expected_version: session?.version,
+    });
+
+    await tabReturn(page, date);
+    const deleted = page.waitForResponse((response) => response.request().method() === 'DELETE' && new URL(response.url()).pathname.startsWith('/api/sessions/'), {
+      timeout: 7_000,
+    });
+    await confirm.getByRole('button', { name: 'Delete session' }).click();
+    expect((await deleted).status(), 'the delete carries the version the confirmation loaded, which is no longer the session\'s').toBe(409);
+    await expect(staleOf(editor)).toBeVisible();
+    expect((await seed.dayView(date)).sessions, 'the session changed elsewhere is not deleted').toHaveLength(1);
+  });
+
+  // O: a read of the day that was sent before the editor's own save and answers after it describes an older day; taking it back would send the
+  // older entry version with the next save. The read is held at the route until the save has been answered.
+  test('O: a read of the day that answers after the editor\'s own save is dropped; the next "Save day fields" still succeeds', async ({
+    page,
+    adminSeed,
+    builtServer,
+    signInPageAs,
+  }) => {
+    const { seed, account, date } = await freshDay(adminSeed, builtServer, 'Overtaken Read');
+    await seed.putDay(date, { notes: SAVED });
+    const editor = await openWide(page, signInPageAs, account, date);
+    const versionBefore = (await seed.dayView(date)).entry?.version ?? 0;
+    let release: () => void = () => undefined;
+    const released = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let fetched: () => void = () => undefined;
+    const fetchedByRoute = new Promise<void>((resolve) => {
+      fetched = resolve;
+    });
+    let armed = true;
+    await page.route(`**/api/days/${date}`, async (route) => {
+      if (route.request().method() !== 'GET' || !armed) {
+        await route.continue();
+        return;
+      }
+      armed = false;
+      const response = await route.fetch();
+      fetched();
+      await released;
+      await route.fulfill({ response });
+    });
+
+    const delayedRead = dayAnswer(page, date, 'GET');
+    await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
+    await fetchedByRoute;
+    // The server has answered the read (the entry as it is now); the page has not received it. Save the day fields meanwhile.
+    const firstSave = dayAnswer(page, date, 'PUT');
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    expect((await firstSave).status()).toBe(200);
+    expect((await seed.dayView(date)).entry?.version, 'the save moved the entry version on').toBeGreaterThan(versionBefore);
+    release();
+    await delayedRead;
+    await twoFrames(page);
+
+    const secondSave = dayAnswer(page, date, 'PUT');
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    expect((await secondSave).status(), 'the second save carries the version of the first save').toBe(200);
+    await expect(staleOf(editor)).toHaveCount(0);
+  });
+});
+
 /** The Partial leave dialog of the Day editor (U5-25), a modal named by its heading. */
 function leaveDialogOf(page: Page): Locator {
   return page.getByRole('dialog', { name: 'Partial leave', exact: true });

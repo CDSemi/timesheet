@@ -1,0 +1,35 @@
+// Which of the differing dist/client files differ only by the renamed (content-hashed) chunk names?
+// Usage: node normcmp.mjs <base dist/client dir> <final dist/client dir>
+// The hashed asset names of the base build are renamed to the final build's names inside the base files; every file whose content is then equal
+// differs only by a chunk name (a cascade of the changed entry chunk's hash). A file that stays different holds a real change.
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [baseDir, finalDir] = process.argv.slice(2);
+if (baseDir === undefined || finalDir === undefined) throw new Error('usage: node normcmp.mjs <base dist/client> <final dist/client>');
+const assets = (dir) => readdirSync(join(dir, 'assets'));
+const stemOf = (name) => name.replace(/-[A-Za-z0-9_-]{8}\.(js|css)(\.map)?$/, '');
+const baseNames = assets(baseDir);
+const finalNames = assets(finalDir);
+const finalByStem = new Map();
+for (const name of finalNames) finalByStem.set(name.replace(/-[A-Za-z0-9_-]{8}\.(js|css)(\.map)?$/, '') + (name.endsWith('.map') ? '#map' : ''), name);
+const rename = new Map();
+for (const name of baseNames) {
+  const key = stemOf(name) + (name.endsWith('.map') ? '#map' : '');
+  const target = finalByStem.get(key);
+  if (target !== undefined && target !== name) rename.set(name, target);
+}
+const normalise = (text) => {
+  let out = text;
+  for (const [from, to] of rename) out = out.split(from).join(to);
+  return out;
+};
+const report = [];
+for (const [from, to] of [...rename, ['index.html', 'index.html']]) {
+  const isHtml = from === 'index.html';
+  const baseText = readFileSync(isHtml ? join(baseDir, from) : join(baseDir, 'assets', from), 'utf8');
+  const finalText = readFileSync(isHtml ? join(finalDir, to) : join(finalDir, 'assets', to), 'utf8');
+  const same = normalise(baseText) === finalText;
+  report.push(`${same ? 'only renamed chunk names' : 'REAL CONTENT CHANGE'}: ${from} -> ${to} (${baseText.length} -> ${finalText.length} chars)`);
+}
+console.log(report.sort().join('\n'));

@@ -1,0 +1,24 @@
+# Probe runs, second pass: the reload observations of B and E on the target (the probe now waits for the reloaded day), and the
+# comparison runs on a5cbc91 with INT2_NO_FOLLOW=1 (no follow read exists there, so the probe waits for the page's period read).
+. <task>/env.sh
+P=$T/logs/probe-run-progress.txt
+step() { echo "$1 $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $P; }
+run() {
+  label=$1; dir=$2; shift 2
+  mkdir -p $T/pw-$label $T/shots-$label
+  export E2E_SCREENSHOT_DIR="$TW\\shots-$label"
+  cd $T/$dir || return 2
+  { echo "== $label in $dir: start $(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "\$ node node_modules/@playwright/test/cli.js test $* --output=<task>/pw-$label"; } > $T/logs/probe-$label.txt
+  NODE_OPTIONS="--trace-deprecation" node.exe node_modules/@playwright/test/cli.js test "$@" --output="$TW\\pw-$label" >> $T/logs/probe-$label.txt 2>&1
+  echo "exit=$?" >> $T/logs/probe-$label.txt
+  echo "== $label end $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $T/logs/probe-$label.txt
+  step "$label done"
+}
+cp $T/probes/zz-int2-follow.spec.ts $T/probes/zz-int2-admin.spec.ts $T/export-probe/tests/e2e/
+cp $T/probes/zz-int2-follow.spec.ts $T/probes/zz-int2-admin.spec.ts $T/export-prev-probe/tests/e2e/
+INT2_OUT="$TW\\out\\45-obs-follow-target-B2.txt" run follow-target-b2 export-probe tests/e2e/zz-int2-follow.spec.ts --project=desktop --workers=2 -g "int2-B "
+INT2_OUT="$TW\\out\\46-obs-admin-target-2.txt" run admin-target-2 export-probe tests/e2e/zz-int2-admin.spec.ts --project=desktop --workers=1
+INT2_NO_FOLLOW=1 INT2_OUT="$TW\\out\\45-obs-follow-prev-2.txt" run follow-prev-2 export-prev-probe tests/e2e/zz-int2-follow.spec.ts --project=desktop --workers=2 -g "int2-A |int2-B |int2-C |int2-D |int2-F1 |int2-F2 |int2-N |int2-O "
+INT2_NO_FOLLOW=1 INT2_OUT="$TW\\out\\46-obs-admin-prev-2.txt" run admin-prev-2 export-prev-probe tests/e2e/zz-int2-admin.spec.ts --project=desktop --workers=1
+bash $T/cens.sh post-probes-2 > $T/logs/cens-post-probes-2.log 2>&1
+step "probe-run2 done"

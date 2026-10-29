@@ -12,6 +12,7 @@ import { createHash } from 'node:crypto';
 
 const listing = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], {
   encoding: 'utf8',
+  maxBuffer: 64 * 1024 * 1024,
 });
 const files = [...new Set(listing.split('\0'))]
   .filter((path) => path !== '' && !path.startsWith('handoff/'))

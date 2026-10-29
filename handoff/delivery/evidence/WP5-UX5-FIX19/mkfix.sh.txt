@@ -1,0 +1,15 @@
+# Usage: bash mkfix.sh <export folder name in the task folder>
+# A scratch export of the working tree: git archive of HEAD, then the owned files of the working tree copied over it, then npm ci, lint, typecheck, build.
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX19/env.sh.txt
+X=$1
+mkdir -p $T/$X
+tar -xf $T/head.tar -C $T/$X || exit 2
+for f in src/client/DayEditor.tsx tests/e2e/day-editor.spec.ts scripts/source-digest.mjs docs/04_UX_AND_SETTINGS.md docs/04_UX_AND_SETTINGS.vi.md; do
+  cp $REPO/$f $T/$X/$f || exit 3
+done
+cd $T/$X
+npmx ci > $E/30-$X-ci.txt 2>&1; echo "ci=$?" >> $E/30-$X-exits.txt
+npmx run lint > $E/30-$X-lint.txt 2>&1; echo "lint=$?" >> $E/30-$X-exits.txt
+npmx run typecheck > $E/30-$X-typecheck.txt 2>&1; echo "typecheck=$?" >> $E/30-$X-exits.txt
+npmx run build > $E/30-$X-build.txt 2>&1; echo "build=$?" >> $E/30-$X-exits.txt
+echo "$X ready" >> $E/30-$X-exits.txt

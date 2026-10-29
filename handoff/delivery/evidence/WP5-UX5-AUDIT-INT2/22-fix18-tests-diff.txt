@@ -1,0 +1,222 @@
+diff --git a/tests/e2e/day-editor.spec.ts b/tests/e2e/day-editor.spec.ts
+index 77e7b9a0..c1d1329c 100644
+--- a/tests/e2e/day-editor.spec.ts
++++ b/tests/e2e/day-editor.spec.ts
+@@ -2454,6 +2454,217 @@ test('a stale session version at Check out says so, reloads and then checks out'
+   expect(bodies[1]?.expected_version, 'the second request carries the reloaded version').toBe((running?.version ?? 0) + 1);
+ });
+ 
++/*
++ * WP5-UX5-FIX18 (F-UX5I-1): from 768px the Day editor is a non-modal drawer, so the page's own Check in and Check out can be pressed while it
++ * is open on today. A clock action changes the day's sessions and, when the day has no entry yet, creates the entry with its calendar defaults;
++ * it never changes a day field. The open editor therefore reads its day again, keeps its forms (a note typed first stays) and a later "Save day
++ * fields" sends the entry version read after the action. A change to the day's fields made elsewhere is another thing: it still ends in the
++ * refused save and "Reload day".
++ */
++test.describe('WP5-UX5-FIX18 (F-UX5I-1): the open Day editor follows the page\'s own Check in and Check out', () => {
++  test.skip(({ isMobile }) => isMobile, 'The phone editor is a modal bottom sheet over an inert page: no Check in or Check out can be pressed while it is open');
++
++  /** Signs in at a width, shows the period that holds today and opens today's Day editor, with no session today. */
++  async function openToday(page: Page, seed: SeedClient, signIn: () => Promise<void>, width: number, todayLocal: string): Promise<{ editor: Locator; notes: Locator }> {
++    await seed.clearSessions(todayLocal);
++    await page.setViewportSize({ width, height: 800 });
++    await signIn();
++    await expect(page.locator('[data-day]')).toHaveCount(14);
++    if ((await page.locator(`[data-day="${todayLocal}"]`).count()) === 0) {
++      await page.locator('.period-bar').getByRole('button', { name: 'Today', exact: true }).click();
++      await expect(page.locator(`[data-day="${todayLocal}"]`)).toHaveCount(1);
++    }
++    const editor = await openEditor(page, todayLocal);
++    // 1440px stands beside the sheet; 1280px floats over it (a rule of the window width alone).
++    await expect(page.locator('[data-editor-layout]')).toHaveAttribute('data-editor-layout', width === 1440 ? 'beside' : 'floating');
++    await expect(editor.locator('.session-card')).toHaveCount(0);
++    return { editor, notes: editor.getByRole('form', { name: 'Day fields' }).getByLabel('Notes') };
++  }
++
++  /**
++   * Presses the page's own Check in or Check out button. Focus goes first: a floating drawer docked over the button moves to the other
++   * edge when the button takes focus under it (SC 2.4.11), so the press never lands on the drawer, whichever weekday today is.
++   */
++  async function pressClock(page: Page, name: 'Check in' | 'Check out'): Promise<void> {
++    const button = page.getByRole('region', { name: 'Check in and out' }).getByRole('button', { name, exact: true });
++    await button.focus();
++    await button.click();
++  }
++
++  /** Puts today back as it was: no session, and the day fields the test saved or the clock created at their calendar category. */
++  async function restoreToday(seed: SeedClient, todayLocal: string, category: string): Promise<void> {
++    await seed.clearSessions(todayLocal);
++    if ((await seed.dayView(todayLocal)).entry !== null) await seed.putDay(todayLocal, { category });
++  }
++
++  for (const width of [1440, 1280]) {
++    test(`at ${width}px a Check in and a Check out of the page update the open editor, the note typed first stays and saves`, async ({
++      page,
++      employeeSeed,
++      signInThroughUi,
++    }) => {
++      const note = 'Synthetic note typed before the Check in';
++      const { todayLocal } = await employeeSeed.today();
++      const before = await employeeSeed.dayView(todayLocal);
++      try {
++        const { editor, notes } = await openToday(page, employeeSeed, signInThroughUi, width, todayLocal);
++        const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
++        await notes.fill(note);
++
++        // Check in: the drawer shows the running session at once, and the note stays.
++        await pressClock(page, 'Check in');
++        const running = editor.locator('.session-card[data-state="running"]');
++        await expect(running).toHaveCount(1);
++        await expect(running.locator('[data-session-state]')).toHaveText('Running');
++        await expect(running.locator('.session-source')).toHaveText('Checked in');
++        await expect(notes).toHaveValue(note);
++        await expect(discard).toHaveCount(0);
++
++        // A session needs a positive length: the server stamps whole seconds, so the clock has to pass the next one.
++        const started = (await employeeSeed.dayView(todayLocal)).sessions.find((session) => session.end_utc === null);
++        expect(started, 'the Check in left a running session on today').toBeDefined();
++        await expect
++          .poll(() => Date.now(), { message: 'the clock is a whole second past the Check in', intervals: [100] })
++          .toBeGreaterThanOrEqual(Date.parse(started?.start_utc ?? '') + 1_000);
++
++        // Check out with no breaks: the drawer shows the ended session, and the note still stays.
++        await pressClock(page, 'Check out');
++        const dialog = page.getByRole('dialog', { name: 'Check out' });
++        await expect(dialog).toBeVisible();
++        await dialog.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
++        await dialog.getByRole('button', { name: 'Check out, no breaks taken' }).click();
++        await expect(dialog).toHaveCount(0);
++        const ended = editor.locator('.session-card:not([data-state="running"])');
++        await expect(ended).toHaveCount(1);
++        await expect(editor.locator('.session-card[data-state="running"]')).toHaveCount(0);
++        await expect(ended.locator('.session-source')).toHaveText('Checked in and out');
++        await expect(notes).toHaveValue(note);
++        await expect(discard).toHaveCount(0);
++
++        // Save day fields: accepted (the editor holds the entry version the clock action left), and it writes the note and no other day field.
++        await editor.getByRole('button', { name: 'Save day fields' }).click();
++        await expect(editor.getByRole('status').filter({ hasText: 'Day fields saved.' })).toBeVisible();
++        await expect(editor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' })).toHaveCount(0);
++        const saved = await employeeSeed.dayView(todayLocal);
++        expect(saved.entry?.notes, 'the server holds the note').toBe(note);
++        expect({ category: saved.category, leave_minutes: saved.leave_minutes, leave_kind: saved.leave_kind, wfh: saved.wfh }).toEqual({
++          category: before.category,
++          leave_minutes: before.leave_minutes,
++          leave_kind: before.leave_kind,
++          wfh: before.wfh,
++        });
++        expect(saved.sessions.map((session) => session.end_utc !== null), 'the one session stays ended').toEqual([true]);
++      } finally {
++        await restoreToday(employeeSeed, todayLocal, before.category);
++      }
++    });
++  }
++
++  test('at 1440px a change made elsewhere to the day fields still ends in the refused save and "Reload day", also after the page\'s own Check in', async ({
++    page,
++    employeeSeed,
++    signInThroughUi,
++  }) => {
++    const { todayLocal } = await employeeSeed.today();
++    const before = await employeeSeed.dayView(todayLocal);
++    try {
++      const { editor, notes } = await openToday(page, employeeSeed, signInThroughUi, 1440, todayLocal);
++      await notes.fill('Synthetic note typed here');
++      // Another device saves the day's notes after the editor loaded it.
++      await employeeSeed.putDay(todayLocal, { category: before.category, notes: 'changed on another device' });
++
++      // The page's own Check in makes the editor read its day again. The day's fields differ from what it holds, so it keeps what it holds.
++      const read = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname === `/api/days/${todayLocal}`, {
++        timeout: 7_000,
++      });
++      await pressClock(page, 'Check in');
++      await read;
++      await editor.getByRole('button', { name: 'Save day fields' }).click();
++      const stale = editor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' });
++      await expect(stale).toBeVisible();
++      await expect(stale).toContainText('Nothing was saved');
++      expect((await employeeSeed.dayView(todayLocal)).entry?.notes, 'the other device\'s note is not overwritten').toBe('changed on another device');
++
++      // Reload day reads the whole day: the other device's note and the running session.
++      await stale.getByRole('button', { name: 'Reload day' }).click();
++      await expect(stale).toHaveCount(0);
++      await expect(notes).toHaveValue('changed on another device');
++      await expect(editor.locator('.session-card[data-state="running"]')).toHaveCount(1);
++    } finally {
++      await restoreToday(employeeSeed, todayLocal, before.category);
++    }
++  });
++
++  // The page raises the follow for every change of the clock version, and the tab coming back into view is one. A session dialog that is open
++  // works on the day it was opened on: its typed values stay, and its save still carries the version it loaded.
++  test('at 1440px a session dialog that is open keeps what was typed when the tab comes back into view after the session changed elsewhere; its save is refused', async ({
++    page,
++    employeeSeed,
++    signInThroughUi,
++  }) => {
++    const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
++    try {
++      await employeeSeed.seedCompleteDay(date);
++      await page.setViewportSize({ width: 1440, height: 800 });
++      await signInThroughUi();
++      const editor = await openEditor(page, date);
++      await editor.getByRole('button', { name: /^Edit session/ }).click();
++      const edit = sessionDialog(page, 'Edit session');
++      await edit.getByLabel('End time', { exact: true }).fill('17:45');
++      // Another device changes the session after the dialog loaded it.
++      const session = (await employeeSeed.dayView(date)).sessions[0];
++      await employeeSeed.call('PUT', `/api/sessions/${session?.id}`, {
++        start: session?.start_utc,
++        end: session?.end_utc,
++        input_zone: session?.input_zone,
++        breaks: [],
++        breaks_confirmed: false,
++        expected_version: session?.version,
++      });
++
++      // The tab comes back into view: the clock version changes, the sheet reloads and the editor reads its day again.
++      const read = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname === `/api/days/${date}`, {
++        timeout: 7_000,
++      });
++      await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
++      await read;
++      await expect(edit).toBeVisible();
++      await expect(edit.getByLabel('End time', { exact: true })).toHaveValue('17:45');
++      await saveSession(page, edit);
++      await expect(editor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' })).toBeVisible();
++      await expect(edit).toHaveCount(0);
++    } finally {
++      await employeeSeed.clearSessions(date);
++    }
++  });
++});
++
++// The phone's bottom sheet is modal: the page behind it is inert, so no clock action of the page can happen under it, and it does not follow.
++test('WP5-UX5-FIX18 (F-UX5I-1): the phone\'s modal bottom sheet does not read its day again when the clock version changes', async ({
++  page,
++  employeeSeed,
++  signInThroughUi,
++  isMobile,
++}) => {
++  test.skip(!isMobile, 'The bottom sheet is the phone project');
++  const [date = ''] = need(await employeeSeed.displayedPeriodFreeWorkdays(), 1);
++  await signInThroughUi();
++  await openEditor(page, date);
++  const dayReads: string[] = [];
++  page.on('request', (request) => {
++    if (request.method() === 'GET' && new URL(request.url()).pathname === `/api/days/${date}`) dayReads.push(request.url());
++  });
++  // The tab comes back into view: the clock version changes and the page reloads its period. A follow read, if there were one, is sent in the
++  // render that this change causes, so two frames after the period answer it has been sent.
++  const period = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname.startsWith('/api/timesheets/'), {
++    timeout: 7_000,
++  });
++  await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
++  await period;
++  await page.evaluate('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
++  expect(dayReads, 'the bottom sheet sent no read of its day').toHaveLength(0);
++});
++
+ /** The Partial leave dialog of the Day editor (U5-25), a modal named by its heading. */
+ function leaveDialogOf(page: Page): Locator {
+   return page.getByRole('dialog', { name: 'Partial leave', exact: true });

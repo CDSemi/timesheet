@@ -17,7 +17,18 @@
     digest of FIX18 on the board. The coordinator confirms both in the line below before
     dispatch. HEAD must equal origin/main, or be a later commit that changes only
     `handoff/`.
-  - Target confirmation: (filled in at dispatch).
+  - Target confirmation:
+    - TARGET_SHA = d96df5daa25b44b156354bc96605e13e94e44396, the FIX18-FREEZE commit,
+      pushed as a fast-forward from a5cbc91.
+    - TARGET_DIGEST = 6937d79ccce4447a30123a52e0cc6c1ede828994186407028acfce74fc2961cb
+      (882 files).
+    - FIX18's paths: `docs/04_UX_AND_SETTINGS.md` and `.vi.md`, `src/client/DayEditor.tsx`,
+      `src/client/TimesheetScreen.tsx` and `tests/e2e/day-editor.spec.ts`.
+    - FIX18's FULL counts: desktop 473 ok / 36 skipped, mobile 408 ok / 101 skipped.
+    - **Digest tooling.** In the repository, `npm run digest` fails with
+      `spawnSync git ENOBUFS` while many `handoff/` files are untracked. Compute the three
+      forms in your clean export, and with `git ls-tree` on TARGET_SHA. Record the
+      repository script's failure as a note, not a gate failure. It is a backlog item.
 
   Compute the digest in three forms, before and after, and record the file count.
 - **Profile and routing.** timesheet-verifier, requested sonnet/medium, no override.
@@ -163,3 +174,29 @@ queries. Never use `-ExecutionPolicy` or `-File`.
   - the digest.
 
 ## Results
+
+Self-reported model: claude-sonnet-5-5. Evidence: `handoff/delivery/evidence/WP5-UX5-REGATE13/` (index `00-README.txt`).
+
+**Decision: PASS** on d96df5daa25b44b156354bc96605e13e94e44396 (one caveat on mutant M6, item 6). NAS items stay NOT VERIFIED.
+
+- **Entry and load.** Entry census 0.59 and 1.02 busy cores of non-mission load (limit about 8): the gate ran. No run failed, so no failure was classified and nothing was repeated. Census after every sweep, stress and mutant run: 0.6 to 2.0 busy cores outside the mission.
+- **1. Identity and scope.**
+  - HEAD = origin/main = d96df5da, before and after; status outside `handoff/` empty.
+  - Digest 6937d79ccce4447a30123a52e0cc6c1ede828994186407028acfce74fc2961cb, 882 files, before and after, in the clean-export form and the `git ls-tree` form; the file lists are byte-identical. `npm run digest` in the repository failed with `spawnSync git ENOBUFS` before and after: a note, not a failure.
+  - `git diff --name-status a5cbc91..d96df5da -- . ':!handoff'` lists exactly the five FIX18 paths (`docs/04` EN and VI, `DayEditor.tsx`, `TimesheetScreen.tsx`, `day-editor.spec.ts`); no package or lockfile change; `git diff --check` exit 0.
+  - Clean builds of a5cbc91 and the target, each after its own `npm ci`: 250 files each. `dist/server` and `dist/domain` identical. Only `dist/client` differs: entry chunk `index-qNP6kTPW.js(.map)` to `index-D6YCEv6o.js(.map)` (492052 to 492662 chars), `index.html` (the script src only), and five lazy chunks renamed with equal content after normalisation (AdminScreen, ImportScreen, ReviewScreen, SettingsTransfer, SettingsTransferFile, each `.js` and `.map`); the style sheet is identical. So the container drill and `npm audit` carry forward from REGATE11. The target build equals itself after `verify`.
+  - docs/04 EN and VI carry the same added clause (a Check in or Check out of the page makes the open editor read its day again, what was typed stays, no question; a change made elsewhere to the day's fields is refused and "Reload day" reads it). It matches the build.
+- **2. Core** (in the export): `npm ci`, lint, typecheck, build exit 0, no chunk advisory, no deprecation text; `npm run verify` exit 0 (smoke passed, port 51650); `npm test` three times: 101 files, 2,397 tests each, exit 0. Validators: `check_recovery.py` 106 PASS, `validate_package.py --preflight` PASS, `validate_orchestration.py` PASS (542 tasks).
+- **3. Real-clock FULL e2e:** desktop 473 ok / 36 skipped / 0 failed (10.9 min); mobile 408 ok / 101 skipped / 0 failed (6.6 min). FIX18's counts exactly. A control showed the real clock inside the window and the simulated clock at 2026-11-01 (preload valid).
+- **4. Six simulated-clock sweeps** (FIX10 wrapper, `--workers=6`): full at 2026-10-26T16:00Z, 2026-11-01T08:45Z and 2027-03-14T10:30Z: desktop 473 / 36 and mobile 408 / 101 each, 0 failed. Seven files at 2026-10-27T06:58:30Z, 2027-01-01T07:30Z and 2027-01-01T08:30Z: desktop 223 / 16 and mobile 166 / 73 each, 0 failed (389 passed per run). The desktop crossing test took 1.1 min, mobile 2.2 s.
+- **5. Stress** (`--repeat-each=20 --workers=10`), 0 failed: the four FIX18 desktop tests (1440 and 1280 px, the change-from-elsewhere case, the open session dialog) on the real clock and at 2026-10-27T06:58:30Z: 80 ok each; the phone test on mobile: 20 ok; the unsaved-changes tests (Escape and Close; Escape in the same task) desktop 40 ok, mobile 40 ok.
+- **6. Test strength** (scratch copy `export-mut`, client rebuilt per mutant, desktop, one worker; every file restored byte-equal, and the rebuilt `dist/` equals the target's):
+  - M1 clock-version refresh removed: all four FIX18 tests fail (Running card "Expected 1, received 0"; the others at the wait for the editor's read).
+  - M2 refresh with a `generation` bump: the 1440 and 1280 tests fail ("toHaveValue": the note is gone); the other two pass, as FIX18 recorded.
+  - M6 refresh on every period reload: **all four pass, as FIX18 recorded and explained.** I confirmed its reason in `ClockProvider.tsx`: one `version` counter is raised by `afterAction` (the page's own Check in and Check out) and by `onVisible` (the tab coming back), so the page cannot tell its own action from another change; the data guard decides. I ran the guard mutant as an extra: M3 (field guard removed): the change-from-elsewhere test fails. Caveat for the coordinator: the brief says each mutant must fail its named test; M6 does not, and by the argument above cannot. I treat it as an equivalent mutant, not a test gap; override if you read the brief strictly.
+  - Diff read (`22-fix18-*-diff.txt`): the test file only adds tests, nothing existing is loosened or dropped; no `sleep`; the only waits are `waitForResponse` timeouts of 7000 ms in the new tests and a 100 ms poll on the clock; the follow takes the fresh day only when `sameDayFields` holds and no session dialog or delete confirmation is open, a stale or overtaken read is dropped, the phone sheet (`modal`) returns first, and a failed read changes nothing. The version check stays for changes from elsewhere.
+- **7. axe 4.14.0** (task folder copy, no dependency added), WCAG 2.0 to 2.2 A and AA, light and dark, Timesheet with the Day editor open on today, before and after a Check in: 1440 px and 1280 px (the drawer stays open while the page's Check in is pressed) and 390 px (the bottom sheet reopened on today after the page's Check in): 12 scans, 0 violations. Incomplete: `color-contrast` (and `label-content-name-mismatch` on desktop), as in earlier gates.
+- **Slips** (none changed a result): a few read-only `ls | head` / `grep | head` pipes, one `tail`, one `> /dev/null` on a census call; two of my waiting loops overlapped once and printed wrong drift hashes (seven lines at 10:56Z, documented in the README); the final digest ran alone. Nothing is left running; the repository holds no change outside `handoff/`.
+- **Commit description:** Record the WP5-UX5-REGATE13 pass for the open Day editor following the page's Check in and Check out.
+
+Status: done

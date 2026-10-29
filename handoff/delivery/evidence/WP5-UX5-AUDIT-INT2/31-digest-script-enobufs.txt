@@ -1,0 +1,20 @@
+WP5-UX5-AUDIT-INT2: why `npm run digest` fails at the target (measured 2026-10-29 about 11:50-12:05Z)
+
+scripts/source-digest.mjs:13 runs `git ls-files --cached --others --exclude-standard -z` through execFileSync with no maxBuffer
+(Node's default is 1,048,576 bytes); only the second call (git hash-object) sets maxBuffer 64 MiB.
+
+$ git ls-tree -r -z --name-only <commit> | wc -c      (the tracked part of that listing, NUL-separated)
+8e557100 (last accepted snapshot):  616,329 bytes
+a5cbc91e (AUDIT-INT's target):    1,027,260 bytes (17,005 files)  -> under the limit
+d96df5da (this target):           1,063,240 bytes (17,548 files)  -> over the limit (FIX18-FREEZE added 535 tracked evidence files)
+
+Scratch clone of the target (`git clone --shared --no-checkout` + `git checkout d96df5da`, 0 untracked files):
+$ git ls-files --cached --others --exclude-standard -z | wc -c   -> 1063240
+$ npm run digest                                                  -> exit 1, "Error: spawnSync git ENOBUFS" (01-digest-before.txt)
+Repository (many untracked handoff/ files): the same ENOBUFS.
+A copy of the target's script with only `maxBuffer: 64 * 1024 * 1024` added to the first call (task folder, digest-wide.mjs.txt):
+  scratch clone  -> 6937d79ccce4447a30123a52e0cc6c1ede828994186407028acfce74fc2961cb  (882 files, handoff/ excluded)
+  repository     -> 6937d79ccce4447a30123a52e0cc6c1ede828994186407028acfce74fc2961cb  (882 files, handoff/ excluded)
+
+So the failure does not depend on untracked files: from d96df5da on, the documented digest command fails in every checkout,
+including the clean checkout of a release candidate (docs/12 "Release identity" names `npm run digest`).

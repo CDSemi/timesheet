@@ -1,0 +1,27 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+O=$T/out
+hashdist() {
+  d=$1; tag=$2
+  cd $T/$d
+  find dist -type f | LC_ALL=C sort > $O/51-$tag-files.txt
+  rm -f $O/51-$tag-hashes.txt
+  while IFS= read -r f; do printf '%s %s\n' "$f" "$(sha256sum "$f" | cut -d' ' -f1)" >> $O/51-$tag-hashes.txt; done < $O/51-$tag-files.txt
+  echo "$tag: $(wc -l < $O/51-$tag-files.txt) files" >> $O/51-dist-counts.txt
+}
+cd $T/export
+npm run verify > $O/03-verify.txt 2>&1; echo "verify exit $?" > $O/03-verify-exit.txt
+echo "verify done $(date -u +%H:%M:%SZ)" > $T/logs/chain1.log
+hashdist export target-after-verify
+diff $O/51-target-hashes.txt $O/51-target-after-verify-hashes.txt > $O/51-target-vs-after-verify.txt; echo "target vs after-verify diff exit $?" >> $O/51-hash-result.txt
+cd $T/export
+for n in 1 2 3; do
+  npm test > $O/05-test-$n.txt 2>&1; echo "npm test run $n exit $?" >> $O/05-test-exits.txt
+  echo "test $n done $(date -u +%H:%M:%SZ)" >> $T/logs/chain1.log
+done
+cd $T/export
+$PY handoff/delivery/validate_package.py --preflight > $O/11-validate_package.txt 2>&1; echo "validate_package exit $?" >> $O/11-exits.txt
+$PY handoff/delivery/validate_orchestration.py > $O/11-validate_orchestration.txt 2>&1; echo "validate_orchestration exit $?" >> $O/11-exits.txt
+$PY handoff/delivery/check_recovery.py > $O/11-check_recovery.txt 2>&1; echo "check_recovery exit $?" >> $O/11-exits.txt
+echo "chain1 done $(date -u +%H:%M:%SZ)" >> $T/logs/chain1.log
+echo chain1-done > $O/chain1.done

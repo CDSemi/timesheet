@@ -2995,8 +2995,67 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - `npm test`: 2,397. FULL: 473/36/0 and 408/101/0. The midnight run: 0 failed.
   - Tooling: `npm run digest` fails with ENOBUFS while many `handoff/` files are untracked.
     It goes to the backlog.
-- **Running now:** WP5-UX5-FIX18-FREEZE (committer). It stages before it computes D_PRE.
-  The coordinator writes no file while it runs.
+- **WP5-UX5-FIX18-FREEZE done.**
+  - Commit d96df5daa25b44b156354bc96605e13e94e44396 on main. It was pushed as a fast-forward
+    from a5cbc91.
+  - `npm run digest` still hit ENOBUFS, so D_PRE was taken with the `git ls-tree` form on
+    the staged tree. It equals the HEAD digest, 6937d79c.
+  - 558 paths were staged. Every check exited 0.
+- **WP5-UX5-REGATE13 PASS** (verifier, self-reported claude-sonnet-5-5) on d96df5d /
+  6937d79c. The entry census was about 1 core. No failure.
+  - Only `dist/client` changed, so the drill and `npm audit` carry forward.
+  - Core ×3: 2,397 tests.
+  - FULL: 473/36/0 and 408/101/0.
+  - Six sweeps: 0 failed. Stress: 0 failed.
+  - Mutants M1 to M3 are caught.
+  - M6 survives, as FIX18 recorded. The gate brief had listed M6 as must-fail; the
+    coordinator records that line as over-specified, and AUDIT-INT2 judges the design.
+  - axe: 12 scans, 0 violations.
+- **WP5-UX5-AUDIT-INT2: FIX REQUIRED** (auditor, self-reported claude-opus-5-5) on d96df5d.
+  - F-UX5I-1 is closed.
+  - FIX18's guards and its tab-return read are judged right: docs/03:24 and :40 give the day
+    entry its own version.
+  - **F-UX5I2-1 (Medium; pre-existing since WP2-T10).** Take a session save, a "Confirm
+    breaks" or a delete in the open editor, after another device changed the day's fields.
+    The editor then takes the newer entry version, but keeps the old draft in the form. The
+    next "Save day fields" silently overwrites the other device's change.
+  - **F-UX5I2-2 (Low).** `scripts/source-digest.mjs` sets no `maxBuffer`, so
+    `npm run digest` fails in every checkout from d96df5d. docs/12:7 names this command for
+    the release identity.
+  - Everything else held: FULL 0 failed, axe 16 scans 0, AC-13.
+  - New optional risks: R-UX5I2-1..3.
+- **Coordinator.**
+  - RECHECK-A2 and RECHECK-B3 now name `superseded_by: WP5-UX5-AUDIT-INT3`.
+  - Four tasks are registered, each with its brief:
+    - FIX19 (worker-high, sonnet):
+      - the `sameDayFields` guard on `saved()`. With no unsaved edit, the form restarts
+        from the server's day; with an unsaved edit, the save is refused and "Reload day"
+        reads the change;
+      - the digest `maxBuffer`;
+      - tests G1, G2 and a typed-note case;
+      - pins for FIX18's guards;
+      - the docs/04 tab-return clause.
+
+      R-UX5I2-3 stays in the backlog: it needs a behaviour choice.
+    - FIX19-FREEZE.
+    - REGATE14.
+    - AUDIT-INT3.
+- **WP5-UX5-FIX19 done** (worker-high, self-reported claude-sonnet-5-5). It is uncommitted.
+  Digest 67aa715c.
+  - Reproduced first: G1 and G2 overwrite the other device's change, and the clean-clone
+    digest fails.
+  - `sessionWritten()` in `DayEditor.tsx`: when the answer's day fields differ, a typed
+    field keeps the held fields and entry, so the save is refused and "Reload day" reads
+    the change. With nothing typed, the form restarts from the answer.
+  - `source-digest.mjs` gets its `maxBuffer`.
+  - 11 new tests: G1 to G3, the typed note, and B, N and O.
+  - docs/04 gets the tab-return clause, EN and VI.
+  - All mutants are caught.
+  - Only `dist/client` changed.
+  - `npm test`: 2,397. FULL: 484/36/0 and 408/112/0. The midnight run: 0 failed.
+  - `npm run digest` works again.
+- **Running now:** WP5-UX5-FIX19-FREEZE (committer). The coordinator writes no file while it
+  runs.
 - **Next:**
   - REGATE13 and AUDIT-INT2;
   - ACCEPT-DOCS: the WP5 handoff backlog, the pilot packet's release identity, and the
