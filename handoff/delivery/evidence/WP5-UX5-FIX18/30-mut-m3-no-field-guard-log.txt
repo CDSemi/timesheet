@@ -1,0 +1,53 @@
+m3-no-field-guard client build exit=0
+== mut-m3-no-field-guard: real start 2026-10-29T09:38:20Z, simulated start real, AB8_SHIFT_MS=0, export export-fix
+process clock 2026-10-29T09:38:20.297Z (Date.now 1793266700307); America/Los_Angeles Thu, 2026-10-29, 02:38; shift ms 0; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/day-editor.spec.ts --project=desktop --workers=1 -g FIX18 --output=<task>/pw-mut-m3-no-field-guard
+
+Running 4 tests using 1 worker
+
+  ok 1 [desktop] › tests\e2e\day-editor.spec.ts:2501:5 › WP5-UX5-FIX18 (F-UX5I-1): the open Day editor follows the page's own Check in and Check out › at 1440px a Check in and a Check out of the page update the open editor, the note typed first stays and saves (1.9s)
+  ok 2 [desktop] › tests\e2e\day-editor.spec.ts:2501:5 › WP5-UX5-FIX18 (F-UX5I-1): the open Day editor follows the page's own Check in and Check out › at 1280px a Check in and a Check out of the page update the open editor, the note typed first stays and saves (2.0s)
+  x  3 [desktop] › tests\e2e\day-editor.spec.ts:2563:3 › WP5-UX5-FIX18 (F-UX5I-1): the open Day editor follows the page's own Check in and Check out › at 1440px a change made elsewhere to the day fields still ends in the refused save and "Reload day", also after the page's own Check in (8.0s)
+  ok 4 [desktop] › tests\e2e\day-editor.spec.ts:2600:3 › WP5-UX5-FIX18 (F-UX5I-1): the open Day editor follows the page's own Check in and Check out › at 1440px a session dialog that is open keeps what was typed when the tab comes back into view after the session changed elsewhere; its save is refused (1.1s)
+
+
+  1) [desktop] › tests\e2e\day-editor.spec.ts:2563:3 › WP5-UX5-FIX18 (F-UX5I-1): the open Day editor follows the page's own Check in and Check out › at 1440px a change made elsewhere to the day fields still ends in the refused save and "Reload day", also after the page's own Check in 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: /Day editor/ }).getByRole('alert').filter({ hasText: 'This day changed since it was loaded' })
+    Expected: visible
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: /Day editor/ }).getByRole('alert').filter({ hasText: 'This day changed since it was loaded' }) with timeout 7000ms
+      - waiting for getByRole('dialog', { name: /Day editor/ }).getByRole('alert').filter({ hasText: 'This day changed since it was loaded' })
+
+
+      2582 |       await editor.getByRole('button', { name: 'Save day fields' }).click();
+      2583 |       const stale = editor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' });
+    > 2584 |       await expect(stale).toBeVisible();
+           |                           ^
+      2585 |       await expect(stale).toContainText('Nothing was saved');
+      2586 |       expect((await employeeSeed.dayView(todayLocal)).entry?.notes, 'the other device\'s note is not overwritten').toBe('changed on another device');
+      2587 |
+        at D:\.claude-tmp\timesheet\WP5-UX5-FIX18\export-fix\tests\e2e\day-editor.spec.ts:2584:27
+
+    Error Context: ..\pw-mut-m3-no-field-guard\day-editor-WP5-UX5-FIX18-F-7a2ba-ter-the-page-s-own-Check-in-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-m3-no-field-guard\day-editor-WP5-UX5-FIX18-F-7a2ba-ter-the-page-s-own-Check-in-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-m3-no-field-guard\day-editor-WP5-UX5-FIX18-F-7a2ba-ter-the-page-s-own-Check-in-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\day-editor.spec.ts:2563:3 › WP5-UX5-FIX18 (F-UX5I-1): the open Day editor follows the page's own Check in and Check out › at 1440px a change made elsewhere to the day fields still ends in the refused save and "Reload day", also after the page's own Check in 
+  3 passed (17.0s)
+exit=1
+process clock 2026-10-29T09:38:37.732Z (Date.now 1793266717741); America/Los_Angeles Thu, 2026-10-29, 02:38; shift ms 0; instanceof true
+== mut-m3-no-field-guard real end 2026-10-29T09:38:37Z
+m3-no-field-guard done

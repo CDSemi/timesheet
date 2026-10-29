@@ -1,0 +1,166 @@
+// WP5-UX5-AUDIT-INT probe (auditor's own, not part of the repository): a shared view (view only and edit) with the round-5 period card,
+// toolbar, sheet and Day editor dialogs, at the widths of the round, in light and dark, with axe-core 4.14.0 loaded from the task folder.
+// Observations go to INT_OUT. Every request the grantee's page makes is recorded; inside the shared view only /api/shared/:ownerId,
+// /api/shares and /api/auth/me may appear.
+import { randomBytes } from 'node:crypto';
+import { appendFileSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import type { Page } from '@playwright/test';
+import { namedDayButton } from './dayButton.ts';
+import { expect, newPerson, test } from './fixtures.ts';
+
+const ROOT = resolve(import.meta.dirname, '..', '..');
+const OUT = process.env.INT_OUT ?? join(ROOT, '..', 'out', '43-obs-shared.txt');
+const AXE = process.env.INT_AXE ?? join(ROOT, '..', 'axe', 'package', 'axe.min.js');
+const flat = (text: string | null) => (text ?? '').replace(/\s+/g, ' ').trim();
+
+let axeSource: string | null = null;
+/** Waits until every running animation and transition has finished and two frames have been drawn (a theme change transitions colours). */
+async function settle(page: Page): Promise<void> {
+  await page.evaluate<void>(
+    '(async () => { await Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))); await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(undefined)))); })()',
+  );
+}
+
+/**
+ * A press on plain page outside the drawer (run 1 of this probe pressed the page title where the floating drawer covered it): a point on
+ * the title row that is not inside a dialog, a control or a day column, read with elementFromPoint.
+ */
+async function outsidePress(page: Page): Promise<string> {
+  // The visible page title (run 2 read the first h1 of the document, which is not the visible title, and found no free point).
+  // Run 3 found the title above the window (the editor had scrolled the edited column into view): scan the window instead, below the top
+  // bars, for the first point on plain page (not a dialog, a control, a day column or a bar).
+  const point = await page.evaluate<{ x: number; y: number; tag: string; tried: string }>(`(() => {
+    const tried = [];
+    for (let y = 140; y < window.innerHeight - 20; y += 60) {
+      for (const x of [20, Math.round(window.innerWidth / 2), window.innerWidth - 40]) {
+        const el = document.elementFromPoint(x, y);
+        const hit = el ? el.closest('dialog, button, a, input, select, textarea, label, [role="switch"], option, [data-day], header.shell-bar, nav, [data-share-bar]') : null;
+        if (tried.length < 6) tried.push(x + ',' + y + ':' + (el ? el.tagName : 'none') + (hit ? ' in ' + hit.tagName : ''));
+        if (el && !hit) return { x, y, tag: el.tagName + (el.className ? '.' + String(el.className).split(' ')[0] : ''), tried: tried.join(' | ') };
+      }
+    }
+    return { x: -1, y: -1, tag: '', tried: tried.join(' | ') };
+  })()`);
+  if (point.x < 0) return `no free point (${point.tried})`;
+  await page.mouse.click(point.x, point.y);
+  return `${point.tag} at ${Math.round(point.x)},${Math.round(point.y)}`;
+}
+
+async function axeScan(page: Page): Promise<string> {
+  // Evaluated as source (CDP), not added as a script element, so the app's content security policy is untouched.
+  axeSource ??= readFileSync(AXE, 'utf8');
+  await settle(page);
+  if (!(await page.evaluate<boolean>("typeof window.axe !== 'undefined'"))) await page.evaluate(axeSource);
+  return page.evaluate<string>(
+    "window.axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } }).then((r) => r.violations.length === 0 ? 'none' : r.violations.map((v) => v.id + ' x' + v.nodes.length + ' [' + v.nodes.slice(0, 2).map((n) => n.target.join(' ')).join(' | ') + ']').join('; '))",
+  );
+}
+
+async function widthState(page: Page, width: number): Promise<string> {
+  await expect.poll(() => page.evaluate<number>('window.innerWidth')).toBe(width);
+  await expect(page.locator('[data-paper] [data-sheet="phone"]')).toHaveCount(width < 480 ? 1 : 0);
+  const bar = page.locator('.period-bar');
+  const buttons = (await bar.getByRole('button').all()).length === 0 ? [] : await Promise.all((await bar.getByRole('button').all()).map(async (b) => `${flat(await b.innerText())}${(await b.isVisible()) ? '' : '(hidden)'}`));
+  const widths = await page.evaluate<{ scroll: number; inner: number }>('({ scroll: document.documentElement.scrollWidth, inner: window.innerWidth })');
+  const toolbar = flat(await page.locator('[data-paper] .tools').first().innerText().catch(() => '(none)'));
+  return [
+    `range "${flat(await bar.locator('.period-name').innerText())}"`,
+    `pills "${flat(await bar.locator('.period-pills').first().innerText().catch(() => '(none)'))}"`,
+    `bar buttons [${buttons.join(', ')}]`,
+    `review links ${await page.locator('[data-review-link]').count()}`,
+    `check-in groups ${await page.locator('.bar-clock, [data-clock-group]').count() + (await page.getByRole('button', { name: /^Check (in|out)$/ }).count())}`,
+    `toolbar "${toolbar.slice(0, 120)}"`,
+    `sideways ${widths.scroll > widths.inner ? `YES ${widths.scroll} > ${widths.inner}` : 'no'}`,
+  ].join('; ');
+}
+
+for (const kind of ['view', 'edit'] as const) {
+  test(`audit-int: a shared view (${kind}) with the round-5 header, sheet and dialogs`, async ({ page, adminSeed, builtServer, signInPageAs }, testInfo) => {
+    test.setTimeout(300_000);
+    const project = testInfo.project.name;
+    const log = (line: string) => appendFileSync(OUT, `[${project} ${kind}] ${line}\n`);
+    const owner = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Owner' });
+    const grantee = await newPerson(adminSeed, builtServer, { displayName: 'Synthetic Grantee' });
+    const [workDay = '', leaveDay = ''] = await owner.api.displayedPeriodFreeWorkdays();
+    await owner.api.seedCompleteDay(workDay);
+    const note = `private-synthetic-${randomBytes(4).toString('hex')}`;
+    await owner.api.putDay(workDay, { notes: note });
+    await owner.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: kind, ot_read: true, pdf_download: true } }, 201);
+    const requests: string[] = [];
+    page.on('request', (request) => {
+      const { pathname } = new URL(request.url());
+      if (pathname.startsWith('/api/')) requests.push(`${request.method()} ${pathname}`);
+    });
+    await signInPageAs(grantee.account, `#/shared/${owner.account.id}/timesheet`);
+    await expect(page.locator('[data-share-bar-title]')).toBeVisible();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    requests.splice(0, requests.length);
+    log(`share bar "${flat(await page.locator('[data-share-bar-title]').innerText())}"; heading "${flat(await page.getByRole('heading', { level: 1 }).first().innerText())}"`);
+
+    const widths = project === 'desktop' ? [1440, 1280, 1024, 768, 767, 600, 480, 479, 390, 360, 320] : [390, 360, 320];
+    for (const width of widths) {
+      await page.setViewportSize({ width, height: 900 });
+      log(`${width}px: ${await widthState(page, width)}`);
+    }
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      for (const width of project === 'desktop' ? [1440, 768] : [390, 320]) {
+        await page.setViewportSize({ width, height: 900 });
+        await expect.poll(() => page.evaluate<number>('window.innerWidth')).toBe(width);
+        log(`axe ${scheme} ${width}px sheet: ${await axeScan(page)}`);
+      }
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+
+    // The Day editor of the owner's day: chips, controls, and (edit) the Partial leave dialog with the guard.
+    const width = project === 'desktop' ? 1280 : 390;
+    await page.setViewportSize({ width, height: 900 });
+    await expect.poll(() => page.evaluate<number>('window.innerWidth')).toBe(width);
+    log(`Open a day field present: ${await page.getByLabel('Open a day').count()}`);
+    await namedDayButton(page, kind === 'edit' ? leaveDay : workDay, kind === 'edit' ? 'Edit' : 'View').click();
+    const editor = page.getByRole('dialog', { name: /Day/ }).first();
+    await expect(editor).toBeVisible();
+    log(`editor ${width}px: chips "${flat(await editor.locator('.editor-chips').first().innerText().catch(() => '(none)')).slice(0, 200)}"; buttons [${(await editor.getByRole('button').allInnerTexts()).map(flat).join(', ')}]`);
+    log(`axe editor: ${await axeScan(page)}`);
+    if (kind === 'edit') {
+      await editor.getByRole('button', { name: /^(Add|Change)$/ }).click();
+      const leave = page.getByRole('dialog', { name: 'Partial leave' });
+      await expect(leave).toBeVisible();
+      await leave.getByLabel('Leave hours').fill('1');
+      await leave.getByLabel('Leave minutes').fill('30');
+      await leave.getByLabel('Leave kind').selectOption('vacation');
+      log(`axe partial leave dialog: ${await axeScan(page)}`);
+      await leave.getByRole('button', { name: 'Done' }).click();
+      await expect(leave).toHaveCount(0);
+      log(`after Done: writes so far ${requests.filter((entry) => !entry.startsWith('GET')).join(', ') || 'none'}; summary "${flat(await editor.locator('[data-leave-summary]').innerText())}"`);
+      if (project === 'desktop') {
+        // A press outside (plain page on the title row) with the unsaved leave: the guard asks; Keep editing keeps it.
+        const where = await outsidePress(page);
+        const ask = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+        await expect(ask).toBeVisible();
+        log(`outside press (${where}) with the unsaved leave: question ${await ask.isVisible()}`);
+        if (await ask.isVisible()) await ask.getByRole('button', { name: 'Keep editing' }).click();
+        log(`after Keep editing: editor ${await editor.isVisible()}, summary "${flat(await editor.locator('[data-leave-summary]').innerText())}"`);
+      }
+      await page.getByRole('button', { name: 'Save day fields' }).click();
+      await expect.poll(async () => (await owner.api.dayView(leaveDay)).leave_minutes, { message: 'the leave is saved through the share' }).toBe(90);
+      const saved = await owner.api.dayView(leaveDay);
+      log(`saved through the share: leave ${saved.leave_minutes} min, kind ${saved.leave_kind}; write requests ${requests.filter((entry) => !entry.startsWith('GET')).join(', ')}`);
+      await owner.api.resetDay(leaveDay);
+    } else {
+      log(`view only: Edit/Delete buttons ${await editor.getByRole('button', { name: /^(Edit|Delete) session/ }).count()}; Save day fields ${await page.getByRole('button', { name: 'Save day fields' }).count()}; Add/Change leave ${await editor.getByRole('button', { name: /^(Add|Change)$/ }).count()}`);
+      if (project === 'desktop') {
+        const where = await outsidePress(page);
+        await expect(editor).toHaveCount(0);
+        log(`outside press (${where}), nothing unsaved: editor ${await editor.isVisible()}, question ${await page.getByRole('alertdialog', { name: 'Discard your changes?' }).isVisible()}`);
+      }
+    }
+    const outside = requests.filter((entry) => {
+      const path = entry.slice(entry.indexOf(' ') + 1);
+      return !path.startsWith(`/api/shared/${owner.account.id}/`) && path !== '/api/shares' && path !== '/api/auth/me';
+    });
+    log(`requests outside the shared mount: ${outside.length === 0 ? 'none' : outside.join(', ')}; shared requests ${requests.length - outside.length}`);
+    log(`the grantee's page shows the owner's note: ${(await page.locator('body').innerText()).includes(note)}`);
+  });
+}

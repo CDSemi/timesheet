@@ -1,0 +1,104 @@
+// WP5-UX5-AUDIT-INT probe (auditor's own, not part of the repository): since round 4 the desktop Day editor is non-modal (U4-05), so
+// Check in and Check out of the page can be pressed while the editor is open on today. Does the open editor follow the clock action?
+// Desktop only (the phone's editor is a modal sheet). Observations go to INT_OUT.
+import { appendFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import type { Locator, Page } from '@playwright/test';
+import { expect, test } from './fixtures.ts';
+
+const OUT = process.env.INT_OUT ?? join(resolve(import.meta.dirname, '..', '..'), '..', 'out', '44-obs-clock-editor.txt');
+const flat = (text: string) => text.replace(/\s+/g, ' ').trim();
+
+async function cards(editor: Locator): Promise<string> {
+  const list = await editor.locator('.session-card').allInnerTexts();
+  return list.length === 0 ? '(no session card)' : list.map((text) => flat(text).slice(0, 140)).join(' || ');
+}
+
+test('audit-int: an unsaved note in the open Day editor across a check in and out from the page (1440px)', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop', 'the phone editor is a modal sheet');
+  const log = (line: string) => appendFileSync(OUT, `[note 1440px] ${line}\n`);
+  const { todayLocal } = await employeeSeed.today();
+  await employeeSeed.clearSessions(todayLocal, 'audit-int probe setup');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  if ((await page.locator(`[data-day="${todayLocal}"]`).count()) === 0) {
+    await page.locator('.period-bar').getByRole('button', { name: 'Today', exact: true }).click();
+    await expect(page.locator(`[data-day="${todayLocal}"]`)).toHaveCount(1);
+  }
+  await page.getByLabel('Open a day').fill(todayLocal);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  const notes = editor.getByLabel('Notes');
+  await notes.fill('Synthetic unsaved note, clock probe');
+  await page.getByRole('button', { name: 'Check in' }).click();
+  await expect.poll(async () => (await employeeSeed.dayView(todayLocal)).sessions.some((session) => session.end_utc === null)).toBe(true);
+  await page.waitForLoadState('networkidle');
+  log(`after Check in: question ${await page.getByRole('alertdialog', { name: 'Discard your changes?' }).isVisible()}; note "${await notes.inputValue()}"; editor cards: ${await cards(editor)}`);
+  await page.waitForTimeout(1_500);
+  await page.getByRole('button', { name: 'Check out' }).click();
+  const out = page.getByRole('dialog', { name: 'Check out' });
+  await expect(out).toBeVisible();
+  await out.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+  await out.getByRole('button', { name: 'Check out, no breaks taken' }).click();
+  await expect(out).toHaveCount(0);
+  await page.waitForLoadState('networkidle');
+  log(`after Check out: note "${await notes.inputValue()}"; editor cards: ${await cards(editor)}; server ${(await employeeSeed.dayView(todayLocal)).sessions.map((session) => (session.end_utc === null ? 'running' : 'ended')).join(', ')}`);
+  await editor.getByRole('button', { name: 'Save day fields' }).click();
+  await expect.poll(async () => (await employeeSeed.dayView(todayLocal)).entry?.notes ?? '').toBe('Synthetic unsaved note, clock probe');
+  log(`Save day fields after the clock actions: saved note "${(await employeeSeed.dayView(todayLocal)).entry?.notes ?? ''}"; editor cards: ${await cards(editor)}`);
+  await employeeSeed.clearSessions(todayLocal, 'audit-int probe cleanup');
+  await employeeSeed.resetDay(todayLocal).catch(() => undefined);
+});
+
+for (const width of [1440, 1280]) {
+  test(`audit-int: the open Day editor and a check in and out from the page (${width}px)`, async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the phone editor is a modal sheet');
+    const log = (line: string) => appendFileSync(OUT, `[${width}px] ${line}\n`);
+    const { todayLocal } = await employeeSeed.today();
+    await employeeSeed.clearSessions(todayLocal, 'audit-int probe setup');
+    await page.setViewportSize({ width, height: 900 });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    if ((await page.locator(`[data-day="${todayLocal}"]`).count()) === 0) {
+      await page.locator('.period-bar').getByRole('button', { name: 'Today', exact: true }).click();
+      await expect(page.locator(`[data-day="${todayLocal}"]`)).toHaveCount(1);
+    }
+    await page.getByLabel('Open a day').fill(todayLocal);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    log(`layout ${await page.locator('[data-editor-layout]').first().getAttribute('data-editor-layout').catch(() => null)}; editor before: ${await cards(editor)}`);
+
+    await page.getByRole('button', { name: 'Check in' }).click();
+    await expect.poll(async () => (await employeeSeed.dayView(todayLocal)).sessions.some((session) => session.end_utc === null), { message: 'running on the server' }).toBe(true);
+    await expect(page.getByRole('button', { name: 'Check out' })).toBeVisible();
+    // Give the page every chance to follow: the period reload after the clock action, then two frames.
+    await page.waitForLoadState('networkidle');
+    log(`after Check in: editor open ${await editor.isVisible()}; editor cards: ${await cards(editor)}; server sessions ${(await employeeSeed.dayView(todayLocal)).sessions.length}`);
+    // A session needs a positive length (whole seconds).
+    await page.waitForTimeout(1_500);
+
+    await page.getByRole('button', { name: 'Check out' }).click();
+    const out = page.getByRole('dialog', { name: 'Check out' });
+    await expect(out).toBeVisible();
+    await out.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+    await out.getByRole('button', { name: 'Check out, no breaks taken' }).click();
+    await expect(out).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Check in' })).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    const server = (await employeeSeed.dayView(todayLocal)).sessions;
+    log(`after Check out: editor open ${await editor.isVisible()}; editor cards: ${await cards(editor)}; server: ${server.map((session) => (session.end_utc === null ? 'running' : 'ended')).join(', ')}`);
+    log(`the sheet's day cell: ${flat(await page.locator(`[data-day="${todayLocal}"]`).first().innerText()).slice(0, 160)}`);
+
+    // Close and open again: the editor reads the day afresh.
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    await page.getByLabel('Open a day').fill(todayLocal);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    await expect(editor).toBeVisible();
+    log(`reopened: editor cards: ${await cards(editor)}`);
+    await employeeSeed.clearSessions(todayLocal, 'audit-int probe cleanup');
+  });
+}

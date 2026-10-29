@@ -1,0 +1,56 @@
+cd <task>
+. ./env.sh
+export GIT_CONFIG_VALUE_0=$T/export-mut
+D=2026-11-01T08:45:00Z
+CROSS=2026-10-27T06:58:30Z
+BOTH="upload, preview with source cells|the opening balance: validation"
+COMMIT="upload, preview with source cells"
+TODAY="a page left open across a reporting-zone midnight"
+O=$T/out
+export SHIFT_EXPORT=$T/export-mut
+cmpset() {
+  tag=$1
+  for f in tests/e2e/import.spec.ts tests/e2e/today.spec.ts src/client/ImportScreen.tsx; do
+    if cmp export/$f export-mut/$f; then echo "$tag: $f identical to the pristine export" >> $O/61-mutants-byte-equal.txt; else echo "$tag: $f DIFFERS" >> $O/61-mutants-byte-equal.txt; fi
+  done
+}
+cmpset before
+# N1: DIAG10 mutant-n1 (the bringToFront before the commit-test step removed), under the 48-thread burner, desktop
+cd $T/export-mut
+git apply --check $T/hold/mutant-n1.patch > $O/62-n1-apply.txt 2>&1; echo "apply --check exit $?" >> $O/62-n1-apply.txt
+git apply $T/hold/mutant-n1.patch >> $O/62-n1-apply.txt 2>&1; echo "apply exit $?" >> $O/62-n1-apply.txt
+cd $T
+node burnrun.mjs mut-n1 48 300 $D tests/e2e/import.spec.ts --project=desktop --grep "$BOTH" --repeat-each=12 --workers=6 > logs/mut-n1.txt 2>&1
+cp export/tests/e2e/import.spec.ts export-mut/tests/e2e/import.spec.ts
+cmpset after-n1
+bash cens.sh st-mut-n1 > logs/cens-mut-n1.log 2>&1
+# T1: the original today.spec.ts (context.newPage) from the previous commit, crossing branch under the burner
+git -C $REPO show $PREV:tests/e2e/today.spec.ts > $T/hold/today.orig.spec.ts
+cp $T/hold/today.orig.spec.ts export-mut/tests/e2e/today.spec.ts
+cmp $T/hold/today.orig.spec.ts export-mut/tests/e2e/today.spec.ts && echo "original today.spec.ts in place" > $O/62-t1-orig.txt
+node burnrun.mjs mut-today-d 48 400 $CROSS tests/e2e/today.spec.ts --project=desktop --grep "$TODAY" --repeat-each=6 --workers=6 > logs/mut-today-d.txt 2>&1
+bash cens.sh st-mut-today-d > logs/cens-mut-today-d.log 2>&1
+node burnrun.mjs mut-today-m 48 400 $CROSS tests/e2e/today.spec.ts --project=mobile --grep "$TODAY" --repeat-each=6 --workers=6 > logs/mut-today-m.txt 2>&1
+cp export/tests/e2e/today.spec.ts export-mut/tests/e2e/today.spec.ts
+cmpset after-today
+bash cens.sh st-mut-today-m > logs/cens-mut-today-m.log 2>&1
+# P1: DIAG10 product mutant (the committed notice never shown), rebuild, commit test must fail on the calm host, rebuild after restoring
+cd $T/export-mut
+git apply --check $T/hold/mutant-product-m1.patch > $O/63-pm1-apply.txt 2>&1; echo "apply --check exit $?" >> $O/63-pm1-apply.txt
+git apply $T/hold/mutant-product-m1.patch >> $O/63-pm1-apply.txt 2>&1; echo "apply exit $?" >> $O/63-pm1-apply.txt
+npm run build > $O/63-pm1-build.txt 2>&1; echo "mutant build exit $?" >> $O/63-pm1-build.txt
+cd $T
+node burnrun.mjs mut-pm1 0 1 $D tests/e2e/import.spec.ts --project=desktop --grep "$COMMIT" --repeat-each=6 --workers=6 > logs/mut-pm1.txt 2>&1
+cd $T/export-mut
+cp $T/export/src/client/ImportScreen.tsx src/client/ImportScreen.tsx
+npm run build > $O/63-pm1-restore-build.txt 2>&1; echo "restore build exit $?" >> $O/63-pm1-restore-build.txt
+find dist -type f | LC_ALL=C sort > $O/63-restored-files.txt
+rm -f $O/63-restored-hashes.txt
+while IFS= read -r f; do printf '%s %s\n' "$f" "$(sha256sum "$f" | cut -d' ' -f1)" >> $O/63-restored-hashes.txt; done < $O/63-restored-files.txt
+diff $O/51-target-hashes.txt $O/63-restored-hashes.txt > $O/63-restored-vs-base.txt; echo "restored dist vs base build: diff exit $? ($(wc -l < $O/63-restored-files.txt) files)" >> $O/63-restored-vs-base.txt
+cd $T
+cmpset after-pm1
+bash cens.sh st-mut-pm1 > logs/cens-mut-pm1.log 2>&1
+diff -rq export/src export-mut/src > $O/64-src-tree-diff.txt 2>&1; echo "src tree diff exit $?" >> $O/64-src-tree-diff.txt
+diff -rq export/tests export-mut/tests > $O/64-tests-tree-diff.txt 2>&1; echo "tests tree diff exit $?" >> $O/64-tests-tree-diff.txt
+echo strength-done > $O/strength.done

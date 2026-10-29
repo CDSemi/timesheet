@@ -147,3 +147,9 @@ Append briefly:
 Return at most 80 words, beginning 'Self-reported model: ...', with the full commit SHA.
 
 ## Results
+
+- HEAD before 1fe5ad3075fd4d1b94abe5b8be04ed05729b05c2; after a5cbc91e6965633a0f9d1dd7e912577321cc71e3.
+- Pushed to origin main (fast-forward); remote SHA a5cbc91e6965633a0f9d1dd7e912577321cc71e3.
+- D_PRE = HEAD digest = 69c6daff305dca839a7128e7b7509f3063c165fe5653d1c73159ea41c003e6bf.
+- Staged 404 paths; no masking, no unstaging; four known leftovers left out.
+- All checks exit 0. Details in evidence/WP5-UX5-FIX17-FREEZE/checks.txt.

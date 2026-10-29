@@ -154,8 +154,17 @@ Current route:
      that was behind, and that tab starves on a saturated machine. One other test had the
      same pattern. A tests-only fix covers both.
    - WP5-UX5-FIX17 applied it and passed its checks (digest 69c6daff).
-   - Running now: WP5-UX5-FIX17-FREEZE commits and pushes it.
-   - Then a regate (WP5-UX5-REGATE12) under a stricter load rule, a fresh
+   - It is frozen in a5cbc91 (digest 69c6daff) and pushed.
+   - WP5-UX5-REGATE12, a scoped regate on a5cbc91, passed.
+   - The fresh area-B recheck WP5-UX5-RECHECK-B3 passed, with no new finding.
+   - The integration audit WP5-UX5-AUDIT-INT found one Low gap. On desktop, an open Day
+     editor does not refresh after Check in or Check out on the page, so a note typed first
+     is refused on save and has to be typed again. Everything else passed.
+   - WP5-UX5-FIX18 fixed it: the editor now follows, and keeps what was typed. Digest
+     6937d79c.
+   - Running now: WP5-UX5-FIX18-FREEZE commits and pushes it.
+   - Then a regate (WP5-UX5-REGATE13), the integration recheck
+     (WP5-UX5-AUDIT-INT2), a fresh
      area-B recheck (WP5-UX5-RECHECK-B3), fresh rechecks of the two fixed findings, the Day editor
      change and the theme change, the integration audit, ACCEPT-DOCS and the WP5 re-accept.
    - To resume after an interruption, use the entry prompt above. The coordinator continues

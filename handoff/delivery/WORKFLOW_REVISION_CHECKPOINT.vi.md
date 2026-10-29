@@ -3007,8 +3007,89 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - Đã đăng ký REGATE12 kèm brief: gate lại có phạm vi, chỉ test đổi, chạy đủ sáu lượt quét,
     theo quy tắc tải mới.
   - RECHECK-B3 và AUDIT-INT giờ phụ thuộc vào REGATE12, và nhắm tới digest của FIX17.
-- **Đang chạy:** WP5-UX5-FIX17-FREEZE (committer). Coordinator không ghi file nào trong lúc
-  committer chạy.
+- **WP5-UX5-FIX17-FREEZE xong.**
+  - Commit a5cbc91e6965633a0f9d1dd7e912577321cc71e3 trên main, đã push dạng fast-forward từ
+    1fe5ad3.
+  - D_PRE trùng digest của HEAD, 69c6daff. Đã stage 404 đường dẫn.
+  - Mọi kiểm tra đều exit 0.
+- **WP5-UX5-REGATE12, lần 1:** dừng đúng quy tắc ngay ở lần đo tải đầu vào. Máy đang bận
+  4,6–4,7 lõi vì việc ngoài mission, vượt giới hạn 4 lõi. Chưa có mục nào được chạy.
+- **Coordinator (Addendum 1 trong brief).** Nâng giới hạn đầu vào lên khoảng 8 lõi, dựa trên
+  số đo của DIAG10:
+  - 0 lỗi khi máy bận 3–8 lõi, qua 198 lượt;
+  - 0 lỗi trong một lượt chạy hỗn hợp 1.068 test khi máy bận 10–14 lõi;
+  - chỉ trượt khi máy đã dùng hết CPU.
+
+  Quy tắc xử lý khi máy bị bỏ đói CPU giữ nguyên.
+- **WP5-UX5-REGATE12 ĐẠT (PASS)** (lần 2, verifier, tự báo claude-sonnet-5-5) trên a5cbc91 /
+  69c6daff.
+  - Lần đo tải đầu vào cho 6,7 và 6,1 lõi, dưới giới hạn 8. Không có lỗi nào.
+  - `dist/` giữ nguyên, nên giữ kết quả drill, `npm audit` và axe.
+  - `npm test`: 2.397.
+  - e2e đầy đủ: 469/407, 0 lỗi. Cả sáu lượt quét: 0 lỗi.
+    - Test logo lâu nhất mất 53, 66 và 96 giây; test qua nửa đêm mất 55 giây.
+  - Chạy dồn, kể cả dưới tải 48 luồng đốt CPU: 0 lỗi. Các mutant đều bị bắt.
+- **WP5-UX5-RECHECK-B3 ĐẠT (PASS)** (auditor, tự báo claude-opus-5-5) trên a5cbc91 /
+  69c6daff. Không có phát hiện mới.
+  - F-UX5B3-1 đã khép lại: các probe của RECHECK-B2 qua 12/12 và các phần A–D.
+  - Ngoại lệ cho lần gửi đã hủy đúng theo mã nguồn và lịch sử git. docs/05:72 mô tả chính
+    xác, cả EN lẫn VI.
+  - E1 và lần Check in đúng giây nửa đêm thực sự ghim được hành vi.
+  - Mọi kiểm tra bắt buộc đều đạt: 2.397 test, e2e đầy đủ 0 lỗi.
+  - 9/11 mutant tự viết bị bắt. Rủi ro tùy chọn: R-UX5B4-1..5.
+  - Trên board, audit này ghi `superseded_by: WP5-UX5-AUDIT-INT` cho đến lúc nghiệm thu
+    lại.
+- **WP5-UX5-AUDIT-INT: CẦN SỬA (FIX REQUIRED)** (auditor, tự báo claude-opus-5-5) trên
+  a5cbc91.
+  - **F-UX5I-1 (Low).** Trên desktop, Day editor đang mở không đọc lại ngày sau khi bấm
+    Check in hoặc Check out trên trang. Ghi chú gõ từ trước bị từ chối khi lưu, và
+    "Reload day" xóa mất ghi chú đó.
+    - Nguyên nhân: `TimesheetScreen.tsx` chỉ tải lại kỳ. `DayEditor.tsx` chỉ đọc lại ngày
+      khi mở, sau các lần ghi của chính nó, và sau khi lưu nhãn hoặc lưu hàng loạt.
+    - Không có dữ liệu nào bị lưu sai hay mất mà không báo: bước kiểm tra phiên bản đã từ
+      chối lần lưu dựa trên dữ liệu cũ.
+  - Mọi mục khác đều đạt:
+    - đã tích hợp các vòng: mọi phát hiện đều đã đóng, mọi yêu cầu của chủ dự án và mọi lần
+      trượt gate đều đã được đối chiếu;
+    - RECHECK-A2 và RECHECK-B3 vẫn giữ;
+    - các probe xuyên vùng đều qua;
+    - AC-13 qua ở ba múi giờ;
+    - tài liệu EN và VI khớp nhau;
+    - e2e đầy đủ: 0 lỗi.
+  - Rủi ro tùy chọn R-UX5I-1..4, và một backlog cho bàn giao WP5.
+- **Coordinator.**
+  - RECHECK-A2 và RECHECK-B3 giờ ghi `superseded_by: WP5-UX5-AUDIT-INT2`, tức lần kiểm tra lại
+    tích hợp.
+  - Đã đăng ký bốn task, mỗi task có brief riêng:
+    - FIX18 (worker-high, sonnet). Vẫn giữ bước kiểm tra phiên bản cho các thay đổi đến từ
+      nơi khác, và không bao giờ gửi các trường ngày đã cũ kèm phiên bản mới.
+    - FIX18-FREEZE.
+    - REGATE13: gate cho thay đổi phía client, có chạy axe khi Day editor đang mở.
+    - AUDIT-INT2.
+- **WP5-UX5-FIX18 xong** (worker-high, tự báo claude-sonnet-5-5). Chưa commit. Digest
+  6937d79c.
+  - Day editor đang mở trên desktop giờ đọc lại ngày mỗi khi phiên bản đồng hồ đổi, và giữ
+    nguyên các form (không tăng `generation`). Nó chỉ lấy dữ liệu ngày mới khi các trường
+    ngày trên server vẫn trùng với những gì nó đang giữ, và không lấy khi hộp thoại phiên
+    làm việc đang mở.
+    - Cùng bộ đếm đó cũng tăng khi tab được mở lại, với các điều kiện bảo vệ như trên.
+      AUDIT-INT2 sẽ đánh giá trường hợp này.
+  - Một thao tác Check in/out không làm đổi trường ngày nào.
+  - Test: bốn test desktop mới (1440 px, 1280 px, thay đổi từ nơi khác, hộp thoại phiên) và
+    một test điện thoại.
+  - docs/04: thêm một câu, cả EN lẫn VI.
+  - Các mutant M1 đến M5 đều bị bắt. M6 thì không phân biệt được.
+  - Chỉ `dist/client` thay đổi.
+  - `npm test`: 2.397. e2e đầy đủ: 473/36/0 và 408/101/0. Lượt chạy qua nửa đêm: 0 lỗi.
+  - Công cụ: `npm run digest` báo lỗi ENOBUFS khi trong `handoff/` có nhiều file git chưa
+    theo dõi. Việc này đưa vào backlog.
+- **Đang chạy:** WP5-UX5-FIX18-FREEZE (committer). Committer stage trước rồi mới tính D_PRE.
+  Coordinator không ghi file nào trong lúc committer chạy.
+- **Tiếp theo:**
+  - REGATE13 và AUDIT-INT2;
+  - ACCEPT-DOCS: backlog trong bàn giao WP5, định danh bản phát hành trong gói pilot, và bước
+    kiểm tra cảm ứng trên thiết bị thật;
+  - nghiệm thu lại WP5.
 - **Tiếp theo:** sửa nếu cần, rồi gate lại trên máy có tải nằm trong giới hạn. RECHECK-B3 và
   AUDIT-INT chuyển sang phụ thuộc vào lần gate mới.
 - **Sau đó:**

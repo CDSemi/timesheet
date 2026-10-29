@@ -1,0 +1,8 @@
+. <task>/env.sh
+mkdir -p $T/export-probe
+cd $REPO
+git archive $TARGET | tar -x -C $T/export-probe
+cd $T/export-probe
+npm ci > $T/out/02-ci-export-probe.txt 2>&1; echo "npm ci exit $?" >> $T/out/02-ci-export-probe.txt
+npm run build > $T/out/02-build-export-probe.txt 2>&1; echo "build exit $?" >> $T/out/02-build-export-probe.txt
+echo probe-setup-done > $T/out/probe-setup.done

@@ -181,6 +181,8 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   const [labelBusy, setLabelBusy] = useState<string | null>(null);
   /** Raised after a label or batch commit changed the day open in the editor, so the editor reloads it. */
   const [editorRefresh, setEditorRefresh] = useState(0);
+  /** Raised with every change of the clock version (the page's own Check in and Check out): the open editor reads its day again without restarting its forms. */
+  const [editorFollow, setEditorFollow] = useState(0);
   /** The element that opened the day editor, and the date whose button gets focus back when it closes. */
   const editorOpener = useRef<Element | null>(null);
   const returnFocusTo = useRef<string | null>(null);
@@ -302,13 +304,15 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
     return () => reportView(null);
   }, [own, view, reportView]);
 
-  // An action of the clock (check in, check out) reloads the period; the check-out confirmation shows as this page's saved notice.
+  // An action of the clock (check in, check out) reloads the period; the check-out confirmation shows as this page's saved notice. The drawer
+  // is not modal, so the open Day editor stays beside the action: it reads its day again (the forms and what was typed in them stay).
   const seenVersion = useRef(clock?.version ?? 0);
   const clockVersion = clock?.version;
   useEffect(() => {
     if (clockVersion === undefined || clockVersion === seenVersion.current) return;
     seenVersion.current = clockVersion;
     load();
+    setEditorFollow((value) => value + 1);
   }, [clockVersion, load]);
   const clockNotice = clock?.notice ?? null;
   const seenNotice = useRef(clockNotice?.id ?? 0);
@@ -826,6 +830,7 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
               bottomSheet={!desktop}
               dockSide={beside ? 'right' : dockSide}
               refresh={editorRefresh}
+              follow={editorFollow}
               periodPill={dayPeriodPill(editDate, view.period, periods)}
               onChanged={load}
               onClose={requestClose}

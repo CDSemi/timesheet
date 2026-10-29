@@ -1,0 +1,49 @@
+== mf-1104-desktop: real start 2026-10-29T09:00:33Z, simulated start 2026-11-04T07:58:50Z, AB8_SHIFT_MS=514696809
+process clock 2026-11-04T07:58:50.087Z (Date.now 1793779130096); America/Los_Angeles Tue, 2026-11-03, 23:58; shift ms 514696809; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/today.spec.ts -g reporting-zone midnight --project=desktop --workers=1 --output=<task>\pw-mf-1104-desktop
+
+Running 1 test using 1 worker
+
+(node:89020) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  1 [desktop] › tests\e2e\today.spec.ts:627:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself (1.2m)
+
+
+  1) [desktop] › tests\e2e\today.spec.ts:627:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+
+    Error: the refreshed tab tags the new date
+
+    the refreshed tab tags the new date
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: "2026-11-04"
+    Received: "2026-11-03"
+
+    Call Log:
+    - Timeout 7000ms exceeded while waiting on the predicate
+
+      691 |     // The other tab, which nobody pressed: a focus refresh alone moves the Today tag and the inactive state to the new date, with no reload.
+      692 |     await other.evaluate("window.dispatchEvent(new Event('focus'))");
+    > 693 |     await expect.poll(() => tagDate(other), { message: 'the refreshed tab tags the new date' }).toBe(stillShowsToday ? after.today_local : null);
+          |                                                                                                 ^
+      694 |     await expectTodayActive(other, !stillShowsToday);
+      695 |     await otherContext?.close();
+      696 |     return;
+        at <task>\export-mut\tests\e2e\today.spec.ts:693:97
+
+    Error Context: ..\pw-mf-1104-desktop\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mf-1104-desktop\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mf-1104-desktop\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\today.spec.ts:627:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+exit=1
+process clock 2026-11-04T08:00:07.591Z (Date.now 1793779207601); America/Los_Angeles Wed, 2026-11-04, 00:00; shift ms 514696809; instanceof true
+== mf-1104-desktop real end 2026-10-29T09:01:50Z

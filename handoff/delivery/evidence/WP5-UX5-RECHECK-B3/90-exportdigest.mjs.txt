@@ -1,0 +1,35 @@
+// Digest of a clean export: for every path of the target tree outside handoff/, the git blob id of the exported raw bytes;
+// SHA-256 of the sorted "<path> <blob>\n" lines (the source-digest.mjs form). Also lists export files outside handoff/ that
+// the tree does not hold (node_modules, dist, test-results, playwright-report and the task's own files excluded).
+// Usage: node exportdigest.mjs <export> <filtered-lstree.txt>
+import { createHash } from 'node:crypto';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [root, listing] = process.argv.slice(2);
+const expected = readFileSync(listing, 'utf8').split('\n').filter((line) => line !== '');
+const paths = expected.map((line) => line.slice(0, line.lastIndexOf(' ')));
+const sortedExpected = [...expected].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+const lines = [];
+for (const path of [...paths].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))) {
+  const bytes = readFileSync(join(root, path));
+  const blob = createHash('sha1').update(Buffer.concat([Buffer.from(`blob ${bytes.length}\0`), bytes])).digest('hex');
+  lines.push(`${path} ${blob}`);
+}
+const digest = createHash('sha256').update(lines.map((line) => `${line}\n`).join('')).digest('hex');
+const mismatches = lines.filter((line, index) => line !== sortedExpected[index]);
+const seen = new Set(paths);
+const extra = [];
+const skip = new Set(['node_modules', 'dist', 'handoff', 'test-results', 'playwright-report', 'blob-report']);
+const walk = (dir, rel) => {
+  for (const name of readdirSync(dir)) {
+    const relPath = rel === '' ? name : `${rel}/${name}`;
+    if (skip.has(relPath)) continue;
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) walk(full, relPath);
+    else if (!seen.has(relPath)) extra.push(relPath);
+  }
+};
+walk(root, '');
+console.log(`${digest}  (${lines.length} files, handoff/ excluded; raw export blobs)`);
+console.log(`lines differing from ls-tree: ${mismatches.length}${mismatches.length > 0 ? ` ${mismatches.slice(0, 10).join(', ')}` : ''}; extra files: ${extra.length}${extra.length > 0 ? ` ${extra.slice(0, 20).join(', ')}` : ''}`);

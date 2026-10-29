@@ -1,0 +1,14 @@
+src/server/db/migrations/0004_submission.ts:243:-- its lease; succeeded and cancelled are final; attempts never decrease. kind is a
+src/server/db/migrations/0004_submission.ts:253:  state TEXT NOT NULL CHECK (state IN ('queued', 'leased', 'succeeded', 'intervention', 'cancelled')),
+src/server/db/migrations/0004_submission.ts:277:WHEN OLD.state IN ('succeeded', 'cancelled')
+src/server/db/migrations/0011_job_retention.ts:11: * - it is `succeeded` (a failed, cancelled, queued or leased job is never deleted);
+src/server/jobs/jobStore.ts:46:export type JobState = 'queued' | 'leased' | 'succeeded' | 'intervention' | 'cancelled';
+src/server/ops/restore.ts:553:  // or held by another restore); a copy that may have arrived must not be followed by an older one. Only a cancelled job (it never ran
+src/server/ops/restore.ts:560:        WHERE held.id = ? AND j.user_id = ? AND j.kind = ? AND j.rowid > ? AND j.state <> 'cancelled' LIMIT 1`,
+src/server/ops/restore.ts:646:      `UPDATE jobs SET state = 'cancelled', last_error = ?, updated_at = ? WHERE id = ? AND state = 'intervention' AND last_error = ?`,
+src/server/ops/restore.ts:648:    auditHeld(db, clock, 'operations.held_job_drop', job, 'cancelled');
+src/server/services/operationsStatus.ts:37:const JOB_STATES = ['queued', 'leased', 'succeeded', 'intervention', 'cancelled'] as const;
+src/server/services/otLeave.ts:33: *   The unused remainder stays reserved until it is used or cancelled. A leave date inside
+src/server/services/otLeave.ts:146:  status: 'cancelled' | 'unchanged';
+src/server/services/otLeave.ts:647:    return { status: 'cancelled', releasedMinutes: plan.releasedMinutes, request: updated, balance: getBalance(ctx.db, input.userId) };
+560:        WHERE held.id = ? AND j.user_id = ? AND j.kind = ? AND j.rowid > ? AND j.state <> 'cancelled' LIMIT 1`,

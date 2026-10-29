@@ -160,8 +160,17 @@ Luồng hiện tại:
      tab trình duyệt đang nằm phía sau, và tab đó bị bỏ đói khi máy dùng hết CPU. Một test
      khác cũng có cùng kiểu này. Một bản sửa chỉ đổi test xử lý cả hai.
    - WP5-UX5-FIX17 đã áp bản sửa đó và qua mọi kiểm tra (digest 69c6daff).
-   - Đang chạy: WP5-UX5-FIX17-FREEZE commit và push bản sửa.
-   - Sau đó là gate lại (WP5-UX5-REGATE12) với quy tắc tải chặt hơn, một lượt kiểm
+   - Bản sửa đã được freeze trong a5cbc91 (digest 69c6daff) và đã push.
+   - WP5-UX5-REGATE12, gate lại có phạm vi trên a5cbc91, đã đạt.
+   - Lượt kiểm tra lại độc lập vùng B, WP5-UX5-RECHECK-B3, đã đạt, không có phát hiện mới.
+   - Audit tích hợp WP5-UX5-AUDIT-INT tìm ra một lỗ hổng mức Low. Trên desktop, Day editor
+     đang mở không cập nhật sau khi bấm Check in hoặc Check out trên trang. Vì vậy ghi chú
+     gõ từ trước bị từ chối khi lưu và phải gõ lại. Mọi mục khác đều đạt.
+   - WP5-UX5-FIX18 đã sửa lỗi này: editor giờ cập nhật theo, và giữ nguyên những gì đã gõ.
+     Digest 6937d79c.
+   - Đang chạy: WP5-UX5-FIX18-FREEZE commit và push bản sửa.
+   - Sau đó là gate lại (WP5-UX5-REGATE13), kiểm tra lại tích hợp
+     (WP5-UX5-AUDIT-INT2), một lượt kiểm
      tra lại độc lập mới cho vùng B (WP5-UX5-RECHECK-B3), kiểm tra lại độc lập hai lỗi đã sửa, thay đổi
      Day editor và thay đổi giao diện, audit tích hợp, ACCEPT-DOCS và nghiệm thu lại WP5.
    - Để tiếp tục sau khi bị gián đoạn, dùng prompt khởi động ở trên. Điều phối viên làm tiếp

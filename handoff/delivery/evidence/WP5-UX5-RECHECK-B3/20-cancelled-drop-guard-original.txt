@@ -1,0 +1,9 @@
+572-/** Cancels one held reminder instead of releasing it (it is never sent); audited. Send jobs cannot be dropped. */
+573-export function dropHeldReminder(db: Db, clock: Clock, jobId: string): DropResult {
+574-  return writeTransaction(db, (): DropResult => {
+575-    const job = heldRow(db, jobId);
+576-    if (job === undefined) return { outcome: 'refused', code: 'not_held' };
+577-    if (job.kind !== JOB_SEND_REMINDER) return { outcome: 'refused', code: 'not_a_reminder' };
+578-    const now = nowUtc(clock);
+579-    db.prepare(
+580:      `UPDATE jobs SET state = 'cancelled', last_error = ?, updated_at = ? WHERE id = ? AND state = 'intervention' AND last_error = ?`,

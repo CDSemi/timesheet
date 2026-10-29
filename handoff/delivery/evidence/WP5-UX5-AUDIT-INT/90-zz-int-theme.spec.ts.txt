@@ -1,0 +1,93 @@
+// WP5-UX5-AUDIT-INT probe (auditor's own, not part of the repository): the theme chosen in one tab followed by a second tab whose Day
+// editor holds an unsaved note and whose account menu (desktop) is open; the guard and the note must survive, and the press in the menu
+// keeps its own action (docs/04 "Day editor", U5-24). Observations go to INT_OUT; each tab is brought to the front before it is driven.
+import { appendFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import type { Page } from '@playwright/test';
+import { expect, openAccount, test } from './fixtures.ts';
+
+const OUT = process.env.INT_OUT ?? join(resolve(import.meta.dirname, '..', '..'), '..', 'out', '42-obs-theme.txt');
+const BG = { dark: 'rgb(14, 18, 23)', light: 'rgb(237, 240, 245)' } as const;
+
+async function painted(page: Page): Promise<string> {
+  return page.evaluate<string>(`(document.documentElement.getAttribute('data-theme') ?? 'device') + '/' + getComputedStyle(document.body).backgroundColor`);
+}
+const discard = (page: Page) => page.getByRole('alertdialog', { name: 'Discard your changes?' });
+
+for (const width of [1280, 1440]) {
+  test(`audit-int: cross-tab theme with the Day editor and the account menu open (${width}px or the phone)`, async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+    const project = testInfo.project.name;
+    if (project === 'mobile' && width === 1440) test.skip(true, 'one phone run is enough');
+    const label = project === 'mobile' ? 'phone' : `${width}px`;
+    const log = (line: string) => appendFileSync(OUT, `[${label}] ${line}\n`);
+    if (project === 'desktop') await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+
+    const second = await page.context().newPage();
+    await second.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    if (project === 'desktop') await second.setViewportSize({ width, height: 900 });
+    await second.goto('/#/timesheet');
+    await expect(second.locator('[data-day]')).toHaveCount(14);
+    await second.getByLabel('Open a day').fill(date);
+    await second.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = second.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    const notes = editor.getByLabel('Notes');
+    await notes.fill('Synthetic unsaved note, theme probe');
+    log(`second tab: editor on ${date}, layout ${await second.locator('[data-editor-layout]').first().getAttribute('data-editor-layout').catch(() => null)}, painted ${await painted(second)}`);
+
+    if (project === 'desktop') {
+      // The account menu of the second tab opened while its editor holds the note: a button keeps its own action.
+      await second.bringToFront();
+      const menu = await openAccount(second);
+      log(`second tab: account menu opened with the note: menu ${await menu.isVisible()}, editor ${await editor.isVisible()}, question ${await discard(second).isVisible()}, note "${await notes.inputValue()}"`);
+    }
+
+    // The first tab chooses Dark.
+    await page.bringToFront();
+    const panel = await openAccount(page);
+    await panel.getByRole('radiogroup', { name: 'Theme', exact: true }).getByRole('radio', { name: 'Dark', exact: true }).click();
+    await expect.poll(() => painted(page)).toBe(`dark/${BG.dark}`);
+    await second.bringToFront();
+    await expect.poll(() => painted(second), { message: 'the second tab follows Dark' }).toBe(`dark/${BG.dark}`);
+    const secondMenuDark = second.locator('#account-menu, #more-panel').getByRole('radio', { name: 'Dark', exact: true });
+    log(`after Dark in the first tab: second painted ${await painted(second)}; its open menu shows Dark checked ${(await secondMenuDark.count()) === 0 ? '(no menu)' : await secondMenuDark.isChecked()}; editor ${await editor.isVisible()}; question ${await discard(second).isVisible()}; note "${await notes.inputValue()}"`);
+
+    if (project === 'desktop') {
+      // The second tab chooses Light in its own menu while the editor holds the note (the menu is opened again if bringing the other
+      // tab to the front closed it; that is recorded).
+      const stillOpen = await second.locator('#account-menu').isVisible();
+      log(`second tab back in front: its account menu still open ${stillOpen}`);
+      if (!stillOpen) {
+        await openAccount(second);
+        log(`second tab: menu opened again with the note: editor ${await editor.isVisible()}, question ${await discard(second).isVisible()}, note "${await notes.inputValue()}"`);
+      }
+      await second.locator('#account-menu').getByRole('radio', { name: 'Light', exact: true }).click();
+      await expect.poll(() => painted(second)).toBe(`light/${BG.light}`);
+      log(`second tab chose Light in its menu: painted ${await painted(second)}; editor ${await editor.isVisible()}; question ${await discard(second).isVisible()}; note "${await notes.inputValue()}"; menu ${await second.locator('#account-menu').isVisible()}`);
+      await page.bringToFront();
+      await expect.poll(() => painted(page), { message: 'the first tab follows Light' }).toBe(`light/${BG.light}`);
+      log(`first tab after the second chose Light: painted ${await painted(page)}`);
+      await second.bringToFront();
+      // Escape with the menu open and the note unsaved.
+      await second.keyboard.press('Escape');
+      log(`second tab, Escape 1: menu ${await second.locator('#account-menu').isVisible()}; editor ${await editor.isVisible()}; question ${await discard(second).isVisible()}; focus ${await second.evaluate<string>('document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.textContent?.trim().slice(0, 40) ?? ""')}`);
+      if (await discard(second).isVisible()) await discard(second).getByRole('button', { name: 'Keep editing' }).click();
+      await second.keyboard.press('Escape');
+      log(`second tab, Escape 2: menu ${await second.locator('#account-menu').isVisible()}; editor ${await editor.isVisible()}; question ${await discard(second).isVisible()}`);
+      if (await discard(second).isVisible()) {
+        await discard(second).getByRole('button', { name: 'Keep editing' }).click();
+        log(`second tab, Keep editing: editor ${await editor.isVisible()}, note "${await notes.inputValue()}"`);
+      }
+    } else {
+      await second.keyboard.press('Escape');
+      log(`phone second tab, Escape: question ${await discard(second).isVisible()}`);
+      if (await discard(second).isVisible()) await discard(second).getByRole('button', { name: 'Keep editing' }).click();
+      log(`phone second tab, after Keep editing: sheet ${await editor.isVisible()}, note "${await notes.inputValue()}"`);
+    }
+    await second.close();
+  });
+}

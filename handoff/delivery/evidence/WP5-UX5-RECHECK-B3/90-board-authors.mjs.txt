@@ -1,0 +1,17 @@
+// Lists WP5-UX4 / WP5-UX5 tasks of the board with kind, status, model and agent id (read-only), the author-kind models, and
+// whether this recheck's agent id appears as the agent of any other task. Usage: node board-authors.mjs <board.json> <self agent id>
+import { readFileSync } from 'node:fs';
+
+const [boardPath, selfAgent] = process.argv.slice(2);
+const board = JSON.parse(readFileSync(boardPath, 'utf8'));
+const tasks = (board.tasks ?? []).filter((task) => /^WP5-UX[45]-/.test(task.id));
+const models = new Map();
+for (const task of tasks) {
+  console.log(`${task.id}\t${task.kind}\t${task.status}\t${task.actual_model ?? task.requested_model ?? '-'}\t${task.agent_id ?? '-'}`);
+  if (['implement', 'fix', 'plan', 'diagnose', 'commit'].includes(task.kind) && task.actual_model) models.set(task.actual_model, (models.get(task.actual_model) ?? 0) + 1);
+}
+console.log(`author-kind models: ${JSON.stringify(Object.fromEntries(models))}`);
+const authored = (board.tasks ?? []).filter((task) => task.id !== 'WP5-UX5-RECHECK-B3' && (task.agent_id === selfAgent || (task.previous_agent_ids ?? []).includes(selfAgent)));
+console.log(`other tasks with this recheck's agent id ${selfAgent}: ${authored.length === 0 ? 'none' : authored.map((task) => task.id).join(', ')}`);
+const self = (board.tasks ?? []).find((task) => task.id === 'WP5-UX5-RECHECK-B3');
+console.log(`this task: ${JSON.stringify(self ?? null)}`);

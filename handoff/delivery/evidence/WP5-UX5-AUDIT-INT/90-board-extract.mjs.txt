@@ -1,0 +1,18 @@
+// Read-only extraction of WP5-UX4 / WP5-UX5 tasks from the board.
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const board = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+const out = [];
+const tasks = board.tasks ?? [];
+out.push(`top-level keys: ${Object.keys(board).join(', ')}`);
+out.push(`current_source_digest: ${board.current_source_digest ?? '(none)'}`);
+const models = new Map();
+for (const t of tasks) {
+  if (!/^WP5-UX[45]-/.test(t.id)) continue;
+  const m = t.actual_model ?? '(null)';
+  models.set(m, (models.get(m) ?? 0) + 1);
+  out.push(`${t.id} | ${t.kind} | ${t.status} | model=${m} | agent=${t.agent_id ?? ''} | rc=${(t.reviewed_commit ?? t.freeze_commit ?? t.commit_sha ?? '').slice(0, 8)} | sd=${(t.source_digest ?? '').slice(0, 8)} | decision=${(t.decision ?? '').slice(0, 60)}`);
+}
+out.push('');
+out.push('models: ' + [...models.entries()].map(([k, v]) => `${k}=${v}`).join(', '));
+writeFileSync(process.argv[3], out.join('\n') + '\n');

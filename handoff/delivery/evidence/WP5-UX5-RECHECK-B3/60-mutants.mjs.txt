@@ -1,0 +1,131 @@
+// WP5-UX5-RECHECK-B3: the auditor's own mutants on FIX16's change (restore.ts blockerOf and the new boundary check), plus FIX16's
+// K2, T4, M1 and C1 run again. Each mutant replaces one exact anchor (it must occur exactly once), runs the named vitest files,
+// then the full suite when the targeted run passed (unless noFull), and restores the file byte-identical.
+// Usage: node mutants.mjs <mutDir> <probeDir> <logDir> [mutant ids...]
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [mutDir, probeDir, logDir, ...only] = process.argv.slice(2);
+const summary = join(logDir, 'mutants-summary.txt');
+const sha = (bytes) => createHash('sha256').update(bytes).digest('hex');
+const RESTORE = 'src/server/ops/restore.ts';
+const COMMANDS = 'src/server/services/timesheetCommands.ts';
+const RESTORE_TESTS = ['tests/integration/restore.test.ts'];
+const BOUNDARY_TESTS = ['tests/integration/timesheet-api.test.ts'];
+const PROBES = ['tests/integration/zz-recheck-b2-restore.test.ts', 'tests/integration/zz-recheck-b3-restore.test.ts'];
+const STATE = "j.state <> 'cancelled'";
+const ORDER = 'AND j.rowid > ? AND';
+const KIND = 'AND j.kind = ? AND';
+const OPEN = "AND (state IN ('preparing', 'sending') OR (state = 'uncertain' AND decision IS NULL)) LIMIT 1";
+const WORK_DATE = 'const workDate = localDateOf(scope.calendar.schedule.reportingZone, now);';
+
+const MUTANTS = [
+  {
+    id: 'N1',
+    what: 'a later send whose attempt failed permanently no longer blocks',
+    file: RESTORE,
+    from: STATE,
+    to: "j.state <> 'cancelled' AND NOT EXISTS (SELECT 1 FROM delivery_attempts fa WHERE fa.job_id = j.id AND fa.state = 'failed_permanent')",
+    tests: RESTORE_TESTS,
+  },
+  {
+    id: 'N2',
+    what: 'a later send the owner marked delivered (decision treat_as_accepted) no longer blocks',
+    file: RESTORE,
+    from: STATE,
+    to: "j.state <> 'cancelled' AND NOT EXISTS (SELECT 1 FROM delivery_attempts da WHERE da.job_id = j.id AND da.decision = 'treat_as_accepted')",
+    tests: RESTORE_TESTS,
+  },
+  {
+    id: 'N3',
+    what: 'a later send that another restore holds (intervention, reconcile_after_restore) no longer blocks',
+    file: RESTORE,
+    from: STATE,
+    to: "j.state <> 'cancelled' AND NOT (j.state = 'intervention' AND j.last_error = 'reconcile_after_restore')",
+    tests: RESTORE_TESTS,
+  },
+  {
+    id: 'N4',
+    what: 'a later send left uncertain by the crash recovery (lease_expired_while_sending) no longer blocks',
+    file: RESTORE,
+    from: STATE,
+    to: "j.state <> 'cancelled' AND NOT EXISTS (SELECT 1 FROM delivery_attempts ua WHERE ua.job_id = j.id AND ua.provider_response = 'lease_expired_while_sending')",
+    tests: RESTORE_TESTS,
+  },
+  { id: 'N5', what: 'the "later" order dropped precisely: an EARLIER send job of the period blocks (the held job itself still does not)', file: RESTORE, from: ORDER, to: 'AND j.rowid <> ? AND', tests: RESTORE_TESTS },
+  { id: 'N5p', what: 'N5 against the RECHECK-B2 and RECHECK-B3 probes (E1, X3, X4)', file: RESTORE, from: ORDER, to: 'AND j.rowid <> ? AND', tests: PROBES, dir: 'probe', noFull: true },
+  { id: 'N6', what: 'the kind filter dropped: a later job of ANY kind of the period (a PDF job) blocks', file: RESTORE, from: KIND, to: 'AND (j.kind = ? OR 1) AND', tests: RESTORE_TESTS },
+  {
+    id: 'N7',
+    what: 'a later send that ended uncertain (job last_error delivery_uncertain, decided or not) no longer blocks',
+    file: RESTORE,
+    from: STATE,
+    to: "j.state <> 'cancelled' AND NOT (j.state = 'intervention' AND j.last_error = 'delivery_uncertain')",
+    tests: RESTORE_TESTS,
+  },
+  { id: 'N8', what: 'the exception swapped: a succeeded later send no longer blocks, a cancelled one does', file: RESTORE, from: STATE, to: "j.state <> 'succeeded'", tests: RESTORE_TESTS },
+  { id: 'N9', what: 'the open-attempt check forgets an undecided uncertain attempt (the same-revision repeat then reports superseded_by_later_send)', file: RESTORE, from: OPEN, to: "AND state IN ('preparing', 'sending') LIMIT 1", tests: RESTORE_TESTS },
+  { id: 'N10', what: 'a later send that exhausted its retries (failed_temporary attempts only, intervention) no longer blocks', file: RESTORE, from: STATE, to: "j.state <> 'cancelled' AND NOT (j.state = 'intervention' AND NOT EXISTS (SELECT 1 FROM delivery_attempts ta WHERE ta.job_id = j.id AND ta.state <> 'failed_temporary') AND EXISTS (SELECT 1 FROM delivery_attempts tb WHERE tb.job_id = j.id))", tests: RESTORE_TESTS },
+  { id: 'N10p', what: 'N10 against the RECHECK-B3 probe (X1)', file: RESTORE, from: STATE, to: "j.state <> 'cancelled' AND NOT (j.state = 'intervention' AND NOT EXISTS (SELECT 1 FROM delivery_attempts ta WHERE ta.job_id = j.id AND ta.state <> 'failed_temporary') AND EXISTS (SELECT 1 FROM delivery_attempts tb WHERE tb.job_id = j.id))", tests: ['tests/integration/zz-recheck-b3-restore.test.ts'], dir: 'probe', noFull: true },
+  { id: 'T6', what: 'the last second before the midnight filed on the new day (check-in at now + 1)', file: COMMANDS, from: WORK_DATE, to: 'const workDate = localDateOf(scope.calendar.schedule.reportingZone, now + 1);', tests: BOUNDARY_TESTS },
+  { id: 'T6p', what: 'T6 against the RECHECK-B2 midnight probe (check-ins at -1 s, 0 s and +1 s)', file: COMMANDS, from: WORK_DATE, to: 'const workDate = localDateOf(scope.calendar.schedule.reportingZone, now + 1);', tests: ['tests/integration/zz-recheck-b2-midnight.test.ts'], dir: 'probe', noFull: true },
+  { id: 'K2', what: "FIX16's K2 again: (j.rowid > ? OR 1), so every send job of the period, the held job itself included, blocks", file: RESTORE, from: ORDER, to: 'AND (j.rowid > ? OR 1) AND', tests: RESTORE_TESTS, noFull: true },
+  { id: 'T4', what: "FIX16's T4 again: the midnight second itself filed on the previous day (now - 1)", file: COMMANDS, from: WORK_DATE, to: 'const workDate = localDateOf(scope.calendar.schedule.reportingZone, now - 1);', tests: BOUNDARY_TESTS, noFull: true },
+  { id: 'M1', what: "FIX16's M1 again: the old state list (queued, leased, succeeded)", file: RESTORE, from: STATE, to: "j.state IN ('queued', 'leased', 'succeeded')", tests: RESTORE_TESTS, noFull: true },
+  { id: 'C1', what: "FIX16's C1 again: a cancelled later send blocks as well", file: RESTORE, from: STATE, to: '1 = 1', tests: RESTORE_TESTS, noFull: true },
+];
+
+function run(cwd, label, args, timeoutMs) {
+  const started = Date.now();
+  const vitest = join(cwd, 'node_modules', 'vitest', 'vitest.mjs');
+  const result = spawnSync(process.execPath, [vitest, 'run', ...args], {
+    cwd,
+    encoding: 'utf8',
+    timeout: timeoutMs,
+    env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0', RECHECK_B2_OUT: join(logDir, `mut-${label}-b2.jsonl`), RECHECK_B3_OUT: join(logDir, `mut-${label}-b3.jsonl`) },
+    maxBuffer: 256 * 1024 * 1024,
+  });
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+  writeFileSync(join(logDir, `mut-${label}.log`), output);
+  const tail = output
+    .split('\n')
+    .filter((line) => /Test Files|Tests |×/.test(line))
+    .join(' / ');
+  // The first failing assertion of each failed test: the source line in the test file and the message.
+  const reasons = output
+    .split('\n')
+    .filter((line) => /❯ tests\/integration\/[^ ]+\.test\.ts:\d+:\d+|AssertionError|^\s*- Expected|^\s*\+ Received|^ FAIL /.test(line))
+    .slice(0, 60)
+    .join('\n');
+  writeFileSync(join(logDir, `mut-${label}-reasons.txt`), `${reasons}\n`);
+  return { status: result.status, seconds: Math.round((Date.now() - started) / 1000), tail };
+}
+
+for (const mutant of MUTANTS.filter((item) => only.length === 0 || only.includes(item.id))) {
+  const dir = mutant.dir === 'probe' ? probeDir : mutDir;
+  const path = join(dir, mutant.file);
+  const originalBytes = readFileSync(path);
+  const original = originalBytes.toString('utf8');
+  const occurrences = original.split(mutant.from).length - 1;
+  if (occurrences !== 1) {
+    appendFileSync(summary, `${mutant.id} ANCHOR found ${occurrences} times, not run\n`);
+    continue;
+  }
+  writeFileSync(path, original.replace(mutant.from, () => mutant.to));
+  let line = `${mutant.id} (${mutant.file}${mutant.dir === 'probe' ? ', probe export' : ''}): ${mutant.what}`;
+  try {
+    const targeted = run(dir, `${mutant.id}-targeted`, mutant.tests, 900_000);
+    line += ` | targeted ${mutant.tests.join(' ')} exit ${targeted.status} (${targeted.seconds} s): ${targeted.tail}`;
+    if (targeted.status === 0 && mutant.noFull !== true) {
+      const full = run(dir, `${mutant.id}-full`, [], 1_800_000);
+      line += ` | FULL exit ${full.status} (${full.seconds} s): ${full.tail}`;
+    }
+  } finally {
+    writeFileSync(path, originalBytes);
+    line += ` | restored ${sha(readFileSync(path)) === sha(originalBytes) ? 'byte-identical' : 'DIFFERENT'}`;
+    appendFileSync(summary, `${line}\n`);
+  }
+}
+appendFileSync(summary, `done ${new Date().toISOString()}\n`);

@@ -1,0 +1,179 @@
+burnrun mut-today-m: start 2026-10-29T07:01:09.912Z
+burn: 48 threads until 2026-10-29T07:07:49.940Z
+== mut-today-m: real start 2026-10-29T07:01:12Z, simulated start 2026-10-27T06:58:30Z, AB8_SHIFT_MS=-172961213
+process clock 2026-10-27T06:58:31.866Z (Date.now 1793084311880); America/Los_Angeles Mon, 2026-10-26, 23:58; shift ms -172961213; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/today.spec.ts --project=mobile --grep a page left open across a reporting-zone midnight --repeat-each=6 --workers=6 --output=<task>\pw-mut-today-m
+
+Running 6 tests using 6 workers
+
+(node:44420) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:49632) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:102348) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:111300) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:70160) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:101076) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  5 [mobile] › tests\e2e\today.spec.ts:627:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself (1.9m)
+  ok 3 [mobile] › tests\e2e\today.spec.ts:627:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself (3.6m)
+  ok 4 [mobile] › tests\e2e\today.spec.ts:627:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself (3.9m)
+  x  1 [mobile] › tests\e2e\today.spec.ts:627:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself (4.1m)
+  x  2 [mobile] › tests\e2e\today.spec.ts:627:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself (4.1m)
+  x  6 [mobile] › tests\e2e\today.spec.ts:627:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself (4.1m)
+
+
+  1) [mobile] › tests\e2e\today.spec.ts:627:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+
+    Test timeout of 240000ms exceeded.
+
+    Error: expect(locator).toBeInViewport() failed
+
+    Locator:  locator('[data-day="2026-10-27"]')
+    Expected: in viewport
+    Received: undefined
+
+    Call log:
+      - Expect "toBeInViewport" locator('[data-day="2026-10-27"]') with timeout 7000ms
+      - waiting for locator('[data-day="2026-10-27"]')
+
+
+      675 |       await expect(jumpStatus(page)).toHaveText(`Showing today, ${weekday(after.today_local)} ${us(after.today_local)}, in the period ${plainRange(after.in_progress)}`);
+      676 |       await expectTodayActive(page, false);
+    > 677 |       await expect(page.locator(`[data-day="${after.today_local}"]`)).toBeInViewport();
+          |                                                                       ^
+      678 |     }
+      679 |     // The other tab, which nobody pressed: a focus refresh alone moves the Today tag and the inactive state to the new date, with no reload.
+      680 |     await other.evaluate("window.dispatchEvent(new Event('focus'))");
+        at <task>\export-mut\tests\e2e\today.spec.ts:677:71
+
+    Error Context: ..\pw-mut-today-m\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile-repeat1\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-today-m\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile-repeat1\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-today-m\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile-repeat1\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [mobile] › tests\e2e\today.spec.ts:627:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+
+    Test timeout of 240000ms exceeded.
+
+    Error: expect(locator).toHaveAccessibleName(expected) failed
+
+    Locator:  locator('.period-bar').getByRole('button', { name: 'Today', exact: true })
+    Expected: "Today"
+    Received: ""
+
+    Call log:
+      - Expect "toHaveAccessibleName" locator('.period-bar').getByRole('button', { name: 'Today', exact: true }) with timeout 7000ms
+      - waiting for locator('.period-bar').getByRole('button', { name: 'Today', exact: true })
+      - Protocol error (Runtime.callFunctionOn): Internal server error, session closed.
+
+
+      92 |   // Either way it is a real, focusable button (never `disabled`), and its name is its visible text.
+      93 |   await expect(button).toHaveJSProperty('disabled', false);
+    > 94 |   await expect(button).toHaveAccessibleName('Today');
+         |                        ^
+      95 | }
+      96 |
+      97 | async function expectNoSidewaysScroll(page: Page, where: string) {
+        at expectTodayActive (<task>\export-mut\tests\e2e\today.spec.ts:94:24)
+        at <task>\export-mut\tests\e2e\today.spec.ts:676:7
+
+    Error Context: ..\pw-mut-today-m\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile-repeat2\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-today-m\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile-repeat2\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-today-m\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile-repeat2\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) [mobile] › tests\e2e\today.spec.ts:627:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+
+    Test timeout of 240000ms exceeded.
+
+    Error: expect(locator).toBeInViewport() failed
+
+    Locator:  locator('[data-day="2026-10-27"]')
+    Expected: in viewport
+    Received: undefined
+
+    Call log:
+      - Expect "toBeInViewport" locator('[data-day="2026-10-27"]') with timeout 7000ms
+      - waiting for locator('[data-day="2026-10-27"]')
+      - Protocol error (Runtime.callFunctionOn): Internal server error, session closed.
+
+
+      675 |       await expect(jumpStatus(page)).toHaveText(`Showing today, ${weekday(after.today_local)} ${us(after.today_local)}, in the period ${plainRange(after.in_progress)}`);
+      676 |       await expectTodayActive(page, false);
+    > 677 |       await expect(page.locator(`[data-day="${after.today_local}"]`)).toBeInViewport();
+          |                                                                       ^
+      678 |     }
+      679 |     // The other tab, which nobody pressed: a focus refresh alone moves the Today tag and the inactive state to the new date, with no reload.
+      680 |     await other.evaluate("window.dispatchEvent(new Event('focus'))");
+        at <task>\export-mut\tests\e2e\today.spec.ts:677:71
+
+    Error Context: ..\pw-mut-today-m\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile-repeat3\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-today-m\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile-repeat3\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-today-m\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile-repeat3\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) [mobile] › tests\e2e\today.spec.ts:627:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  locator('.period-bar').locator('.period-name')
+    Expected: "10/26/2026→ to 11/08/2026"
+    Received: "10/12/2026→ to 10/25/2026"
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveText" locator('.period-bar').locator('.period-name') with timeout 7000ms
+      - waiting for locator('.period-bar').locator('.period-name')
+
+
+      72 | /** The sheet shows this period (its name in the bar) and, when it contains `today`, only that day carries the Today tag. */
+      73 | async function expectShown(page: Page, period: PeriodFacts, today: string) {
+    > 74 |   await expect(periodName(page)).toHaveText(rangeText(period));
+         |                                  ^
+      75 |   await expect(page.locator('[data-day]')).toHaveCount(14);
+      76 |   const showsToday = contains(period, today);
+      77 |   await expect(page.locator('[data-sheet] .today-tag')).toHaveCount(showsToday ? 1 : 0);
+        at expectShown (<task>\export-mut\tests\e2e\today.spec.ts:74:34)
+        at <task>\export-mut\tests\e2e\today.spec.ts:674:13
+
+    Error Context: ..\pw-mut-today-m\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile-repeat5\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-today-m\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile-repeat5\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-today-m\today-a-page-left-open-acr-e7014-ves-the-Today-tag-by-itself-mobile-repeat5\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4 failed
+    [mobile] › tests\e2e\today.spec.ts:627:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+    [mobile] › tests\e2e\today.spec.ts:627:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+    [mobile] › tests\e2e\today.spec.ts:627:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+    [mobile] › tests\e2e\today.spec.ts:627:1 › a page left open across a reporting-zone midnight: a press on Today re-reads the server date and decides from it; a focus refresh moves the Today tag by itself 
+  2 passed (5.5m)
+exit=1
+process clock 2026-10-27T07:04:01.864Z (Date.now 1793084641879); America/Los_Angeles Tue, 2026-10-27, 00:04; shift ms -172961213; instanceof true
+== mut-today-m real end 2026-10-29T07:06:43Z
+burnrun mut-today-m: playwright wrapper exit 0 at 2026-10-29T07:06:43.428Z
+burn: done
+burnrun mut-today-m: burner ended 2026-10-29T07:07:50.106Z

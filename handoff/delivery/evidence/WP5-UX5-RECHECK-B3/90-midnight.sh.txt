@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# RECHECK-B2's in-process midnight and DST check-in probe (unmodified) on the target, in the probe export.
+source <task>/env.sh
+E="$T/logs/midnight-exits.txt"
+EV="$REPO/handoff/delivery/evidence/WP5-UX5-RECHECK-B2"
+cd "$P" || exit 9
+cp "$EV/41-midnight-probe.ts.txt" "$P/tests/integration/zz-recheck-b2-midnight.test.ts"
+cmp "$EV/41-midnight-probe.ts.txt" "$P/tests/integration/zz-recheck-b2-midnight.test.ts" >> "$E" 2>&1 && echo "midnight probe copy equal to the RECHECK-B2 evidence" >> "$E"
+RECHECK_B2_OUT="$(cygpath -w "$T/logs/b2-midnight-probe.jsonl")" npx vitest run tests/integration/zz-recheck-b2-midnight.test.ts > "$T/logs/b2-midnight-probe-vitest.txt" 2>&1
+echo "b2 midnight probe exit=$? at $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$E"

@@ -1,0 +1,12 @@
+# Usage: bash overlay.sh <export folder name in the task folder> [build]
+# Copies the owned files of the working tree over a scratch export; with "build" it also runs the build there (tsc server, vite client).
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX18/env.sh.txt
+X=$1
+for f in src/client/TimesheetScreen.tsx src/client/DayEditor.tsx tests/e2e/day-editor.spec.ts docs/04_UX_AND_SETTINGS.md docs/04_UX_AND_SETTINGS.vi.md; do
+  cp $REPO/$f $T/$X/$f || exit 3
+done
+if [ "$2" = "build" ]; then
+  cd $T/$X
+  npmx run build > $T/overlay-build-$X.txt 2>&1
+  echo "overlay build exit=$?"
+fi

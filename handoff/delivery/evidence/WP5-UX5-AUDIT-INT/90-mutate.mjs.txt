@@ -1,0 +1,21 @@
+// Applies or restores one exact-text mutant. Usage: node mutate.mjs apply|restore <file> <mutant.json>
+// The JSON holds { "old": "...", "new": "..." }; apply requires exactly one occurrence and keeps a backup beside the task's mutant file.
+import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+
+const [mode, file, spec] = process.argv.slice(2);
+const backup = `${spec}.orig`;
+if (mode === 'apply') {
+  const { old: before, new: after } = JSON.parse(readFileSync(spec, 'utf8'));
+  const text = readFileSync(file, 'utf8');
+  const count = text.split(before).length - 1;
+  if (count !== 1) throw new Error(`expected exactly one occurrence, found ${count}`);
+  copyFileSync(file, backup);
+  writeFileSync(file, text.replace(before, after));
+  console.log(`applied ${spec} to ${file}`);
+} else if (mode === 'restore') {
+  if (!existsSync(backup)) throw new Error('no backup');
+  copyFileSync(backup, file);
+  console.log(`restored ${file}`);
+} else {
+  throw new Error('mode must be apply or restore');
+}

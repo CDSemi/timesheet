@@ -1,0 +1,52 @@
+== probe-shared-run5: real start 2026-10-29T08:47:41Z, simulated start real, AB8_SHIFT_MS=0
+process clock 2026-10-29T08:47:41.780Z (Date.now 1793263661790); America/Los_Angeles Thu, 2026-10-29, 01:47; shift ms 0; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/zz-int-shared.spec.ts --project=desktop --workers=1 --output=<task>\pw-probe-shared-run5
+
+Running 2 tests using 1 worker
+
+(node:70300) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 1 [desktop] › tests\e2e\zz-int-shared.spec.ts:79:3 › audit-int: a shared view (view) with the round-5 header, sheet and dialogs (3.2s)
+  x  2 [desktop] › tests\e2e\zz-int-shared.spec.ts:79:3 › audit-int: a shared view (edit) with the round-5 header, sheet and dialogs (3.6s)
+
+
+  1) [desktop] › tests\e2e\zz-int-shared.spec.ts:79:3 › audit-int: a shared view (edit) with the round-5 header, sheet and dialogs 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('alertdialog', { name: 'Discard your changes?' }).or(getByRole('dialog', { name: /Day/ }).first())
+    Expected: visible
+    Error: strict mode violation: getByRole('alertdialog', { name: 'Discard your changes?' }).or(getByRole('dialog', { name: /Day/ }).first()) resolved to 2 elements:
+        1) <dialog open="" data-side="left" data-day-editor="2026-10-22" class="day-panel day-panel-side" aria-labelledby="day-editor-title">…</dialog> aka getByRole('dialog', { name: 'Day editor Thu 10/22/2026 (' })
+        2) <dialog open="" role="alertdialog" class="dialog confirm-dialog" aria-labelledby="_r_1c_-title" aria-describedby="_r_1c_-message">…</dialog> aka getByRole('alertdialog', { name: 'Discard your changes?' })
+
+    Call log:
+      - Expect "toBeVisible" getByRole('alertdialog', { name: 'Discard your changes?' }).or(getByRole('dialog', { name: /Day/ }).first()) with timeout 7000ms
+      - waiting for getByRole('alertdialog', { name: 'Discard your changes?' }).or(getByRole('dialog', { name: /Day/ }).first())
+
+
+      139 |         const where = await outsidePress(page);
+      140 |         const ask = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    > 141 |         await expect(ask.or(editor)).toBeVisible();
+          |                                      ^
+      142 |         log(`outside press (${where}) with the unsaved leave: question ${await ask.isVisible()}`);
+      143 |         if (await ask.isVisible()) await ask.getByRole('button', { name: 'Keep editing' }).click();
+      144 |         log(`after Keep editing: editor ${await editor.isVisible()}, summary "${flat(await editor.locator('[data-leave-summary]').innerText())}"`);
+        at <task>\export-probe\tests\e2e\zz-int-shared.spec.ts:141:38
+
+    Error Context: ..\pw-probe-shared-run5\zz-int-shared-audit-int-a--00d5a--5-header-sheet-and-dialogs-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-probe-shared-run5\zz-int-shared-audit-int-a--00d5a--5-header-sheet-and-dialogs-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-probe-shared-run5\zz-int-shared-audit-int-a--00d5a--5-header-sheet-and-dialogs-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\zz-int-shared.spec.ts:79:3 › audit-int: a shared view (edit) with the round-5 header, sheet and dialogs 
+  1 passed (9.2s)
+exit=1
+process clock 2026-10-29T08:47:51.390Z (Date.now 1793263671399); America/Los_Angeles Thu, 2026-10-29, 01:47; shift ms 0; instanceof true
+== probe-shared-run5 real end 2026-10-29T08:47:51Z

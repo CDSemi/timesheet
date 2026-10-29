@@ -1,0 +1,23 @@
+# Usage: bash run-pw.sh <label> <export folder name in the task folder> <target instant, UTC ISO or "real"> [playwright args...]
+# One Playwright run in a scratch export under a real or a simulated wall clock (shiftclock.mjs, the FIX10 wrapper), own output folder.
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX18/env.sh.txt
+L=$1; X=$2; TARGET=$3; shift 3
+mkdir -p $T/pw-$L $T/shots-$L
+export E2E_SCREENSHOT_DIR="$TW\\shots-$L"
+if [ "$TARGET" = "real" ]; then
+  export NODE_OPTIONS="--trace-deprecation"
+  export AB8_SHIFT_MS=0
+else
+  TARGET_MS=$(date -u -d "$TARGET" +%s%3N)
+  NOW_MS=$(date -u +%s%3N)
+  export AB8_SHIFT_MS=$((TARGET_MS - NOW_MS))
+  export NODE_OPTIONS="--trace-deprecation --import file:///$(cygpath -m $T)/shiftclock.mjs"
+fi
+echo "== $L: real start $(date -u +%Y-%m-%dT%H:%M:%SZ), simulated start $TARGET, AB8_SHIFT_MS=$AB8_SHIFT_MS, export $X"
+node.exe $T/probe-now.mjs
+cd "$T/$X" || exit 2
+echo "\$ node node_modules/@playwright/test/cli.js test $* --output=<task>/pw-$L"
+node.exe node_modules/@playwright/test/cli.js test "$@" --output="$TW\\pw-$L"
+echo "exit=$?"
+node.exe $T/probe-now.mjs
+echo "== $L real end $(date -u +%Y-%m-%dT%H:%M:%SZ)"

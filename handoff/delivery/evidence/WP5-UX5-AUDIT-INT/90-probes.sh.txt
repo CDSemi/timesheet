@@ -1,0 +1,22 @@
+# The auditor's cross-area probes in export-probe (a clean archive of the target with its own npm ci and build; only the task's spec
+# files and the probe port helper are added). Real-clock probes first, then the midnight probe under the FIX10 clock.
+. <task>/env.sh
+cd $T
+X=$T/export-probe
+O=$T/out
+P=$O/40-probe-exits.txt
+cp probes/zz-int-restore.spec.ts probes/zz-int-theme.spec.ts probes/zz-int-shared.spec.ts probes/zz-int-midnight.spec.ts $X/tests/e2e/
+node mutate.mjs apply $X/tests/e2e/fixtures.ts mutants/probe-port-helper.json > $O/40-probe-port-helper.txt 2>&1
+echo "port helper apply exit $?" > $P
+run() {
+  label=$1; instant=$2; shift 2
+  bash census.sh pre-$label 5
+  SHIFT_EXPORT=$X bash run-shift.sh $label $instant "$@" > $O/41-log-$label.txt 2>&1
+  echo "$label exit $(grep -E '^exit=' $O/41-log-$label.txt)" >> $P
+}
+run probe-restore real tests/e2e/zz-int-restore.spec.ts --project=desktop --workers=1
+run probe-theme real tests/e2e/zz-int-theme.spec.ts --workers=1
+run probe-shared real tests/e2e/zz-int-shared.spec.ts --workers=1
+run probe-midnight-desktop 2026-10-27T06:58:00Z tests/e2e/zz-int-midnight.spec.ts --project=desktop --workers=1
+run probe-midnight-mobile 2026-10-27T06:58:00Z tests/e2e/zz-int-midnight.spec.ts --project=mobile --workers=1
+echo probes-done > $O/probes.done

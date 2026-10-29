@@ -1,0 +1,36 @@
+
+ RUN  v5.0.2 <task>/probe
+
+ ❯ tests/integration/zz-recheck-b3-restore.test.ts (5 tests | 1 failed) 2579ms
+   ❯ RECHECK-B3: FIX16 rule in further shapes (5)
+     × X1 the correction's send exhausted the retry ladder (intervention after failed_temporary): refused, nothing of revision 1 sent 640ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  00:25:49
+   Duration  3.61s (tests 73%, transform 16%, import 11%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/zz-recheck-b3-restore.test.ts > RECHECK-B3: FIX16 rule in further shapes > X1 the correction's send exhausted the retry ladder (intervention after failed_temporary): refused, nothing of revision 1 sent
+AssertionError: expected { outcome: 'released' } to deeply equal { outcome: 'refused', …(1) }
+
+- Expected
++ Received
+
+  {
+-   "code": "superseded_by_later_send",
+-   "outcome": "refused",
++   "outcome": "released",
+  }
+
+ ❯ tests/integration/zz-recheck-b3-restore.test.ts:195:18
+    193|     await capturePass(r, 'rb3-x1');
+    194|     note('X1', 'attempts after a capture pass', attempts(r.db));
+    195|     expect(byId).toEqual(REFUSED);
+       |                  ^
+    196|     expect(bulk).toEqual({ released: 0, refused: { superseded_by_later…
+    197|     expect(attempts(r.db).filter((a) => a[0] === 1)).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯

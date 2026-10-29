@@ -1,0 +1,9 @@
+# Usage: bash mutrun.sh <label> <playwright -g pattern> [spec file, default tests/e2e/day-editor.spec.ts]
+# In the scratch export export-fix (the mutation lab): rebuild the client, then run the matching desktop tests once (real clock, one worker).
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX18/env.sh.txt
+L=$1; G=$2; S=${3:-tests/e2e/day-editor.spec.ts}
+cd $T/export-fix
+npmx run build:client > $T/mut-build-$L.txt 2>&1
+echo "$L client build exit=$?" > $E/30-mut-$L-log.txt
+bash $E/run-pw.sh.txt mut-$L export-fix real $S --project=desktop --workers=1 -g "$G" >> $E/30-mut-$L-log.txt 2>&1
+echo "$L done" >> $E/30-mut-$L-log.txt

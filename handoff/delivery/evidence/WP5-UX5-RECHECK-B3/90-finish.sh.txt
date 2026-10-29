@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# After the e2e: its per-project summary, the end census, the digest after, and the leftover check (counts only).
+source <task>/env.sh
+L="$T/logs"
+{
+  echo "e2e run1 tail counts (Playwright list reporter):"
+  grep -E "^\s+[0-9]+ (passed|skipped|failed|flaky)|did not run|interrupted" "$L/e2e-run1.log"
+  echo "per project, from the result lines:"
+  echo "  desktop ok: $(grep -cE '^\s+(ok|✓) +[0-9]+ \[desktop\]' "$L/e2e-run1.log")"
+  echo "  desktop skipped: $(grep -cE '^\s+- +[0-9]+ \[desktop\]' "$L/e2e-run1.log")"
+  echo "  desktop failed: $(grep -cE '^\s+(x|✘) +[0-9]+ \[desktop\]' "$L/e2e-run1.log")"
+  echo "  mobile ok: $(grep -cE '^\s+(ok|✓) +[0-9]+ \[mobile\]' "$L/e2e-run1.log")"
+  echo "  mobile skipped: $(grep -cE '^\s+- +[0-9]+ \[mobile\]' "$L/e2e-run1.log")"
+  echo "  mobile failed: $(grep -cE '^\s+(x|✘) +[0-9]+ \[mobile\]' "$L/e2e-run1.log")"
+  echo "deprecation or warning lines:"
+  grep -inE "deprecat|warning" "$L/e2e-run1.log"
+  echo "end"
+} > "$L/e2e-summary.txt" 2>&1
+bash "$T/digest.sh" after

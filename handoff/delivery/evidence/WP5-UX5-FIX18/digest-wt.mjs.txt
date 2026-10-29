@@ -1,0 +1,24 @@
+#!/usr/bin/env node
+// WP5-UX5-FIX18: a copy of scripts/source-digest.mjs for a working tree that holds many untracked handoff/ files.
+// The only differences: the file listing excludes handoff/ with a pathspec (so the listing stays under the 1 MB default buffer that
+// made `npm run digest` fail with ENOBUFS here) and the listing has a 64 MB buffer. The rest is the repository script, line for line.
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+
+const listing = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', '.', ':!handoff'], {
+  encoding: 'utf8',
+  maxBuffer: 64 * 1024 * 1024,
+});
+const files = [...new Set(listing.split('\0'))]
+  .filter((path) => path !== '' && !path.startsWith('handoff/'))
+  .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+const blobs = execFileSync('git', ['hash-object', '--stdin-paths'], {
+  input: `${files.join('\n')}\n`,
+  encoding: 'utf8',
+  maxBuffer: 64 * 1024 * 1024,
+})
+  .trim()
+  .split('\n');
+if (blobs.length !== files.length) throw new Error('git hash-object returned an unexpected number of blob IDs');
+const lines = files.map((path, index) => `${path} ${blobs[index]}\n`).join('');
+console.log(`${createHash('sha256').update(lines).digest('hex')}  (${files.length} files, handoff/ excluded)`);

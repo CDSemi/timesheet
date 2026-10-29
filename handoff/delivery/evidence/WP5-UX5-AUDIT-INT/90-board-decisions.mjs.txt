@@ -1,0 +1,23 @@
+// Read-only: dump owner_decisions / coordinator_decisions entries and answered owner questions for rounds 4 and 5.
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const board = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+const out = [];
+const dump = (label, value) => out.push(`### ${label}\n${JSON.stringify(value, null, 2)}\n`);
+const od = board.owner_decisions;
+out.push(`owner_decisions type: ${Array.isArray(od) ? 'array' : typeof od}, size ${Array.isArray(od) ? od.length : Object.keys(od ?? {}).length}`);
+const cd = board.coordinator_decisions;
+out.push(`coordinator_decisions type: ${Array.isArray(cd) ? 'array' : typeof cd}, size ${Array.isArray(cd) ? cd.length : Object.keys(cd ?? {}).length}`);
+const pick = (coll, name) => {
+  const entries = Array.isArray(coll) ? coll.map((v, i) => [String(i), v]) : Object.entries(coll ?? {});
+  for (const [k, v] of entries) {
+    const s = JSON.stringify(v);
+    if (/UX4|UX5|U4-|U5-|round 4|round 5|round-4|round-5/i.test(k + s)) dump(`${name}[${k}]`, v);
+  }
+};
+pick(od, 'owner_decisions');
+pick(cd, 'coordinator_decisions');
+for (const key of Object.keys(board)) {
+  if (/^answered_owner_question_ux[45]|^pending_owner_question|^open_owner_question/.test(key)) dump(key, board[key]);
+}
+writeFileSync(process.argv[3], out.join('\n') + '\n');

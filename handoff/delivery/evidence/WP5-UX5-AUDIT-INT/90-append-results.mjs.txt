@@ -1,0 +1,11 @@
+// Appends the Results text under the brief's final "## Results" heading; refuses if the brief does not end with that heading.
+// Usage: node append-results.mjs <brief> <results.md>
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [briefPath, resultsPath] = process.argv.slice(2);
+const brief = readFileSync(briefPath, 'utf8');
+if (!/## Results\r?\n?$/.test(brief)) throw new Error('the brief does not end with "## Results"; nothing written');
+const results = readFileSync(resultsPath, 'utf8').replace(/\r\n/g, '\n').replace(/\n+$/, '');
+const text = `${brief.replace(/\r\n/g, '\n').replace(/\n+$/, '')}\n\n${results}\n`;
+writeFileSync(briefPath, text);
+console.log(`appended ${results.split('\n').length} lines; the brief now has ${text.split('\n').length - 1} lines`);

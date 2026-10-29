@@ -1,0 +1,14 @@
+. <task>/env.sh
+mkdir -p $T/out $T/logs $T/tmp $T/data $T/export $T/census
+O=$T/out
+date -u +%Y-%m-%dT%H:%M:%SZ > $O/00-start-time.txt
+cd $REPO
+{ echo "HEAD $(git rev-parse HEAD)"; echo "origin/main $(git rev-parse origin/main)"; echo "branch $(git branch --show-current)"; echo "TARGET $TARGET"; } > $O/00-head-before.txt 2>&1
+git status --short -- . ':!handoff' > $O/00-nonhandoff-status-before.txt 2>&1
+echo "non-handoff status lines: $(wc -l < $O/00-nonhandoff-status-before.txt)" >> $O/00-nonhandoff-status-before.txt
+git archive $TARGET | tar -x -C $T/export
+echo "export top-level entries: $(ls -A $T/export | wc -l)" > $O/02-export.txt
+{ echo "node $(node --version)"; echo "node path $(command -v node)"; echo "npm $(npm --version)"; npm config get user-agent; } > $O/00-node-version.txt 2>&1
+cd $T/export
+npm ci > $O/02-ci-export.txt 2>&1; echo "npm ci exit $?" >> $O/02-ci-export.txt
+echo setup-done > $O/setup.done

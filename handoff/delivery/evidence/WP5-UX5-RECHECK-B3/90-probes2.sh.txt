@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Run 2 of this recheck's own in-process probe (X6 added; X1-X5 unchanged), after the e2e. Keeps the run-1 source aside first.
+source <task>/env.sh
+E="$T/logs/probes-exits.txt"
+cd "$P" || exit 9
+cp "$P/tests/integration/zz-recheck-b3-restore.test.ts" "$T/zz-recheck-b3-restore-run1.test.ts"
+cp "$T/zz-recheck-b3-restore.test.ts" "$P/tests/integration/zz-recheck-b3-restore.test.ts"
+echo "run2 start $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$E"
+RECHECK_B3_OUT="$(cygpath -w "$T/logs/b3-restore-probe-run2.jsonl")" npx vitest run tests/integration/zz-recheck-b3-restore.test.ts > "$T/logs/b3-restore-probe-run2-vitest.txt" 2>&1
+echo "b3 in-process probe run2 exit=$? at $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$E"

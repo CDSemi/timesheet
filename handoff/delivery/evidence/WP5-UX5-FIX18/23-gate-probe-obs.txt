@@ -1,0 +1,6 @@
+WP5-UX5-FIX18 gate probe (probe-gate.spec.ts.txt) in a scratch export of the fix, real clock, both projects, 2026-10-29T09:27Z; log 23-gate-probe-log.txt (2 passed).
+The tab coming back into view raises the clock version on the Timesheet page (document visibilitychange while visible); the sheet reloads its period.
+[desktop] modal sheet false; after the event: 2 period read(s), 1 read(s) of the open day
+[mobile] modal sheet true; after the event: 1 period read(s), 0 read(s) of the open day
+=> the phone's modal bottom sheet does not read its day again (gated by `modal` in the follow effect); the desktop drawer does.
+A shared view has no clock: ClockProvider is `enabled` false there, useClock() is null, `clockVersion` stays undefined and `follow` stays 0 (code reading, ClockProvider.tsx:174, TimesheetScreen.tsx:307-309).

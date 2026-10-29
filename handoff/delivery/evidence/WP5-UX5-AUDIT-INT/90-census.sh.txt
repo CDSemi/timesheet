@@ -1,0 +1,5 @@
+# Usage: bash census.sh <label> [intervalSeconds] - one read-only per-process CPU counter sample over the interval (process names and values only); result in out/10-census-<label>.txt
+. <task>/env.sh
+L=$1; G=${2:-10}
+powershell.exe -NoProfile -Command "(Get-Counter '\Process(*)\% Processor Time' -SampleInterval $G -MaxSamples 1).CounterSamples | Where-Object { \$_.CookedValue -gt 1 } | Sort-Object CookedValue -Descending | Format-Table InstanceName,CookedValue -AutoSize | Out-String -Width 200" > $T/census/$L.txt 2>&1
+{ echo "taken $(date -u +%Y-%m-%dT%H:%M:%SZ)"; node $T/census-sum.mjs $T/census/$L.txt $L $G; } > $T/out/10-census-$L.txt 2>&1

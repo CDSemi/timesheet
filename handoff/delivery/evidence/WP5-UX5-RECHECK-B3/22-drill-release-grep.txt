@@ -1,0 +1,36 @@
+== REGATE11 drill summary lines
+65:INFO  manifest summary: schema 15, app 0.1.0, 10 files (7 signatures, 1 PDFs), database 684032 bytes, integrity ok, foreign key violations 0
+81:INFO  restore summary: {"outcome":"restored","manifest":{"verified":true,"schema_version":15,"files":10,"signatures":7,"pdfs":1,"database_bytes":684032},"schema":{"backup":15,"restored":15,"applied":[]},"outbound":{"paused":true,"reason":"restored"},"reconciliation":{"attempts_marked_uncertain":0,"send_jobs_held":0,"queued_send_jobs":0,"awaiting_decision":0},"counts":{"users":2,"revisions":1,"ledger_entries":0,"attachments":8}}
+114:INFO  second restore summary: {"outcome":"restored","manifest":{"verified":true,"schema_version":15,"files":12,"signatures":7,"pdfs":3,"database_bytes":716800},"schema":{"backup":15,"restored":15,"applied":[]},"outbound":{"paused":true,"reason":"restored"},"reconciliation":{"attempts_marked_uncertain":0,"send_jobs_held":2,"queued_send_jobs":0,"awaiting_decision":0},"counts":{"users":2,"revisions":3,"ledger_entries":0,"attachments":10}}
+119:PASS  outbound release (preview, exit 2) lists the held send job as releasable  {"held":2,"releasable":2,"blocked":{}}
+124:PASS  cli.js outbound release --job <id> --confirm releases one held job (exit 0)  {"outcome":"released"}
+125:PASS  cli.js outbound release --all --confirm releases the remaining held send jobs (exit 0, released >= 1)  {"outcome":"released","released":1,"refused":{}}
+126:PASS  the released jobs are claimed  9.1 s
+127:PASS  each released job made exactly one delivery attempt  [0,0] -> [1,1]
+180:INFO  rollback restore summary: {"outcome":"restored","manifest":{"verified":true,"schema_version":6,"files":2,"signatures":2,"pdfs":0,"database_bytes":532480},"schema":{"backup":6,"restored":6,"applied":[]},"outbound":{"paused":false,"reason":null},"reconciliation":{"attempts_marked_uncertain":0,"send_jobs_held":2,"queued_send_jobs":0,"awaiting_decision":0},"counts":{"users":3,"revisions":2,"ledger_entries":1,"attachments":2}}
+202:PASS  the stage 1 instance starts again for stage 6 (healthy)  5.3 s (running healthy)
+227:INFO  counts at the end of stage 6: timesheets 12, day_entries 101, work_sessions 72, ot_ledger 1, timesheet_revisions 1, signoffs 1, jobs 3, delivery_attempts 0, imports 3, opening_balance 1
+229:PASS  the stage 6 instance log has no deprecation warning and never contains a password
+233:SUMMARY stage 1: 33 PASS; stage 2: 32 PASS; stage 3: 57 PASS; stage 4: 35 PASS; stage 5: 27 PASS; stage 6: 23 PASS; total 209 PASS, 0 FAIL
+== container-drill release/blocker lines (target)
+16:// releases only a job created after the restore, nothing from the backup goes out, and only
+17:// `cli.js outbound release --job <id>` and `--all` (with `--confirm`) send the held jobs, each exactly once.
+157:/** Asks the OS for a free loopback port (bound, read, released). */
+801:  // A second send job, so the bulk release after the second restore has more than the one released by id (R-A5).
+835:  // nothing from that backup goes out until the operator releases it explicitly.
+876:  const held = parseJson(cliIn(['outbound', 'release']).stdout);
+877:  const heldSend = (held?.jobs ?? []).find((job) => job.kind === 'send_email' && job.blocker === null);
+878:  check('outbound release (preview, exit 2) lists the held send job as releasable', held?.outcome === 'confirmation_required' && held?.held >= 1 && heldSend !== undefined, JSON.stringify({ held: held?.held, releasable: held?.releasable, blocked: held?.blocked }));
+892:  // The explicit, audited release (one by id, then the rest in bulk): each held job goes out exactly once.
+893:  const release = cliIn(['outbound', 'release', '--job', heldSend?.id ?? 'none', '--confirm']);
+894:  check('cli.js outbound release --job <id> --confirm releases one held job (exit 0)', release.status === 0 && parseJson(release.stdout)?.outcome === 'released', release.stdout.trim());
+895:  const bulk = cliIn(['outbound', 'release', '--all', '--confirm']);
+898:    'cli.js outbound release --all --confirm releases the remaining held send jobs (exit 0, released >= 1)',
+899:    bulk.status === 0 && bulkResult?.released >= 1 && bulkResult?.released === (held?.releasable ?? 0) - 1,
+902:  const releasedClaimed = await waitUntil(async () => (await Promise.all(heldRevisions.map((revisionId) => attemptsOf(revisionId)))).every((value, index) => value > (atRestore2[index] ?? 0)), 60_000);
+903:  check('the released jobs are claimed', releasedClaimed.ok, `${releasedClaimed.seconds.toFixed(1)} s`);
+906:  check('each released job made exactly one delivery attempt', after2.every((value, index) => value === (atRestore2[index] ?? 0) + 1), `${JSON.stringify(atRestore2)} -> ${JSON.stringify(after2)}`);
+907:  const again = cliIn(['outbound', 'release', '--job', heldSend?.id ?? 'none', '--confirm']);
+1630:  stageReport(3, 'restore, pause, release');
+== scripts and src changed 1fe5ad3..a5cbc91
+== end

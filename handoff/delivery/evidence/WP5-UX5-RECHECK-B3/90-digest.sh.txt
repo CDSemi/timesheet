@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Digest in three forms: npm run digest in the repository, git ls-tree of HEAD and of the target, and (if present) clean exports.
+# Usage: digest.sh <label>
+source <task>/env.sh
+label=$1
+out="$T/logs/digest-$label.txt"
+cd "$REPO" || exit 9
+{
+  echo "label=$label at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "HEAD=$(git rev-parse HEAD)"
+  echo "origin/main=$(git rev-parse origin/main)"
+  echo "target=$TARGET"
+  echo "status outside handoff (expected empty):"
+  git status --short -- . ':!handoff'
+  echo "end status"
+  echo "1 npm run digest (repository working tree):"
+  npm run --silent digest
+  echo "exit=$?"
+} > "$out" 2>&1
+git ls-tree -r --format='%(path) %(objectname)' HEAD > "$T/logs/lstree-head.txt"
+git ls-tree -r --format='%(path) %(objectname)' "$TARGET" > "$T/logs/lstree-target-raw.txt"
+{
+  echo "2a git ls-tree of HEAD:"
+  node "$T/lstree-digest.mjs" "$T/logs/lstree-head.txt" "$T/logs/lstree-head-filtered.txt"
+  echo "2b git ls-tree of the target SHA:"
+  node "$T/lstree-digest.mjs" "$T/logs/lstree-target-raw.txt" "$T/lstree-target.txt"
+  for d in "$X" "$P" "$M"; do
+    if [ -d "$d/src" ]; then
+      echo "3 clean export $(basename "$d") (raw blobs of the exported bytes):"
+      node "$T/exportdigest.mjs" "$d" "$T/lstree-target.txt"
+    fi
+  done
+} >> "$out" 2>&1
+echo "digest-$label done" >> "$out"

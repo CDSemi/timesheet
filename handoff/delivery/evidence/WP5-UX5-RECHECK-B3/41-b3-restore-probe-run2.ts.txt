@@ -1,0 +1,367 @@
+// WP5-UX5-RECHECK-B3 auditor probe (not part of the product suite): what FIX16's rule ("a later send job of the period in any
+// state except cancelled keeps a held send held", docs/05:72) means in shapes the FIX16 tests and the RECHECK-B2 probe do not
+// build. Each case builds its own source, backup and isolated restore through the product functions and routes. Observations go
+// to RECHECK_B3_OUT as JSON lines; each `expect` states what docs/05:72 and docs/11:178 require. Synthetic data, stub or capture
+// adapters only; the passwords are the test context's own random ones (never printed).
+//   X1 the correction's send exhausted the retry ladder (failed_temporary until intervention): refused.
+//   X2 the correction's send ended uncertain, the owner chose "resend", and the resend failed permanently: refused.
+//   X3 no over-blocking: in the source revision 1's send failed for good, revision 2's send waited; the restore holds revision 2
+//      only and it is releasable (an EARLIER job of the period in intervention must not block); released and delivered once;
+//      the release audit event carries job id, kind, attempts and states only.
+//   X4 no over-blocking: in the source revision 1's send ended uncertain and the owner chose "resend"; the restore holds the
+//      resend job; it is releasable (the earlier, decided job does not block) and delivered once.
+//   X5 another period's later send that failed for good does not hold this period's held send; it holds its own period's.
+import { appendFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { afterAll, describe, expect, it } from 'vitest';
+import { createApp } from '../../src/server/app.ts';
+import { LoginRateLimiter } from '../../src/server/auth/rateLimit.ts';
+import { createAuthSession, SESSION_COOKIE } from '../../src/server/auth/sessions.ts';
+import { loadDeliveryConfig } from '../../src/server/config.ts';
+import { type Db, openDatabase } from '../../src/server/db/database.ts';
+import { FileStore } from '../../src/server/files/fileStore.ts';
+import { createPdfJobHandler } from '../../src/server/jobs/pdfJob.ts';
+import { createJobHandlers, runJobsOnce } from '../../src/server/jobs/runner.ts';
+import { createSendJobHandler, JOB_SEND_EMAIL } from '../../src/server/jobs/sendJob.ts';
+import type { OutboundAdapter, SendOutcome } from '../../src/server/mail/outbound.ts';
+import { createBackup } from '../../src/server/ops/backup.ts';
+import { listHeldJobs, releaseAllHeldJobs, releaseHeldJob, RESTORED_DATA_DIR, RESTORED_DATABASE_NAME, restoreBackup, resumeOutbound } from '../../src/server/ops/restore.ts';
+import { saveSignature } from '../../src/server/services/signatures.ts';
+import { makePng } from '../support/pdfText.ts';
+import { sendWithDefaults } from '../support/sends.ts';
+import { createTestContext, la, LA, MutableClock, ORIGIN, type TestContext } from '../support/testApp.ts';
+
+const NOW = '2026-09-29T20:00:00Z';
+const LATER = '2026-09-29T21:00:00Z';
+const SENDER = 'recheck-b3-sender@example.invalid';
+const PAYROLL = '2026-10-02';
+const OTHER_PAYROLL = '2026-09-18';
+const OUT = process.env.RECHECK_B3_OUT ?? join(tmpdir(), 'recheck-b3-restore.jsonl');
+const cleanups: Array<() => void> = [];
+afterAll(() => {
+  for (const cleanup of cleanups.reverse()) cleanup();
+});
+const note = (caseId: string, what: string, value: unknown) => appendFileSync(OUT, `${JSON.stringify({ case: caseId, what, value })}\n`);
+const scratch = (prefix: string): string => {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+  return dir;
+};
+const dataDirOf = (t: TestContext): string => join(dirname(t.config.databasePath), 'private-data');
+const fixed = (outcome: SendOutcome): OutboundAdapter => ({ mode: 'capture', send: () => Promise.resolve(outcome) });
+const UNCERTAIN: SendOutcome = { kind: 'uncertain', code: 'smtp_connection_lost_after_data', providerResponse: null };
+const FAILED: SendOutcome = { kind: 'failed_permanent', code: 'smtp_rejected', providerResponse: '550 5.1.1' };
+const TEMPORARY: SendOutcome = { kind: 'failed_temporary', code: 'smtp_unavailable', providerResponse: '421 4.3.2' };
+const REFUSED = { outcome: 'refused', code: 'superseded_by_later_send' };
+
+type Req = TestContext['request'];
+interface Inst {
+  db: Db;
+  clock: MutableClock;
+  request: Req;
+  cookie: string;
+  dataDir: string;
+  dbPath: string;
+  files: FileStore;
+}
+
+function appFor(db: Db, clock: MutableClock, config: TestContext['config'], userId: string) {
+  const app = createApp({ db, clock, config, loginLimiter: new LoginRateLimiter(), staticDir: null });
+  const cookie = `${SESSION_COOKIE}=${createAuthSession(db, clock, userId, 3600).token}`;
+  const request: Req = async (method, path, options = {}) => {
+    const headers: Record<string, string> = { origin: ORIGIN, cookie: options.cookie ?? cookie };
+    const init: RequestInit = { method, headers };
+    if (options.body !== undefined) {
+      headers['content-type'] = 'application/json';
+      init.body = JSON.stringify(options.body);
+    }
+    const response = await app.request(path, init);
+    const text = await response.text();
+    return { status: response.status, body: text === '' ? null : JSON.parse(text), headers: response.headers };
+  };
+  return { request, cookie };
+}
+
+async function addSession(r: Inst, date: string, reason?: string) {
+  const res = await r.request('POST', `/api/days/${date}/sessions`, {
+    cookie: r.cookie,
+    body: { start: la(`${date}T09:00`), end: la(`${date}T18:00`), input_zone: LA, breaks: [], breaks_confirmed: true, ...(reason === undefined ? {} : { reason }) },
+  });
+  expect(res.status, JSON.stringify(res.body)).toBe(201);
+}
+
+async function signAndSend(r: Inst, payroll: string): Promise<string> {
+  const review = await r.request('GET', `/api/timesheets/${payroll}/review`);
+  const signed = await r.request('POST', `/api/timesheets/${payroll}/signoff`, {
+    body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, signer_name: 'Example Employee', incomplete_evidence_acknowledged: true },
+  });
+  expect(signed.status, JSON.stringify(signed.body)).toBe(201);
+  const id = signed.body.revision.id as string;
+  const sent = await sendWithDefaults({ request: r.request }, r.cookie, id);
+  expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+  return id;
+}
+
+async function correctAndSend(r: Inst, day: string, payroll = PAYROLL, extra: Record<string, unknown> = {}): Promise<string> {
+  await addSession(r, day, 'Synthetic forgotten day');
+  const review = await r.request('GET', `/api/timesheets/${payroll}/review`);
+  const correction = await r.request('POST', `/api/timesheets/${payroll}/revisions`, {
+    body: { expected_version: review.body.expected_version, reviewed_hash: review.body.payload_hash, incomplete_evidence_acknowledged: true, reason: 'Synthetic added day', send_email: false },
+  });
+  expect(correction.status, JSON.stringify(correction.body)).toBe(201);
+  const revision = correction.body.revision.id as string;
+  const sent = await sendWithDefaults({ request: r.request }, r.cookie, revision, extra);
+  expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+  return revision;
+}
+
+const pdfPass = (r: Inst) => runJobsOnce({ db: r.db, clock: r.clock, owner: 'rb3-pdf', handlers: { render_pdf: createPdfJobHandler({ db: r.db, clock: r.clock, files: r.files }) } });
+const stubSendPass = (r: Inst, outcome: SendOutcome) =>
+  runJobsOnce({ db: r.db, clock: r.clock, owner: 'rb3-stub', leaseSeconds: 600, handlers: { send_email: createSendJobHandler({ db: r.db, clock: r.clock, files: r.files, outbound: fixed(outcome), senderAddress: SENDER }) } });
+const capturePass = (r: Inst, owner: string) => {
+  const delivery = loadDeliveryConfig({ MAIL_FROM: SENDER, DATA_DIR: r.dataDir }, { databasePath: join(r.dataDir, '..', 'unused.db'), port: 3000, production: false });
+  return runJobsOnce({ db: r.db, clock: r.clock, owner, leaseSeconds: 600, handlers: createJobHandlers({ db: r.db, clock: r.clock, files: r.files, delivery }) });
+};
+const jobsOf = (db: Db, revisionId: string) =>
+  db.prepare<[string], { id: string; state: string; last_error: string | null }>("SELECT id, state, last_error FROM jobs WHERE revision_id = ? AND kind = 'send_email' ORDER BY rowid").all(revisionId);
+const attempts = (db: Db) =>
+  db
+    .prepare<[], { revision_no: number; state: string; decision: string | null }>(
+      'SELECT r.revision_no, a.state, a.decision FROM delivery_attempts a JOIN timesheet_revisions r ON r.id = a.revision_id ORDER BY a.rowid',
+    )
+    .all()
+    .map((a) => [a.revision_no, a.state, a.decision]);
+const heldBlockers = (db: Db, names: Record<string, string>) => listHeldJobs(db).filter((job) => job.kind === JOB_SEND_EMAIL).map((job) => [names[job.id] ?? job.id, job.blocker]);
+const releaseAudits = (db: Db) =>
+  db
+    .prepare<[], { entity_type: string; entity_id: string; actor_user_id: string | null; owner_user_id: string | null; reason: string | null; before_json: string; after_json: string }>(
+      "SELECT entity_type, entity_id, actor_user_id, owner_user_id, reason, before_json, after_json FROM audit_events WHERE operation = 'operations.held_job_release' ORDER BY rowid",
+    )
+    .all();
+
+/** A source (owner signed in), its isolated restore after `prepare` ran on it, resumed. */
+async function sourceAndRestore(prepare: (s: Inst) => Promise<void>): Promise<{ source: Inst; r: Inst }> {
+  const t = await createTestContext(NOW);
+  cleanups.push(() => t.close());
+  const employee = await t.login('employee');
+  const files = new FileStore(dataDirOf(t));
+  const settings = await t.request('POST', '/api/settings/submission', { cookie: employee, body: { expected_seq: 0, to: ['payroll@example.invalid'], cc: [], auto_submit: false } });
+  expect(settings.status, JSON.stringify(settings.body)).toBeLessThan(300);
+  saveSignature(t.db, t.clock, files, t.userIds.employee, makePng(40, 12), 'image/png');
+  const source: Inst = { db: t.db, clock: t.clock, request: (m, p, o = {}) => t.request(m, p, { ...o, cookie: o.cookie ?? employee }), cookie: employee, dataDir: dataDirOf(t), dbPath: t.config.databasePath, files };
+  await prepare(source);
+  t.clock.set('2026-09-29T20:30:00Z');
+  const backup = await createBackup({ databasePath: t.config.databasePath, dataDir: dataDirOf(t), targetDir: scratch('rb3-backups-'), clock: t.clock });
+  const target = join(scratch('rb3-restore-'), 'instance');
+  const clock = new MutableClock(LATER);
+  await restoreBackup({ fromDir: backup.directory, toDir: target, liveDataDir: dataDirOf(t), liveDatabasePath: t.config.databasePath, clock });
+  const dbPath = join(target, RESTORED_DATABASE_NAME);
+  const db = openDatabase(dbPath);
+  cleanups.push(() => db.close());
+  expect(resumeOutbound(db, clock)).toMatchObject({ outcome: 'resumed' });
+  const { request, cookie } = appFor(db, clock, t.config, t.userIds.employee);
+  const dataDir = join(target, RESTORED_DATA_DIR);
+  return { source, r: { db, clock, request, cookie, dataDir, dbPath, files: new FileStore(dataDir) } };
+}
+
+describe('RECHECK-B3: FIX16 rule in further shapes', () => {
+  it('X1 the correction\'s send exhausted the retry ladder (intervention after failed_temporary): refused, nothing of revision 1 sent', async () => {
+    let first = '';
+    const { r } = await sourceAndRestore(async (s) => {
+      await addSession(s, '2026-09-15');
+      first = await signAndSend(s, PAYROLL);
+    });
+    const held = jobsOf(r.db, first)[0]?.id ?? '';
+    const second = await correctAndSend(r, '2026-09-16');
+    await pdfPass(r);
+    const ladder: string[] = [];
+    for (let pass = 0; pass < 8 && jobsOf(r.db, second)[0]?.state !== 'intervention'; pass += 1) {
+      await stubSendPass(r, TEMPORARY);
+      const job = jobsOf(r.db, second)[0];
+      ladder.push(`${job?.state}/${job?.last_error}`);
+      r.clock.advanceSeconds(61 * 60);
+    }
+    note('X1', 'revision 2 job after each temporary failure', ladder);
+    note('X1', 'attempts', attempts(r.db));
+    expect(jobsOf(r.db, second)[0]?.state).toBe('intervention');
+    note('X1', 'blockers', heldBlockers(r.db, { [held]: 'revision 1 held' }));
+    const byId = releaseHeldJob(r.db, r.clock, held);
+    const bulk = releaseAllHeldJobs(r.db, r.clock);
+    note('X1', 'release by id / bulk', [byId, bulk]);
+    r.clock.advanceSeconds(120);
+    await capturePass(r, 'rb3-x1');
+    note('X1', 'attempts after a capture pass', attempts(r.db));
+    expect(byId).toEqual(REFUSED);
+    expect(bulk).toEqual({ released: 0, refused: { superseded_by_later_send: 1 } });
+    expect(attempts(r.db).filter((a) => a[0] === 1)).toEqual([]);
+  });
+
+  it('X2 the correction\'s send ended uncertain, the owner chose resend, the resend failed for good: refused', async () => {
+    let first = '';
+    const { r } = await sourceAndRestore(async (s) => {
+      await addSession(s, '2026-09-15');
+      first = await signAndSend(s, PAYROLL);
+    });
+    const held = jobsOf(r.db, first)[0]?.id ?? '';
+    const second = await correctAndSend(r, '2026-09-16');
+    await pdfPass(r);
+    await stubSendPass(r, UNCERTAIN);
+    const attemptId = r.db.prepare<[string], { id: string }>("SELECT id FROM delivery_attempts WHERE revision_id = ? AND state = 'uncertain'").get(second)?.id ?? '';
+    const decided = await r.request('POST', `/api/deliveries/${attemptId}/decision`, { body: { decision: 'resend', reason: 'Synthetic resend reason' } });
+    note('X2', 'decision resend', [decided.status, decided.body?.error?.code ?? null]);
+    expect(decided.status, JSON.stringify(decided.body)).toBeLessThan(300);
+    await pdfPass(r);
+    await stubSendPass(r, FAILED);
+    note('X2', 'revision 2 jobs', jobsOf(r.db, second).map((j) => `${j.state}/${j.last_error}`));
+    note('X2', 'attempts', attempts(r.db));
+    note('X2', 'blockers', heldBlockers(r.db, { [held]: 'revision 1 held' }));
+    const byId = releaseHeldJob(r.db, r.clock, held);
+    note('X2', 'release by id', byId);
+    expect(jobsOf(r.db, second).map((j) => j.state)).toEqual(['intervention', 'intervention']);
+    expect(byId).toEqual(REFUSED);
+  });
+
+  it('X3 no over-blocking: an EARLIER failed job of the period does not hold the newest revision\'s held send; release audited with ids and kind only', async () => {
+    let first = '';
+    let second = '';
+    const { r } = await sourceAndRestore(async (s) => {
+      await addSession(s, '2026-09-15');
+      first = await signAndSend(s, PAYROLL);
+      await pdfPass(s);
+      await stubSendPass(s, FAILED);
+      note('X3', 'source: revision 1 job and attempts', [jobsOf(s.db, first).map((j) => `${j.state}/${j.last_error}`), attempts(s.db)]);
+      s.clock.set('2026-09-29T20:10:00Z');
+      second = await correctAndSend(s, '2026-09-16');
+      note('X3', 'source: revision 2 job waits', jobsOf(s.db, second).map((j) => j.state));
+    });
+    const held = jobsOf(r.db, second)[0]?.id ?? '';
+    note('X3', 'restored: revision 1 job (not held) and revision 2 job (held)', [jobsOf(r.db, first).map((j) => `${j.state}/${j.last_error}`), jobsOf(r.db, second).map((j) => `${j.state}/${j.last_error}`)]);
+    const blockers = heldBlockers(r.db, { [held]: 'revision 2 held' });
+    note('X3', 'blockers', blockers);
+    const bulk = releaseAllHeldJobs(r.db, r.clock);
+    note('X3', 'bulk release', bulk);
+    r.clock.advanceSeconds(120);
+    await capturePass(r, 'rb3-x3');
+    r.clock.advanceSeconds(120);
+    await capturePass(r, 'rb3-x3b');
+    note('X3', 'attempts after capture passes', attempts(r.db));
+    const audits = releaseAudits(r.db).map((a) => ({
+      entity: [a.entity_type, a.entity_id === held ? 'held job id' : 'other'],
+      actor: a.actor_user_id,
+      owner: a.owner_user_id,
+      reason: a.reason,
+      before: JSON.parse(a.before_json) as unknown,
+      after: JSON.parse(a.after_json) as unknown,
+    }));
+    note('X3', 'release audit events', audits);
+    expect(blockers).toEqual([['revision 2 held', null]]);
+    expect(bulk).toEqual({ released: 1, refused: {} });
+    expect(attempts(r.db)).toEqual([
+      [1, 'failed_permanent', null],
+      [2, 'accepted', null],
+    ]);
+    expect(audits).toEqual([
+      { entity: ['job', 'held job id'], actor: null, owner: null, reason: null, before: { state: 'intervention', last_error: 'reconcile_after_restore' }, after: { state: 'queued', kind: 'send_email', attempts: 0 } },
+    ]);
+  });
+
+  it('X4 no over-blocking: the held resend the owner chose in the source is releasable although the earlier uncertain job exists', async () => {
+    let first = '';
+    const { r } = await sourceAndRestore(async (s) => {
+      await addSession(s, '2026-09-15');
+      first = await signAndSend(s, PAYROLL);
+      await pdfPass(s);
+      await stubSendPass(s, UNCERTAIN);
+      const attemptId = s.db.prepare<[string], { id: string }>("SELECT id FROM delivery_attempts WHERE revision_id = ? AND state = 'uncertain'").get(first)?.id ?? '';
+      const decided = await s.request('POST', `/api/deliveries/${attemptId}/decision`, { body: { decision: 'resend', reason: 'Synthetic resend reason' } });
+      note('X4', 'source: decision resend', [decided.status, decided.body?.error?.code ?? null]);
+      expect(decided.status, JSON.stringify(decided.body)).toBeLessThan(300);
+      note('X4', 'source: revision 1 jobs', jobsOf(s.db, first).map((j) => `${j.state}/${j.last_error}`));
+    });
+    const jobs = jobsOf(r.db, first);
+    note('X4', 'restored: revision 1 jobs', jobs.map((j) => `${j.state}/${j.last_error}`));
+    const resendJob = jobs[1]?.id ?? '';
+    const blockers = heldBlockers(r.db, { [resendJob]: 'the resend job (held)' });
+    note('X4', 'blockers', blockers);
+    const byId = releaseHeldJob(r.db, r.clock, resendJob);
+    note('X4', 'release by id', byId);
+    r.clock.advanceSeconds(120);
+    await capturePass(r, 'rb3-x4');
+    r.clock.advanceSeconds(120);
+    await capturePass(r, 'rb3-x4b');
+    note('X4', 'attempts after capture passes', attempts(r.db));
+    expect(blockers).toEqual([['the resend job (held)', null]]);
+    expect(byId).toEqual({ outcome: 'released' });
+    expect(attempts(r.db)).toEqual([
+      [1, 'uncertain', 'resend'],
+      [1, 'accepted', null],
+    ]);
+  });
+
+  it('X5 another period\'s later send that failed for good holds its own period\'s held send only', async () => {
+    let first = '';
+    let otherFirst = '';
+    const { r } = await sourceAndRestore(async (s) => {
+      await addSession(s, '2026-09-15');
+      first = await signAndSend(s, PAYROLL);
+      s.clock.set('2026-09-29T20:01:00Z');
+      await addSession(s, '2026-09-02', 'Synthetic late entry');
+      otherFirst = await signAndSend(s, OTHER_PAYROLL);
+    });
+    const held = jobsOf(r.db, first)[0]?.id ?? '';
+    const heldOther = jobsOf(r.db, otherFirst)[0]?.id ?? '';
+    const otherSecond = await correctAndSend(r, '2026-09-03', OTHER_PAYROLL);
+    await pdfPass(r);
+    await stubSendPass(r, FAILED);
+    note('X5', 'other period revision 2 job', jobsOf(r.db, otherSecond).map((j) => `${j.state}/${j.last_error}`));
+    const blockers = heldBlockers(r.db, { [held]: 'this period rev 1', [heldOther]: 'other period rev 1' });
+    note('X5', 'blockers', blockers);
+    const bulk = releaseAllHeldJobs(r.db, r.clock);
+    note('X5', 'bulk release', bulk);
+    expect(jobsOf(r.db, otherSecond)[0]?.state).toBe('intervention');
+    expect(blockers).toEqual([
+      ['this period rev 1', null],
+      ['other period rev 1', 'superseded_by_later_send'],
+    ]);
+    expect(bulk).toEqual({ released: 1, refused: { superseded_by_later_send: 1 } });
+    expect(jobsOf(r.db, first)[0]?.state).toBe('queued');
+    expect(jobsOf(r.db, otherFirst)[0]?.state).toBe('intervention');
+  });
+
+  it('X6 (run 2) the owner\'s repeat of the SAME revision failed for good: the held copy stays held (docs/05:72); the owner can still send once more', async () => {
+    let first = '';
+    const { r } = await sourceAndRestore(async (s) => {
+      await addSession(s, '2026-09-15');
+      first = await signAndSend(s, PAYROLL);
+    });
+    const held = jobsOf(r.db, first)[0]?.id ?? '';
+    const again = await sendWithDefaults({ request: r.request }, r.cookie, first);
+    note('X6', 'repeat of revision 1 on the restored copy', [again.status, again.body?.error?.code ?? null, again.body?.send?.reason ?? null]);
+    expect(again.status, JSON.stringify(again.body)).toBe(201);
+    await pdfPass(r);
+    await stubSendPass(r, FAILED);
+    note('X6', 'revision 1 jobs (held, repeat)', jobsOf(r.db, first).map((j) => `${j.state}/${j.last_error}`));
+    note('X6', 'attempts', attempts(r.db));
+    const blockers = heldBlockers(r.db, { [held]: 'revision 1 held' });
+    note('X6', 'blockers', blockers);
+    const byId = releaseHeldJob(r.db, r.clock, held);
+    note('X6', 'release by id', byId);
+    // The owner sends the same revision once more (no copy counts, so no reason); it goes out once, the held copy stays held.
+    const third = await sendWithDefaults({ request: r.request }, r.cookie, first);
+    note('X6', 'third send of revision 1', [third.status, third.body?.error?.code ?? null]);
+    r.clock.advanceSeconds(120);
+    await capturePass(r, 'rb3-x6');
+    r.clock.advanceSeconds(120);
+    await capturePass(r, 'rb3-x6b');
+    note('X6', 'attempts after capture passes', attempts(r.db));
+    note('X6', 'held job after', jobsOf(r.db, first).map((j) => `${j.state}/${j.last_error}`));
+    expect(blockers).toEqual([['revision 1 held', 'superseded_by_later_send']]);
+    expect(byId).toEqual(REFUSED);
+    expect(third.status, JSON.stringify(third.body)).toBe(201);
+    expect(attempts(r.db)).toEqual([
+      [1, 'failed_permanent', null],
+      [1, 'accepted', null],
+    ]);
+  });
+});

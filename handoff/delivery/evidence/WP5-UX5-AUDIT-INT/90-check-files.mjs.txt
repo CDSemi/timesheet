@@ -1,0 +1,25 @@
+// Checks that every given file (or every file of a given folder) ends with exactly one LF, has no CR, and has an allowed name.
+// Usage: node check-files.mjs <file-or-folder> [...]
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+
+const files = [];
+for (const arg of process.argv.slice(2)) {
+  if (statSync(arg).isDirectory()) for (const name of readdirSync(arg)) files.push(join(arg, name));
+  else files.push(arg);
+}
+let bad = 0;
+for (const file of files) {
+  const name = file.split(/[\\/]/).pop();
+  if (name.endsWith('.png')) {
+    if (!name.endsWith('-synthetic.png')) { bad += 1; console.log(`bad name: ${name}`); }
+    continue;
+  }
+  const bytes = readFileSync(file);
+  const problems = [];
+  if (bytes.length === 0 || bytes[bytes.length - 1] !== 0x0a) problems.push('no final LF');
+  if (bytes.length > 1 && bytes[bytes.length - 2] === 0x0a) problems.push('more than one final LF');
+  if (bytes.includes(0x0d)) problems.push('CR present');
+  if (problems.length > 0) { bad += 1; console.log(`${name}: ${problems.join(', ')}`); }
+}
+console.log(`checked ${files.length} files, ${bad} with problems`);

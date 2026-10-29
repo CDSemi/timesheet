@@ -1,0 +1,18 @@
+# Real-clock FULL e2e on both projects (config default workers), then one seven-file sweep at 2026-10-27T06:58:30Z (FIX10 wrapper, 6 workers). Census before and after each run.
+. <task>/env.sh
+cd $T
+O=$T/out
+SEVEN="tests/e2e/day-editor.spec.ts tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/review.spec.ts tests/e2e/submission.spec.ts tests/e2e/settings-transfer.spec.ts tests/e2e/profile.spec.ts"
+for P in desktop mobile; do
+  bash census.sh pre-e2e-$P 10
+  bash run-shift.sh full-$P real --project=$P > $O/04-e2e-$P.txt 2>&1
+  node counts.mjs $O/04-e2e-$P.txt >> $O/04-e2e-counts.txt 2>&1
+  bash census.sh post-e2e-$P 10
+  echo "e2e $P done $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $O/chain2-progress.txt
+done
+bash census.sh pre-seven-1026 10
+bash run-shift.sh seven-1026 2026-10-27T06:58:30Z $SEVEN --workers=6 > $O/08-seven-1026.txt 2>&1
+node counts.mjs $O/08-seven-1026.txt >> $O/08-seven-counts.txt 2>&1
+bash census.sh post-seven-1026 10
+echo "seven done $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $O/chain2-progress.txt
+echo chain2-done > $O/chain2.done

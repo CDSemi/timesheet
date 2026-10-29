@@ -1,0 +1,51 @@
+diff --git a/docs/05_SUBMISSION_AND_NOTIFICATIONS.md b/docs/05_SUBMISSION_AND_NOTIFICATIONS.md
+index 18778ceb..897cf189 100644
+--- a/docs/05_SUBMISSION_AND_NOTIFICATIONS.md
++++ b/docs/05_SUBMISSION_AND_NOTIFICATIONS.md
+@@ -69,7 +69,7 @@ Another copy needs a confirmation and a typed reason (owner decision F-4, 2026-1
+ - A copy of the period counts as sent once any delivery attempt of any of its revisions was `accepted` or `uncertain`, whatever was decided later (the mail may have arrived). A send whose attempts all ended `failed_permanent` does not count, so retrying a failed first send needs no reason.
+ - When a copy counts, a send needs a reason: 2-500 characters after trimming, NFC, no control characters except line feeds. Otherwise the send is refused (422 `reason_required`) and nothing is written. The explicit "resend" decision on an uncertain attempt needs the reason too.
+ - The reason is stored on the send and in its audit event. It is never added to the email.
+-- The check runs inside the send transaction, so two concurrent sends cannot both skip it. A send still in progress, or a send job of any revision of the period that still waits, blocks another one (409), so an older revision's copy cannot arrive after the correction's. A send job that a restore holds follows the same rule when the operator releases it: the release is refused (`superseded_by_later_send`) while any later send of the period exists ([11 Operations runbook](11_OPERATIONS_RUNBOOK.md) section 7).
++- The check runs inside the send transaction, so two concurrent sends cannot both skip it. A send still in progress, or a send job of any revision of the period that still waits, blocks another one (409), so an older revision's copy cannot arrive after the correction's. A send job that a restore holds follows the same rule when the operator releases it: the release is refused (`superseded_by_later_send`) while any later send of the period exists, whatever state it is in or ended in (a cancelled one excepted) ([11 Operations runbook](11_OPERATIONS_RUNBOOK.md) section 7).
+ - The automatic paths never need a reason: they run only for a period that has no send.
+ 
+ Archived downloads require ownership or a share whose PDF item is on (the PDF may contain the signature image); signature image files are never shared. Separate OT evidence export includes raw intervals, breaks, policies, daily eligible/credited amounts, adjustments and leave permission; it is not automatically attached to payroll email.
+diff --git a/docs/05_SUBMISSION_AND_NOTIFICATIONS.vi.md b/docs/05_SUBMISSION_AND_NOTIFICATIONS.vi.md
+index c1dcf810..56048ddd 100644
+--- a/docs/05_SUBMISSION_AND_NOTIFICATIONS.vi.md
++++ b/docs/05_SUBMISSION_AND_NOTIFICATIONS.vi.md
+@@ -69,7 +69,7 @@ Gửi thêm một bản cần xác nhận và lý do gõ tay (quyết định c
+ - Một bản của kỳ được tính là đã gửi khi bất kỳ lượt gửi nào của bất kỳ revision nào của kỳ đã `accepted` hoặc `uncertain`, bất kể quyết định sau đó (thư có thể đã tới). Một lần gửi mà mọi lượt đều kết thúc `failed_permanent` thì không được tính, nên thử lại một lần gửi đầu thất bại không cần lý do.
+ - Khi đã có bản được tính, lần gửi cần lý do: 2-500 ký tự sau khi cắt khoảng trắng, NFC, không ký tự điều khiển trừ xuống dòng. Nếu không, lần gửi bị từ chối (422 `reason_required`) và không ghi gì. Quyết định "gửi lại" rõ ràng cho một lượt không chắc chắn cũng cần lý do.
+ - Lý do được lưu trên lần gửi và trong sự kiện audit của nó. Nó không bao giờ được thêm vào email.
+-- Việc kiểm tra chạy trong transaction gửi, nên hai lần gửi đồng thời không thể cùng bỏ qua nó. Một lần gửi đang chạy, hoặc một send job của bất kỳ revision nào của kỳ còn đang chờ, chặn lần gửi khác (409), nên bản gửi của revision cũ không thể đến sau bản của lần sửa. Một send job bị giữ sau khôi phục theo cùng quy tắc khi người vận hành giải phóng nó: việc giải phóng bị từ chối (`superseded_by_later_send`) chừng nào còn bất kỳ lần gửi nào muộn hơn của kỳ ([11 Operations runbook](11_OPERATIONS_RUNBOOK.md) mục 7).
++- Việc kiểm tra chạy trong transaction gửi, nên hai lần gửi đồng thời không thể cùng bỏ qua nó. Một lần gửi đang chạy, hoặc một send job của bất kỳ revision nào của kỳ còn đang chờ, chặn lần gửi khác (409), nên bản gửi của revision cũ không thể đến sau bản của lần sửa. Một send job bị giữ sau khôi phục theo cùng quy tắc khi người vận hành giải phóng nó: việc giải phóng bị từ chối (`superseded_by_later_send`) chừng nào còn bất kỳ lần gửi nào muộn hơn của kỳ, dù nó đang ở hay đã kết thúc ở trạng thái nào (trừ lần gửi đã bị hủy) ([11 Operations runbook](11_OPERATIONS_RUNBOOK.md) mục 7).
+ - Các đường tự động không bao giờ cần lý do: chúng chỉ chạy cho kỳ chưa có lần gửi nào.
+ 
+ Tải lưu trữ cần quyền chủ hoặc quyền chia sẻ bật mục PDF (PDF có thể chứa ảnh chữ ký); file ảnh chữ ký không bao giờ được chia sẻ. Báo cáo OT riêng có ca gốc, nghỉ, quy tắc, số đủ điều kiện/ghi mỗi ngày, điều chỉnh và quyền dùng phép; không tự kèm email payroll.
+diff --git a/src/server/ops/restore.ts b/src/server/ops/restore.ts
+index 1c135630..846af13a 100644
+--- a/src/server/ops/restore.ts
++++ b/src/server/ops/restore.ts
+@@ -547,14 +547,17 @@ function blockerOf(db: Db, job: HeldRow): ReleaseBlocker | null {
+     )
+     .get(job.revision_id, job.user_id, job.id);
+   if (open !== undefined) return 'delivery_attempt_open';
+-  // A later send of ANY revision of the same period (not only of the held job's own revision) keeps the held job held, so the
+-  // older revision's copy cannot arrive after the correction's (R-UX5B-1, the same period-wide rule as the send guard).
++  // A later send job of ANY revision of the same period (not only of the held job's own revision) keeps the held job held, so the
++  // older revision's copy cannot arrive after the correction's (R-UX5B-1, the same period-wide rule as the send guard). It counts in
++  // whatever state it is in or ended: waiting, leased, succeeded, or `intervention` (failed for good, uncertain, decided by the owner,
++  // or held by another restore); a copy that may have arrived must not be followed by an older one. Only a cancelled job (it never ran
++  // and cannot run) does not count.
+   const later = db
+     .prepare<[string, string, string, number], { one: number }>(
+       `SELECT 1 AS one FROM jobs j
+          JOIN timesheet_revisions r ON r.id = j.revision_id AND r.user_id = j.user_id
+          JOIN timesheet_revisions held ON held.timesheet_id = r.timesheet_id AND held.user_id = r.user_id
+-        WHERE held.id = ? AND j.user_id = ? AND j.kind = ? AND j.rowid > ? AND j.state IN ('queued', 'leased', 'succeeded') LIMIT 1`,
++        WHERE held.id = ? AND j.user_id = ? AND j.kind = ? AND j.rowid > ? AND j.state <> 'cancelled' LIMIT 1`,
+     )
+     .get(job.revision_id, job.user_id, job.kind, job.rowid);
+   return later === undefined ? null : 'superseded_by_later_send';

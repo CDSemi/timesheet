@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Probes on the target in the probe export: RECHECK-B2's in-process probe (unmodified), RECHECK-B2's HTTP and CLI probe
+# (unmodified, ports 51421 up), and this recheck's own in-process probe. Usage: probes.sh <run label>
+source <task>/env.sh
+run=$1
+E="$T/logs/probes-exits.txt"
+EV="$REPO/handoff/delivery/evidence/WP5-UX5-RECHECK-B2"
+cd "$P" || exit 9
+cp "$EV/40-restore-probe.ts.txt" "$P/tests/integration/zz-recheck-b2-restore.test.ts"
+cp "$EV/50-http-restore.mjs.txt" "$T/http-restore.mjs"
+cp "$T/zz-recheck-b3-restore.test.ts" "$P/tests/integration/zz-recheck-b3-restore.test.ts"
+{
+  echo "run $run start $(date -u +%Y-%m-%dT%H:%M:%SZ) node $(node --version)"
+  cmp "$EV/40-restore-probe.ts.txt" "$P/tests/integration/zz-recheck-b2-restore.test.ts" && echo "b2 in-process probe copy equal to the RECHECK-B2 evidence"
+  cmp "$EV/50-http-restore.mjs.txt" "$T/http-restore.mjs" && echo "b2 HTTP probe copy equal to the RECHECK-B2 evidence"
+} >> "$E" 2>&1
+if [ ! -f "$P/dist/server/cli.js" ]; then
+  npm run build > "$T/logs/probe-build.txt" 2>&1
+  echo "probe export build exit=$?" >> "$E"
+fi
+rm -f "$T/logs/b2-restore-probe-$run.jsonl" "$T/logs/b3-restore-probe-$run.jsonl"
+RECHECK_B2_OUT="$(cygpath -w "$T/logs/b2-restore-probe-$run.jsonl")" npx vitest run tests/integration/zz-recheck-b2-restore.test.ts > "$T/logs/b2-restore-probe-$run-vitest.txt" 2>&1
+echo "b2 in-process probe exit=$? at $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$E"
+RECHECK_B3_OUT="$(cygpath -w "$T/logs/b3-restore-probe-$run.jsonl")" npx vitest run tests/integration/zz-recheck-b3-restore.test.ts > "$T/logs/b3-restore-probe-$run-vitest.txt" 2>&1
+echo "b3 in-process probe exit=$? at $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$E"
+mkdir -p "$T/http-$run"
+node "$T/http-restore.mjs" "$(cygpath -w "$P")" "$(cygpath -w "$T/http-$run")" 51421 "$(cygpath -w "$T/logs/b2-http-restore-$run.txt")" > "$T/logs/b2-http-restore-$run.stdout.txt" 2>&1
+echo "b2 HTTP and CLI probe exit=$? at $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$E"

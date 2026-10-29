@@ -1,0 +1,36 @@
+# Test-design probe: the midnight crossing test against a product mutant that removes the page's focus and visibility refresh
+# (TimesheetScreen.tsx), at the gate's sweep instant and at an instant where the displayed period holds both dates. export-mut is a
+# clean archive of the target with its own npm ci and build; the source is restored byte for byte and rebuilt at the end.
+. <task>/env.sh
+cd $T
+O=$T/out
+M=$O/50-mut-exits.txt
+mkdir -p $T/export-mut
+cd $REPO
+git archive $TARGET | tar -x -C $T/export-mut
+cd $T/export-mut
+npm ci > $O/50-mut-ci.txt 2>&1; echo "export-mut npm ci exit $?" > $M
+npm run build > $O/50-mut-build-base.txt 2>&1; echo "export-mut build exit $?" >> $M
+cd $T
+X=$T/export-mut
+grun() {
+  label=$1; instant=$2; project=$3; pattern=${4:-reporting-zone midnight}
+  SHIFT_EXPORT=$X bash run-shift.sh $label $instant tests/e2e/today.spec.ts -g "$pattern" --project=$project --workers=1 > $O/51-log-$label.txt 2>&1
+  echo "$label exit $(grep -E '^exit=' $O/51-log-$label.txt); $(grep -cE '^\s+ok ' $O/51-log-$label.txt) ok, $(grep -cE '^\s+x ' $O/51-log-$label.txt) failed" >> $M
+}
+# Control, unmutated, at the instant where the displayed period holds both dates.
+grun ctl-1104-desktop 2026-11-04T07:58:50Z desktop
+node mutate.mjs apply $X/src/client/TimesheetScreen.tsx mutants/MF-focus.json >> $M 2>&1
+(cd $X && npm run build:client > $O/50-mut-build-mf.txt 2>&1; echo "mutant build exit $?" >> $M)
+grun mf-1026-desktop 2026-10-27T06:58:30Z desktop
+grun mf-1026-mobile 2026-10-27T06:58:30Z mobile
+grun mf-1104-desktop 2026-11-04T07:58:50Z desktop
+grun mf-1104-mobile 2026-11-04T07:58:50Z mobile
+# The two tests that count the refresh reads, on the real clock.
+grun mf-real-triggers-desktop real desktop "are re-read"
+grun mf-real-triggers-mobile real mobile "are re-read"
+node mutate.mjs restore $X/src/client/TimesheetScreen.tsx mutants/MF-focus.json >> $M 2>&1
+cmp $X/src/client/TimesheetScreen.tsx $T/export/src/client/TimesheetScreen.tsx && echo "restored source byte-equal to the clean export" >> $M
+(cd $X && npm run build:client > $O/50-mut-build-restored.txt 2>&1; echo "restore build exit $?" >> $M)
+diff -r $X/dist $T/export/dist > $O/50-mut-dist-diff.txt 2>&1; echo "dist diff against the clean export exit $?" >> $M
+echo mut-done > $O/mut.done

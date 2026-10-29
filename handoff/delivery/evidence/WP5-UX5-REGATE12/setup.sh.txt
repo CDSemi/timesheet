@@ -1,0 +1,21 @@
+. <task>/env.sh
+cd $REPO
+git rev-parse HEAD > $T/out/00-head.txt 2>&1
+git rev-parse origin/main >> $T/out/00-head.txt 2>&1
+git branch --show-current >> $T/out/00-head.txt 2>&1
+git status --short -- . ':!handoff' > $T/out/00-nonhandoff-status-before.txt 2>&1
+git diff --name-status $PREV..$TARGET -- . ':!handoff' > $T/out/20-namestatus.txt 2>&1
+git diff --stat $PREV..$TARGET -- . ':!handoff' > $T/out/20-diffstat-nonhandoff.txt 2>&1
+git diff --stat $PREV..$TARGET -- package.json package-lock.json > $T/out/25-lock-and-scope.txt 2>&1
+echo "lock/package diff lines: $(wc -l < $T/out/25-lock-and-scope.txt)" >> $T/out/25-lock-and-scope.txt
+git diff --name-status $PREV..$TARGET -- src > $T/out/21-carry-forward-names.txt 2>&1
+git diff --name-status $PREV..$TARGET -- tests ':!tests/e2e/import.spec.ts' ':!tests/e2e/today.spec.ts' >> $T/out/21-carry-forward-names.txt 2>&1
+echo "src + other tests name-status lines (excluding the two FIX17 files): $(wc -l < $T/out/21-carry-forward-names.txt)" >> $T/out/21-carry-forward-names.txt
+git diff $PREV..$TARGET -- src tests/e2e/fixtures.ts > $T/out/21-carry-forward-diff.txt 2>&1
+echo "carry-forward diff lines: $(wc -l < $T/out/21-carry-forward-diff.txt)" >> $T/out/21-carry-forward-diff.txt
+git diff $PREV..$TARGET -- tests > $T/out/22-fix17-diff.txt 2>&1
+git diff --check $PREV..$TARGET > $T/out/21-diff-check.txt 2>&1; echo "diff --check exit $?" >> $T/out/21-diff-check.txt
+git archive $TARGET | tar -x -C $T/export
+git archive $PREV | tar -x -C $T/export-prev
+ls $T/export | wc -l
+cat $T/out/00-head.txt $T/out/20-namestatus.txt $T/out/00-nonhandoff-status-before.txt $T/out/25-lock-and-scope.txt $T/out/21-carry-forward-names.txt $T/out/21-diff-check.txt

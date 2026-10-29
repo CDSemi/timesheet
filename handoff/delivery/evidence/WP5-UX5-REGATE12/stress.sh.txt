@@ -1,0 +1,25 @@
+cd <task>
+. ./env.sh
+D=2026-11-01T08:45:00Z
+CROSS=2026-10-27T06:58:30Z
+BOTH="upload, preview with source cells|the opening balance: validation"
+TODAY="a page left open across a reporting-zone midnight"
+st() {
+  label=$1; shift
+  node burnrun.mjs "$label" "$@" > "logs/stress-$label.txt" 2>&1
+  echo "$label finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/stress-progress.txt
+  node counts.mjs "logs/stress-$label.txt" >> out/18-stress-counts.txt 2>&1
+  bash cens.sh "st-$label" > "logs/cens-st-$label.log" 2>&1
+}
+# 1. import.spec.ts, both projects, 20 repeats, 6 workers, real clock and at the sweep instant
+st imp-real 0 1 real tests/e2e/import.spec.ts --repeat-each=20 --workers=6
+st imp-1101 0 1 $D tests/e2e/import.spec.ts --repeat-each=20 --workers=6
+# 2. the two two-tab import tests under the 48-thread burner, 12 repeats per project
+st imp-b48-d 48 300 $D tests/e2e/import.spec.ts --project=desktop --grep "$BOTH" --repeat-each=12 --workers=6
+st imp-b48-m 48 300 $D tests/e2e/import.spec.ts --project=mobile --grep "$BOTH" --repeat-each=12 --workers=6
+# 3. today.spec.ts reporting-zone midnight test, both projects
+st today-cross 0 1 $CROSS tests/e2e/today.spec.ts --grep "$TODAY" --repeat-each=6 --workers=6
+st today-normal 0 1 $D tests/e2e/today.spec.ts --grep "$TODAY" --repeat-each=12 --workers=6
+st today-cross-b48-d 48 400 $CROSS tests/e2e/today.spec.ts --project=desktop --grep "$TODAY" --repeat-each=6 --workers=6
+st today-cross-b48-m 48 400 $CROSS tests/e2e/today.spec.ts --project=mobile --grep "$TODAY" --repeat-each=6 --workers=6
+echo stress-done > out/stress.done

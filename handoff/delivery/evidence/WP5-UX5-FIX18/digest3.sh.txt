@@ -1,0 +1,26 @@
+# Usage: bash digest3.sh <tag> <clean export folder in the task folder> [ls-tree ref] [wt]
+# The source digest in its forms: (1) the export form: the blob hashes of the files of a clean export outside handoff/, sorted, SHA-256 of the lines;
+# (2) the git ls-tree form of a ref (when given), whose sorted list must be byte-identical to the export's; (3) the repository script
+# (digest-wt.mjs, the repository's script with a pathspec and a wide buffer, see 01-digest-before.txt) in the repository working tree.
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX18/env.sh.txt
+TAG=$1; X=$2; REF=$3
+mkdir -p $T/dg
+cd $T/$X
+find . -type f -not -path './handoff/*' -not -path './node_modules/*' -not -path './dist/*' -not -path './.git/*' | sed 's|^\./||' | LC_ALL=C sort > $T/dg/files-$TAG.txt
+git hash-object --no-filters --stdin-paths < $T/dg/files-$TAG.txt > $T/dg/blobs-$TAG.txt
+paste -d' ' $T/dg/files-$TAG.txt $T/dg/blobs-$TAG.txt | LC_ALL=C sort > $T/dg/ex-sorted-$TAG.txt
+{
+  echo "digest forms $TAG, taken $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "export form ($X): $(sha256sum $T/dg/ex-sorted-$TAG.txt | cut -d' ' -f1)  lines $(wc -l < $T/dg/ex-sorted-$TAG.txt)"
+} > $E/01-digest-$TAG.txt
+cd $REPO
+if [ -n "$REF" ]; then
+  git ls-tree -r --format="%(path) %(objectname)" $REF | grep -v '^handoff/' | LC_ALL=C sort > $T/dg/lstree-$TAG.txt
+  echo "ls-tree form ($REF): $(sha256sum $T/dg/lstree-$TAG.txt | cut -d' ' -f1)  lines $(wc -l < $T/dg/lstree-$TAG.txt)" >> $E/01-digest-$TAG.txt
+  if cmp $T/dg/ex-sorted-$TAG.txt $T/dg/lstree-$TAG.txt; then echo "export list byte-identical to the ls-tree list" >> $E/01-digest-$TAG.txt; else echo "export list DIFFERS from the ls-tree list" >> $E/01-digest-$TAG.txt; fi
+fi
+if [ "$4" = "wt" ]; then
+  echo "repository script form (digest-wt.mjs, repository working tree):" >> $E/01-digest-$TAG.txt
+  node.exe "$TW\\digest-wt.mjs" >> $E/01-digest-$TAG.txt 2>&1
+fi
+echo "HEAD $(git rev-parse HEAD)" >> $E/01-digest-$TAG.txt

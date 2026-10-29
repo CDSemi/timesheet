@@ -1,0 +1,23 @@
+# Usage: bash digest.sh <tag>  - the digest in three forms: export file hashes, git ls-tree of TARGET, npm run digest in the repository.
+. <task>/env.sh
+TAG=$1
+O=$T/out
+mkdir -p $T/dg
+cd $T/export
+find . -type f -not -path './handoff/*' -not -path './node_modules/*' -not -path './dist/*' -not -path './.git/*' -not -path './test-results/*' -not -path './playwright-report/*' | sed 's|^\./||' | LC_ALL=C sort > $T/dg/ex-files-$TAG.txt
+: > $T/dg/ex-hashes-$TAG.txt
+while IFS= read -r f; do
+  h=$(git hash-object --no-filters -- "$f")
+  printf '%s %s\n' "$f" "$h" >> $T/dg/ex-hashes-$TAG.txt
+done < $T/dg/ex-files-$TAG.txt
+LC_ALL=C sort $T/dg/ex-hashes-$TAG.txt > $T/dg/ex-sorted-$TAG.txt
+echo "export form: $(sha256sum $T/dg/ex-sorted-$TAG.txt | cut -d' ' -f1) lines $(wc -l < $T/dg/ex-sorted-$TAG.txt)" > $O/01-digest-$TAG.txt
+cd $REPO
+git ls-tree -r --format="%(path) %(objectname)" $TARGET | grep -v '^handoff/' | LC_ALL=C sort > $T/dg/lstree-sorted-$TAG.txt
+echo "ls-tree form ($TARGET): $(sha256sum $T/dg/lstree-sorted-$TAG.txt | cut -d' ' -f1) lines $(wc -l < $T/dg/lstree-sorted-$TAG.txt)" >> $O/01-digest-$TAG.txt
+cmp $T/dg/ex-sorted-$TAG.txt $T/dg/lstree-sorted-$TAG.txt && echo "export list byte-identical to the ls-tree list" >> $O/01-digest-$TAG.txt
+echo "npm run digest (repository working tree, HEAD $(git rev-parse HEAD)):" >> $O/01-digest-$TAG.txt
+npm run digest > $T/dg/npm-$TAG.txt 2>&1
+grep -E '^[0-9a-f]{64}' $T/dg/npm-$TAG.txt >> $O/01-digest-$TAG.txt
+echo "taken $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $O/01-digest-$TAG.txt
+echo digest-$TAG-done > $O/digest-$TAG.done

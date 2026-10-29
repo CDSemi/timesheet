@@ -1,0 +1,10 @@
+WP5-UX5-FIX18 digest before any change (working tree outside handoff/ clean; HEAD a5cbc91e6965633a0f9d1dd7e912577321cc71e3)
+
+`npm run digest` in the repository FAILED with spawnSync git ENOBUFS (exit 1): the working tree holds many untracked handoff/ evidence
+files, so `git ls-files --cached --others --exclude-standard -z` (which the repository script runs without a pathspec) prints more than
+the 1 MB default buffer of execFileSync. This is a volume limit of the untracked handoff/ files, not a source difference; the output of
+that failed run was a 1 MB file listing and is not kept.
+
+The same script with the listing restricted to `-- . ':!handoff'` and a 64 MB buffer (digest-wt.mjs.txt; the hash lines are identical):
+69c6daff305dca839a7128e7b7509f3063c165fe5653d1c73159ea41c003e6bf  (882 files, handoff/ excluded)
+equal to the expected 69c6daff305dca839a7128e7b7509f3063c165fe5653d1c73159ea41c003e6bf.

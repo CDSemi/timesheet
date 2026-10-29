@@ -1,0 +1,318 @@
+// WP5-UX5-AUDIT-INT probe (auditor's own, not part of the repository): a period signed and sent, then corrected and resent, with a
+// backup, an isolated restore, the resume and the release in between, driven through the Review page and watched on the Review page,
+// the Timesheet header and the History at every step. Synthetic example.invalid accounts, capture mode, JOB_RUNNER off (jobs run only
+// through `cli.js run-jobs`), random per-run passwords never written anywhere. Servers on the task's ports 51460-51462.
+// Part A: release after resume (the normal reconciliation). Part B, from the same backup: the owner sends the held revision again on the
+// restored copy before the operator releases the held job (the same-revision repeat).
+import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { appendFileSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { type Browser, type BrowserContext, type Page, expect, test } from '@playwright/test';
+
+const ROOT = resolve(import.meta.dirname, '..', '..');
+const WORK = process.env.INT_WORK ?? join(ROOT, '..', 'probe-work', 'restore');
+const OUT = process.env.INT_OUT ?? join(ROOT, '..', 'out', '40-obs-restore.txt');
+const SENDER = 'audit-int-sender@example.invalid';
+const passwords = { admin: randomBytes(18).toString('base64url'), employee: randomBytes(18).toString('base64url'), employee2: randomBytes(18).toString('base64url') };
+const OWNER = 'employee2@example.invalid';
+const ADMIN = 'admin@example.invalid';
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
+
+const log = (line: string) => appendFileSync(OUT, `${line.replaceAll(WORK, '<work>').replace(UUID, '<id>')}\n`);
+const flat = (text: string | null) => (text ?? '').replace(/\s+/g, ' ').trim();
+
+interface Instance {
+  name: string;
+  dir: string;
+  port: number;
+  env: NodeJS.ProcessEnv;
+  child: ChildProcess | null;
+}
+
+function instance(name: string, port: number, dir = join(WORK, name)): Instance {
+  mkdirSync(dir, { recursive: true });
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    NODE_ENV: 'development',
+    HOST: '127.0.0.1',
+    PORT: String(port),
+    DATABASE_PATH: join(dir, 'timesheet.db'),
+    DATA_DIR: join(dir, 'private-data'),
+    APP_ORIGINS: `http://127.0.0.1:${port}`,
+    MAIL_FROM: SENDER,
+    OUTBOUND_MODE: 'capture',
+    JOB_RUNNER: 'off',
+    SEED_ADMIN_PASSWORD: passwords.admin,
+    SEED_EMPLOYEE_PASSWORD: passwords.employee,
+    SEED_EMPLOYEE2_PASSWORD: passwords.employee2,
+  };
+  delete env.PRODUCTION_SENDING_ENABLED;
+  delete env.NODE_OPTIONS;
+  // The task environment sets NO_COLOR and FORCE_COLOR, which makes Node print a warning on stderr; keep the CLI output clean.
+  delete env.FORCE_COLOR;
+  return { name, dir, port, env, child: null };
+}
+
+function cli(inst: Instance, args: string[]): { status: number | null; output: string; stdout: string } {
+  const result = spawnSync(process.execPath, [join(ROOT, 'dist', 'server', 'cli.js'), ...args], { cwd: ROOT, env: inst.env, encoding: 'utf8' });
+  return { status: result.status, output: `${result.stdout}${result.stderr}`.trim(), stdout: result.stdout.trim() };
+}
+
+async function start(inst: Instance): Promise<void> {
+  inst.child = spawn(process.execPath, [join(ROOT, 'dist', 'server', 'index.js')], { cwd: ROOT, env: inst.env, stdio: 'ignore' });
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      if ((await fetch(`http://127.0.0.1:${inst.port}/api/health`, { headers: { connection: 'close' } })).ok) return;
+    } catch {
+      // not listening yet
+    }
+    await new Promise((done) => setTimeout(done, 100));
+  }
+  throw new Error(`${inst.name} did not become healthy`);
+}
+
+async function stop(inst: Instance): Promise<void> {
+  const child = inst.child;
+  // A child stopped by kill() has a signalCode and no exitCode, so both are checked (run 1 of this probe waited here for an exit that
+  // had already happened).
+  if (child === null || child.exitCode !== null || child.signalCode !== null) return;
+  const exited = new Promise((done) => child.once('exit', done));
+  child.kill();
+  await exited;
+  inst.child = null;
+}
+
+let clockStep = 0;
+/** run-jobs at instants that move forward 150 s per pass from now (the PDF and the send of a revision share a second). */
+function runJobs(inst: Instance, passes = 3): string {
+  const out: string[] = [];
+  for (let pass = 0; pass < passes; pass += 1) {
+    clockStep += 150;
+    const now = new Date(Date.now() + clockStep * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    const result = cli(inst, ['run-jobs', '--once', '--now', now]);
+    out.push(`${result.status}:${flat(result.output)}`);
+  }
+  return out.join(' ; ');
+}
+
+async function signIn(context: BrowserContext, email: string, password: string, hash: string): Promise<Page> {
+  const page = await context.newPage();
+  await page.goto(`/${hash}`);
+  await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible();
+  return page;
+}
+
+async function textOf(page: Page, selector: string): Promise<string> {
+  const locator = page.locator(selector).first();
+  return (await locator.count()) === 0 ? '(none)' : flat(await locator.innerText());
+}
+
+/** What the Review page shows: chips, the check card, the signature lines, the Send card (status, hint, button) and any notice. */
+async function watchReview(page: Page, payrollDate: string, label: string): Promise<void> {
+  await page.goto(`/#/review/${payrollDate}`);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Review and sign off', level: 1 })).toBeVisible();
+  await expect(page.locator('[data-review-day]')).toHaveCount(14);
+  await expect(page.locator('[data-send-card]')).toBeVisible();
+  const send = page.locator('[data-send]');
+  log(`[${label}] review chips: ${await textOf(page, '[data-review-chips]')}`);
+  log(`[${label}] review mode: ${(await page.locator('[data-mode]').first().getAttribute('data-mode').catch(() => null)) ?? '(none)'}; sign button: ${await textOf(page, '[data-sign-off]')}`);
+  log(`[${label}] signatures: ${await textOf(page, '.review-signatures')}`);
+  log(`[${label}] send card: mode ${await page.locator('[data-send-card]').getAttribute('data-send-mode')}; status ${await textOf(page, '[data-send-status]')}; hint ${await textOf(page, '#send-hint')}; button "${flat(await send.innerText())}" ${(await send.isDisabled()) ? 'disabled' : 'enabled'}`);
+  log(`[${label}] notices: ${await textOf(page, '[data-notice], [data-result]')}`);
+}
+
+/** What the Timesheet header says about the period, and the History (deliveries and the newest audit events). */
+async function watchTimesheetAndHistory(page: Page, label: string): Promise<void> {
+  await page.goto('/#/timesheet');
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  log(`[${label}] timesheet statuses: ${(await page.locator('[data-status]').allInnerTexts()).map(flat).join(' | ')}`);
+  await page.goto('/#/history');
+  await expect(page.getByRole('heading', { name: 'History', level: 1 })).toBeVisible();
+  await expect(page.locator('.history-item').first()).toBeVisible();
+  const deliveries = page.locator('section').filter({ has: page.getByRole('heading', { level: 2 }) }).first();
+  log(`[${label}] history deliveries: ${flat(await deliveries.innerText()).slice(0, 1600)}`);
+  const events = (await page.locator('.history-item').allInnerTexts()).slice(0, 6).map((item) => flat(item).slice(0, 160));
+  log(`[${label}] history newest events: ${events.join(' || ')}`);
+}
+
+async function adminStatus(browser: Browser, inst: Instance, label: string): Promise<void> {
+  const context = await browser.newContext({ baseURL: `http://127.0.0.1:${inst.port}` });
+  const page = await signIn(context, ADMIN, passwords.admin, '#/settings/admin');
+  const status = page.locator('[data-ops="status"]');
+  await expect(status).toBeVisible();
+  log(`[${label}] admin operations status: ${flat(await status.innerText()).slice(0, 900)}`);
+  await context.close();
+}
+
+function preview(inst: Instance): string {
+  const result = cli(inst, ['outbound', 'release']);
+  return `exit ${result.status} ${flat(result.output)}`;
+}
+
+/** The capture folders of the instance's delivery attempts (one per attempt that reached the capture adapter). */
+function captures(inst: Instance): number {
+  try {
+    return readdirSync(join(inst.dir, 'private-data', 'mail-capture')).filter((entry) => !entry.startsWith('.')).length;
+  } catch {
+    return 0;
+  }
+}
+
+function heldJob(inst: Instance): string {
+  const listed = cli(inst, ['outbound', 'release']).stdout;
+  try {
+    const parsed = JSON.parse(listed) as { jobs: Array<{ id: string; kind: string; blocker: string | null }> };
+    return parsed.jobs.find((job) => job.kind === 'send_email')?.id ?? '';
+  } catch {
+    return '';
+  }
+}
+
+test.setTimeout(900_000);
+
+test('restore with a correction: Review, Timesheet and History at every step', async ({ browser }) => {
+  mkdirSync(WORK, { recursive: true });
+  writeFileSync(OUT, `audit-int restore probe, node ${process.version}, started ${new Date().toISOString()}\n`);
+  const source = instance('source', 51460);
+  const restored: Instance[] = [];
+  try {
+    log(`source: migrate ${cli(source, ['migrate']).status}, seed ${cli(source, ['seed']).status}`);
+    await start(source);
+    const ctx = await browser.newContext({ baseURL: `http://127.0.0.1:${source.port}` });
+    const page = await signIn(ctx, OWNER, passwords.employee2, '#/timesheet');
+    const periods = await (await ctx.request.get('/api/periods/current')).json() as { today_local: string; current: { payroll_date: string } };
+    const payroll = periods.current.payroll_date;
+    log(`today ${periods.today_local}; displayed period payroll ${payroll}`);
+
+    await watchReview(page, payroll, 'S0 source, before the sign-off');
+    // Sign off through the dialog.
+    await page.locator('[data-sign-off]').click();
+    const dialog = page.getByRole('dialog', { name: 'Sign off confirmation' });
+    await expect(dialog).toBeVisible();
+    const ack = dialog.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ });
+    if ((await ack.count()) > 0) await ack.check();
+    await dialog.getByRole('button', { name: 'Sign off', exact: true }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.locator('[data-signed-line]').first()).toBeVisible();
+    await watchReview(page, payroll, 'S1 source, signed, not sent');
+    // Send revision 1 from the Send card.
+    await page.locator('[data-send]').click();
+    await expect(page.locator('[data-send-notice]')).toBeVisible();
+    log(`[S2] send notice: ${await textOf(page, '[data-send-notice]')}`);
+    await watchReview(page, payroll, 'S2 source, revision 1 send queued');
+    await watchTimesheetAndHistory(page, 'S2 source');
+    log(`[S3] run-jobs: ${runJobs(source)}`);
+    await watchReview(page, payroll, 'S3 source, revision 1 delivered');
+    await watchTimesheetAndHistory(page, 'S3 source');
+
+    // A correction: one day changed with a reason, then Sign correction on the Review page.
+    const review = await (await ctx.request.get(`/api/timesheets/${payroll}/review`)).json() as { payload: { days: Array<{ work_date: string }> } };
+    const day = review.payload.days[2]?.work_date ?? '';
+    const put = await ctx.request.put(`/api/days/${day}`, {
+      headers: { origin: `http://127.0.0.1:${source.port}` },
+      data: { category: 'Worked', leave_minutes: 0, wfh: false, notes: 'Synthetic correction note', reason: 'Synthetic correction' },
+    });
+    log(`[S4] day ${day} changed with a reason: ${put.status()} ${put.status() >= 300 ? flat(await put.text()) : ''}`);
+    await watchReview(page, payroll, 'S4 source, correction draft');
+    await page.locator('[data-sign-off]').click();
+    const correction = page.getByRole('dialog', { name: 'Sign the correction' });
+    await expect(correction).toBeVisible();
+    await correction.getByLabel('Reason for the correction').fill('Synthetic correction of one day');
+    const ack2 = correction.getByRole('checkbox', { name: /I acknowledge the incomplete evidence/ });
+    if ((await ack2.count()) > 0) await ack2.check();
+    await correction.getByRole('button', { name: 'Sign correction' }).click();
+    await expect(correction).toHaveCount(0);
+    await watchReview(page, payroll, 'S5 source, revision 2 signed, not sent');
+    // Send another copy: the reason dialog.
+    await page.locator('[data-send]').click();
+    const ask = page.getByRole('alertdialog', { name: 'Send another copy?' });
+    await expect(ask).toBeVisible();
+    log(`[S6] reason dialog: ${flat(await ask.innerText()).slice(0, 400)}`);
+    log(`[S6] reason field starts with: "${await ask.locator('#send-field-reason').inputValue()}"`);
+    await ask.getByRole('button', { name: 'Send another copy' }).click();
+    await expect(ask).toHaveCount(0);
+    log(`[S6] send notice: ${await textOf(page, '[data-send-notice]')}`);
+    await watchReview(page, payroll, 'S6 source, revision 2 send queued (runner off)');
+    await watchTimesheetAndHistory(page, 'S6 source');
+    await ctx.close();
+
+    // Backup while revision 2's send waits; isolated restore twice from the same backup.
+    const backups = join(WORK, 'backups');
+    mkdirSync(backups, { recursive: true });
+    const backup = cli(source, ['backup', '--to', backups]);
+    log(`[B] backup exit ${backup.status}`);
+    await stop(source);
+    const backupName = readdirSync(backups).find((entry) => !entry.startsWith('.')) ?? 'missing';
+    for (const [index, name] of ['restored-a', 'restored-b'].entries()) {
+      const inst = instance(name, 51461 + index, join(WORK, name));
+      const restore = cli(source, ['restore', '--from', join(backups, backupName), '--to', inst.dir]);
+      log(`[R] restore into ${name}: exit ${restore.status}; ${flat(restore.output).slice(0, 300)}`);
+      restored.push(inst);
+    }
+
+    /* ---- Part A: resume, then release the held send, then run-jobs ---- */
+    const a = restored[0] as Instance;
+    await start(a);
+    const actx = await browser.newContext({ baseURL: `http://127.0.0.1:${a.port}` });
+    const apage = await signIn(actx, OWNER, passwords.employee2, '#/timesheet');
+    await watchReview(apage, payroll, 'A1 restored, paused, revision 2 send held');
+    await watchTimesheetAndHistory(apage, 'A1 restored');
+    await adminStatus(browser, a, 'A1 restored');
+    log(`[A1] release preview: ${preview(a)}`);
+    log(`[A2] resume --confirm: ${flat(JSON.stringify(cli(a, ['outbound', 'resume', '--confirm'])))}`);
+    await watchReview(apage, payroll, 'A2 restored, resumed, still held');
+    await adminStatus(browser, a, 'A2 restored');
+    const heldA = heldJob(a);
+    log(`[A3] release preview: ${preview(a)}`);
+    log(`[A3] release --job --confirm: ${flat(JSON.stringify(cli(a, ['outbound', 'release', '--job', heldA, '--confirm'])))}`);
+    await watchReview(apage, payroll, 'A3 restored, released, waiting');
+    log(`[A4] run-jobs: ${runJobs(a)}`);
+    await watchReview(apage, payroll, 'A4 restored, revision 2 delivered');
+    await watchTimesheetAndHistory(apage, 'A4 restored');
+    log(`[A4] release preview: ${preview(a)}; capture folders on the restored instance ${captures(a)} (the source had ${captures(source)})`);
+    await actx.close();
+    await stop(a);
+
+    /* ---- Part B: the owner sends revision 2 again on the restored copy before the release ---- */
+    const b = restored[1] as Instance;
+    await start(b);
+    log(`[B1] resume --confirm: ${flat(JSON.stringify(cli(b, ['outbound', 'resume', '--confirm'])))}`);
+    const bctx = await browser.newContext({ baseURL: `http://127.0.0.1:${b.port}` });
+    const bpage = await signIn(bctx, OWNER, passwords.employee2, '#/timesheet');
+    await watchReview(bpage, payroll, 'B1 restored-b, resumed, revision 2 send held');
+    await bpage.locator('[data-send]').click();
+    const askB = bpage.getByRole('alertdialog', { name: 'Send another copy?' });
+    await expect(askB.or(bpage.locator('[data-send-notice]'))).toBeVisible();
+    const askVisible = await askB.isVisible().catch(() => false);
+    if (askVisible) {
+      log(`[B2] reason dialog: ${flat(await askB.innerText()).slice(0, 400)}`);
+      await askB.locator('#send-field-reason').fill('Synthetic resend after the restore');
+      await askB.getByRole('button', { name: 'Send another copy' }).click();
+    }
+    await expect(bpage.locator('[data-send-notice]')).toBeVisible();
+    log(`[B2] owner's own send on the restored copy: ${await textOf(bpage, '[data-send-notice]')}`);
+    await watchReview(bpage, payroll, 'B2 restored-b, the owner sent again');
+    log(`[B3] release preview: ${preview(b)}`);
+    const heldB = heldJob(b);
+    log(`[B3] release --job --confirm: ${flat(JSON.stringify(cli(b, ['outbound', 'release', '--job', heldB, '--confirm'])))}`);
+    log(`[B4] run-jobs: ${runJobs(b)}`);
+    await watchReview(bpage, payroll, 'B4 restored-b, after run-jobs');
+    await watchTimesheetAndHistory(bpage, 'B4 restored-b');
+    log(`[B4] release preview: ${preview(b)}; capture folders on restored-b ${captures(b)}`);
+    log(`[B5] release --all --confirm: ${flat(JSON.stringify(cli(b, ['outbound', 'release', '--all', '--confirm'])))}`);
+    log(`[B5] run-jobs: ${runJobs(b, 2)}; capture folders on restored-b ${captures(b)}`);
+    await watchReview(bpage, payroll, 'B5 restored-b, after the bulk release');
+    await bctx.close();
+    await stop(b);
+  } finally {
+    await stop(source);
+    for (const inst of restored) await stop(inst);
+    log(`servers stopped; finished ${new Date().toISOString()}`);
+  }
+});

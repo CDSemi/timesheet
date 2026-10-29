@@ -1,0 +1,25 @@
+42-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+43-
+44: FAIL  tests/integration/restore.test.ts > a held send stays held whatever state the later send of the period ends in (F-UX5B3-1) > E1: the newest revision's held send is released when only an older revision of the period was delivered
+45-AssertionError: expected [ [ …(2) ] ] to deeply equal [ [ …(2) ] ]
+46-
+47-- Expected
+48-+ Received
+49-
+50-  [
+51-    [
+52-      "704756fb-c0ac-4a31-9027-94aa03b9375e",
+53--     null,
+54-+     "superseded_by_later_send",
+55-    ],
+56-  ]
+57-
+58- ❯ tests/integration/restore.test.ts:938:113
+59-    936|     const heldSecond = sendJobOf(r.db, second).id;
+60-    937|     // Revision 1's job succeeded in the source, so only revision 2's …
+61-    938|     expect(listHeldJobs(r.db).filter((job) => job.kind === JOB_SEND_EM…
+62-       |                                                                                                                 ^
+63-    939|     expect(releaseAllHeldJobs(r.db, r.clock)).toEqual({ released: 1, r…
+64-    940|     r.clock.advanceSeconds(120);
+65-
+66-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯

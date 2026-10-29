@@ -1,0 +1,21 @@
+// Busy cores per process name from one Get-Counter '\Process(*)\% Processor Time' sample (100 = one core).
+// Usage: node census-sum.mjs <raw> <label> <intervalSeconds>
+import { readFileSync } from 'node:fs';
+import { availableParallelism } from 'node:os';
+
+const [file, label, interval] = process.argv.slice(2);
+let total = 0;
+let idle = 0;
+const groups = new Map();
+for (const line of readFileSync(file, 'utf8').replace(/\r/g, '').split('\n')) {
+  const m = /^(\S+)\s+([\d.]+)\s*$/.exec(line);
+  if (!m) continue;
+  const value = Number(m[2]);
+  if (m[1] === '_total') total = value;
+  else if (m[1] === 'idle') idle = value;
+  else groups.set(m[1], (groups.get(m[1]) ?? 0) + value);
+}
+console.log(`census ${label}: interval ${interval}s, logical cores ${availableParallelism()}, TOTAL busy cores ${((total - idle) / 100).toFixed(2)}`);
+for (const [name, value] of [...groups].sort((a, b) => b[1] - a[1])) {
+  if (value / 100 >= 0.05) console.log(`  ${name}\tbusy cores ${(value / 100).toFixed(2)}`);
+}

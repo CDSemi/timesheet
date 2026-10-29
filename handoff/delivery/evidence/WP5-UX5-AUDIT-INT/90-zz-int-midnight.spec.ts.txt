@@ -1,0 +1,157 @@
+// WP5-UX5-AUDIT-INT probe (auditor's own, not part of the repository): the Day editor's unsaved-changes guard while a check-in runs across
+// the reporting-zone midnight. Run under the FIX10 simulated clock with the run starting about two minutes before the America/Los_Angeles
+// midnight. The test carries the CROSSES_MIDNIGHT annotation, so the fixtures' fence does not hold it. Observations go to INT_OUT.
+import { appendFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import type { Locator, Page } from '@playwright/test';
+import { addDays } from '../../src/domain/dates.ts';
+import { dateTimeIn } from '../client/zoneOracle.ts';
+import { CROSSES_MIDNIGHT, expect, test } from './fixtures.ts';
+
+const OUT = process.env.INT_OUT ?? join(resolve(import.meta.dirname, '..', '..'), '..', 'out', '41-obs-midnight.txt');
+
+function secondsToMidnight(zone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: zone, hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date());
+  const part = (type: string) => Number(parts.find((entry) => entry.type === type)?.value ?? Number.NaN);
+  return 86_400 - (part('hour') * 3600 + part('minute') * 60 + part('second'));
+}
+
+const bar = (page: Page) => page.locator('.period-bar');
+const discard = (page: Page) => page.getByRole('alertdialog', { name: 'Discard your changes?' });
+
+async function tagDate(page: Page): Promise<string | null> {
+  const tagged = page.locator('[data-sheet] [data-day].today');
+  return (await tagged.count()) === 0 ? null : tagged.getAttribute('data-day');
+}
+
+test(
+  'audit-int: the Day editor guard with a check-in running across the reporting-zone midnight',
+  { annotation: { type: CROSSES_MIDNIGHT, description: 'auditor probe; starts about 2 minutes before the midnight' } },
+  async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+    test.setTimeout(300_000);
+    const project = testInfo.project.name;
+    const log = (line: string) => appendFileSync(OUT, `[${project}] ${line}\n`);
+    if (project === 'desktop') writeFileSync(OUT, `audit-int midnight probe, started ${new Date().toISOString()} (process clock)\n`);
+    const before = await employeeSeed.periodsCurrent();
+    const zone = before.reporting_zone;
+    const left = secondsToMidnight(zone);
+    log(`process clock ${new Date().toISOString()}; zone ${zone}; today ${before.today_local}; seconds to midnight ${left}; displayed ${before.current.payroll_date}; in progress ${before.in_progress.period_start}..${before.in_progress.period_end}`);
+    if (left < 40 || left > 170) {
+      log(`NOT VERIFIED: the run did not start 40-170 s before the midnight (${left} s)`);
+      return;
+    }
+    const today = before.today_local;
+    const tomorrow = addDays(today, 1);
+    if (project === 'desktop') await page.setViewportSize({ width: 1280, height: 900 });
+    await signInThroughUi();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    // Show the period that holds today (the page opens on the displayed, ended period on a window day).
+    if ((await page.locator(`[data-day="${today}"]`).count()) === 0) {
+      await bar(page).getByRole('button', { name: 'Today', exact: true }).click();
+      await expect(page.locator(`[data-day="${today}"]`)).toHaveCount(1);
+    }
+    log(`before: today tag ${await tagDate(page)}`);
+
+    // Check in through the UI: the session is filed under the local date of its start.
+    await page.getByRole('button', { name: 'Check in' }).click();
+    let startUtc = '';
+    await expect
+      .poll(async () => {
+        const running = (await employeeSeed.dayView(today)).sessions.find((session) => session.end_utc === null);
+        startUtc = running?.start_utc ?? '';
+        return running !== undefined;
+      }, { message: 'the running session is on today' })
+      .toBe(true);
+    log(`checked in: start ${startUtc} (local ${dateTimeIn(startUtc, zone)}), filed under ${today}`);
+
+    // Open today's Day editor and type a note that is not saved.
+    await page.getByLabel('Open a day').fill(today);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor: Locator = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    const notes = editor.getByLabel('Notes');
+    await notes.fill('Synthetic unsaved note across the midnight');
+    log(`editor open on ${today}: title "${(await editor.locator('h2').first().innerText()).trim()}"; sessions text: ${(await editor.innerText()).replace(/\s+/g, ' ').slice(0, 260)}`);
+    await page.keyboard.press('Escape');
+    log(`before midnight, Escape with the note: question shown ${await discard(page).isVisible()}`);
+    if (await discard(page).isVisible()) await discard(page).getByRole('button', { name: 'Keep editing' }).click();
+    log(`before midnight, after Keep editing: editor open ${await editor.isVisible()}, note "${await notes.inputValue()}"`);
+
+    // Wait for the server date to pass the midnight; the page is left alone meanwhile.
+    await expect
+      .poll(async () => (await employeeSeed.periodsCurrent()).today_local, { message: 'the server date passes the midnight', timeout: 200_000, intervals: [1000] })
+      .not.toBe(today);
+    const after = await employeeSeed.periodsCurrent();
+    log(`after midnight: server today ${after.today_local}; process clock ${new Date().toISOString()}`);
+    log(`after midnight, untouched page: editor open ${await editor.isVisible()}, note "${await notes.inputValue()}", today tag ${await tagDate(page)}, question shown ${await discard(page).isVisible()}`);
+
+    // The documented refresh on window focus: the Today tag follows the server date. Does the open, unsaved day survive it?
+    const refreshed = page.waitForResponse((response) => response.request().method() === 'GET' && new URL(response.url()).pathname === '/api/periods/current');
+    await page.evaluate("window.dispatchEvent(new Event('focus'))");
+    await refreshed;
+    await expect.poll(() => tagDate(page), { message: 'the focus refresh moves the Today tag' }).toBe(after.today_local);
+    log(`after the focus refresh: today tag ${await tagDate(page)}; editor open ${await editor.isVisible()}; editor title "${(await editor.locator('h2').first().innerText().catch(() => '(none)')).trim()}"; note "${await notes.inputValue().catch(() => '(none)')}"; question shown ${await discard(page).isVisible()}`);
+    const runningOnToday = (await employeeSeed.dayView(today)).sessions.find((session) => session.end_utc === null);
+    const runningOnTomorrow = (await employeeSeed.dayView(tomorrow)).sessions.find((session) => session.end_utc === null);
+    log(`server: running session on ${today} ${runningOnToday !== undefined}, on ${tomorrow} ${runningOnTomorrow !== undefined}; check-in region "${(await page.getByRole('region', { name: 'Check in and out' }).innerText().catch(() => '(none)')).replace(/\s+/g, ' ')}"`);
+
+    // Escape after the midnight: the question.
+    await notes.focus();
+    await page.keyboard.press('Escape');
+    log(`after midnight, Escape: question shown ${await discard(page).isVisible()}`);
+    if (await discard(page).isVisible()) await discard(page).getByRole('button', { name: 'Keep editing' }).click();
+    log(`after Keep editing: editor open ${await editor.isVisible()}, note "${await notes.inputValue()}"`);
+
+    if (project === 'mobile') {
+      // The phone's Day editor is a modal sheet: the bar is behind it. Save the note from the fixed foot, close, then check out.
+      await page.getByRole('button', { name: 'Save day fields' }).click();
+      await expect.poll(async () => (await employeeSeed.dayView(today)).entry?.notes ?? '', { message: 'the note is saved on the old date' }).toBe('Synthetic unsaved note across the midnight');
+      log(`phone: saved from the foot after the midnight: ${today} notes "${(await employeeSeed.dayView(today)).entry?.notes ?? ''}"; ${tomorrow} entry ${(await employeeSeed.dayView(tomorrow)).entry === null ? 'none' : 'present'}`);
+      await page.keyboard.press('Escape');
+      await expect(editor).toHaveCount(0);
+      await page.getByRole('button', { name: 'Check out' }).click();
+      const phoneOut = page.getByRole('dialog', { name: 'Check out' });
+      await expect(phoneOut).toBeVisible();
+      await phoneOut.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+      await phoneOut.getByRole('button', { name: 'Check out, no breaks taken' }).click();
+      await expect(phoneOut).toHaveCount(0);
+      const phoneEnded = (await employeeSeed.dayView(today)).sessions.filter((session) => session.source === 'clock').at(-1);
+      log(`phone: server after Check out: ${today} session local ${dateTimeIn(phoneEnded?.start_utc ?? '', zone)} - ${dateTimeIn(phoneEnded?.end_utc ?? '', zone)}; ${tomorrow} sessions ${(await employeeSeed.dayView(tomorrow)).sessions.length}`);
+      await employeeSeed.clearSessions(today, 'audit-int probe cleanup');
+      await employeeSeed.resetDay(today).catch(() => undefined);
+      return;
+    }
+
+    // Today (now the next date) while the old day holds unsaved edits.
+    await bar(page).getByRole('button', { name: 'Today', exact: true }).click({ force: true });
+    log(`Today pressed with the note: question shown ${await discard(page).isVisible()}`);
+    if (await discard(page).isVisible()) await discard(page).getByRole('button', { name: 'Keep editing' }).click();
+    log(`after Keep editing: editor title "${(await editor.locator('h2').first().innerText()).trim()}", note "${await notes.inputValue()}"`);
+
+    // Check out from the bar while the editor holds the unsaved note.
+    await page.getByRole('button', { name: 'Check out' }).click();
+    log(`Check out pressed with the note: question shown ${await discard(page).isVisible()}; Check out dialog shown ${await page.getByRole('dialog', { name: 'Check out' }).isVisible()}`);
+    if (await discard(page).isVisible()) await discard(page).getByRole('button', { name: 'Keep editing' }).click();
+    const checkOut = page.getByRole('dialog', { name: 'Check out' });
+    if (!(await checkOut.isVisible())) await page.getByRole('button', { name: 'Check out' }).click();
+    if (await discard(page).isVisible()) await discard(page).getByRole('button', { name: 'Keep editing' }).click();
+    await expect(checkOut).toBeVisible();
+    log(`Check out dialog: ${(await checkOut.innerText()).replace(/\s+/g, ' ').slice(0, 300)}`);
+    await checkOut.getByRole('checkbox', { name: 'Confirm no breaks taken' }).check();
+    await checkOut.getByRole('button', { name: 'Check out, no breaks taken' }).click();
+    await expect(checkOut).toHaveCount(0);
+    log(`after Check out: editor open ${await editor.isVisible()}, note "${await notes.inputValue().catch(() => '(none)')}", question shown ${await discard(page).isVisible()}`);
+    const ended = (await employeeSeed.dayView(today)).sessions.filter((session) => session.source === 'clock').at(-1);
+    const next = await employeeSeed.dayView(tomorrow);
+    log(`server after Check out: ${today} session ${ended?.start_utc} - ${ended?.end_utc} (local ${dateTimeIn(ended?.start_utc ?? '', zone)} - ${dateTimeIn(ended?.end_utc ?? '', zone)}); ${tomorrow} sessions ${next.sessions.length}; ${today} notes "${(await employeeSeed.dayView(today)).entry?.notes ?? ''}"`);
+    if (await editor.isVisible()) {
+      log(`editor after Check out: ${(await editor.innerText()).replace(/\s+/g, ' ').slice(0, 300)}`);
+      await editor.getByRole('button', { name: 'Save day fields' }).click();
+      await expect.poll(async () => (await employeeSeed.dayView(today)).entry?.notes ?? '', { message: 'the note is saved on the old date' }).toBe('Synthetic unsaved note across the midnight');
+      log(`saved: ${today} notes "${(await employeeSeed.dayView(today)).entry?.notes ?? ''}"; ${tomorrow} entry ${(await employeeSeed.dayView(tomorrow)).entry === null ? 'none' : 'present'}`);
+    }
+    await page.screenshot({ path: join(process.env.E2E_SCREENSHOT_DIR ?? '.', `aint-midnight-${project}-synthetic.png`) });
+    await employeeSeed.clearSessions(today, 'audit-int probe cleanup');
+    await employeeSeed.resetDay(today).catch(() => undefined);
+  },
+);

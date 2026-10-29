@@ -1,0 +1,19 @@
+// Fills the {{KEY}} placeholders of a review skeleton from draft files and short values; fails if any placeholder is left.
+// Usage: node assemble.mjs <skeleton> <values.json>   (values: { "KEY": "text" | { "file": "path" } }); rewrites the skeleton in place.
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [skeleton, valuesPath] = process.argv.slice(2);
+const values = JSON.parse(readFileSync(valuesPath, 'utf8'));
+let text = readFileSync(skeleton, 'utf8');
+for (let pass = 0; pass < 3; pass += 1) {
+  text = text.replace(/\{\{([A-Z0-9_]+)\}\}/g, (whole, key) => {
+    const value = values[key];
+    if (value === undefined) return whole;
+    return typeof value === 'string' ? value : readFileSync(value.file, 'utf8').replace(/\n+$/, '');
+  });
+}
+const left = [...text.matchAll(/\{\{([A-Z0-9_]+)\}\}/g)].map((match) => match[1]);
+if (left.length > 0) throw new Error(`placeholders left: ${[...new Set(left)].join(', ')}`);
+text = `${text.replace(/\r\n/g, '\n').replace(/\n+$/, '')}\n`;
+writeFileSync(skeleton, text);
+console.log(`assembled ${skeleton.split(/[\\/]/).pop()}: ${text.split('\n').length - 1} lines`);

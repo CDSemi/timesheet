@@ -1,0 +1,4 @@
+{
+  "old": "function freePort(): Promise<number> {\n  return new Promise((resolvePort, reject) => {\n    const probe = createServer();\n    probe.once('error', reject);\n    probe.listen(0, '127.0.0.1', () => {",
+  "new": "// AUDIT-INT probe copy only: ports from the task's range 51470-51489 (the next free one), never a random one.\nlet nextProbePort = 51470;\nfunction takeProbePort(): number {\n  const port = nextProbePort;\n  nextProbePort = port >= 51489 ? 51470 : port + 1;\n  return port;\n}\nfunction freePort(): Promise<number> {\n  return new Promise((resolvePort, reject) => {\n    const probe = createServer();\n    let tries = 0;\n    probe.on('error', () => {\n      tries += 1;\n      if (tries > 20) reject(new Error('No port in 51470-51489'));\n      else probe.listen(takeProbePort(), '127.0.0.1');\n    });\n    probe.listen(takeProbePort(), '127.0.0.1', () => {"
+}

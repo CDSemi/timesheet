@@ -1,0 +1,27 @@
+# Copies the task outputs into the evidence folder as masked LF .txt (refuses an address outside example.invalid).
+. <task>/env.sh
+cd $T
+ARGS=()
+for f in out/*.txt; do
+  b=$(basename $f)
+  case $b in
+    ex-*|lstree-*|51-*-files.txt|51-*-hashes.txt) continue;;
+  esac
+  ARGS+=("$T/$f=$b")
+done
+for f in logs/*.txt; do
+  b=$(basename $f)
+  ARGS+=("$T/$f=log-$b")
+done
+for f in logs/*.log; do
+  b=$(basename $f .log)
+  ARGS+=("$T/$f=log-$b.txt")
+done
+ARGS+=("$T/README.txt=00-README.txt")
+for s in digestw.sh env.sh setup.sh digest.sh chain0.sh chain1.sh chain2.sh sweep.sh stress.sh strength.sh master2.sh run-shift.sh census.sh cens.sh finalize.sh; do
+  ARGS+=("$T/$s=$s.txt")
+done
+for s in durations.mjs burnrun.mjs census.mjs counts.mjs mask.mjs probe-now.mjs shiftclock.mjs zone.mjs zz-control.spec.ts burn.mjs; do
+  ARGS+=("$T/$s=$s.txt")
+done
+node.exe $T/mask.mjs "<repo>\\handoff\\delivery\\evidence\\WP5-UX5-REGATE12" "${ARGS[@]}"

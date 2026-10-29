@@ -1,0 +1,26 @@
+# Mandatory repository checks in the pristine export: typecheck, lint, build, npm test, AC-13 under three device zones.
+. <task>/env.sh
+X=$T/export
+O=$T/out
+EX=$O/03-core-exits.txt
+cd $X || exit 9
+step() {
+  name=$1; shift
+  start=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  "$@" > "$O/03-$name.txt" 2>&1
+  code=$?
+  echo "$name exit=$code start=$start end=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$EX"
+}
+bash $T/census.sh c1-entry 10
+echo "node $(node --version) npm $(npm --version) cwd=<task>/export" > "$EX"
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+step typecheck npm run typecheck
+step lint npm run lint
+step build npm run build
+step npmtest npm test
+unset NODE_OPTIONS
+step ac13-los-angeles node $T/run-tz.mjs America/Los_Angeles $X npx vitest run tests/integration/ac13-two-week.test.ts
+step ac13-tokyo node $T/run-tz.mjs Asia/Tokyo $X npx vitest run tests/integration/ac13-two-week.test.ts
+step ac13-new-york node $T/run-tz.mjs America/New_York $X npx vitest run tests/integration/ac13-two-week.test.ts
+echo "chain1 done $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$EX"
+echo chain1-done > $O/chain1.done

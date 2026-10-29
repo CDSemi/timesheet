@@ -1,0 +1,25 @@
+# Copies the task outputs into the evidence folder as masked LF .txt (and a few -synthetic.png), then lists them.
+. <task>/env.sh
+cd $T
+O=$T/out
+args=""
+for f in $O/*.txt; do
+  args="$args $f=$(basename $f)"
+done
+for f in env.sh setup.sh digest.sh census.sh run-shift.sh chain1.sh chain2.sh master.sh setup-probe.sh probes.sh mut.sh master2.sh collect.sh finish.sh probe-restore-run2.sh probe-shared-run3.sh probe-shared-run4.sh probe-shared-run5.sh probe-shared-run6.sh probe-clock-run2.sh; do
+  args="$args $T/$f=90-$f.txt"
+done
+for f in census-sum.mjs counts.mjs durations.mjs probe-now.mjs shiftclock.mjs tzprobe.mjs run-tz.mjs mutate.mjs parity.mjs collect.mjs assemble.mjs append-results.mjs check-files.mjs board-extract.mjs board-decisions.mjs board-decisions2.mjs board-gates.mjs; do
+  args="$args $T/$f=90-$f.txt"
+done
+for f in probes/zz-int-restore.spec.ts probes/zz-int-midnight.spec.ts probes/zz-int-theme.spec.ts probes/zz-int-shared.spec.ts probes/zz-int-clock-editor.spec.ts; do
+  args="$args $T/$f=90-$(basename $f).txt"
+done
+args="$args $T/mutants/MF-focus.json=90-mutant-MF-focus.json.txt $T/mutants/probe-port-helper.json=90-probe-port-helper.json.txt"
+args="$args $T/board-tasks.txt=01-author-models.txt"
+for f in $T/pw-probe-clock-editor-run2/*/error-context.md; do
+  args="$args $f=44-error-context-clock-editor-note.txt"
+done
+node collect.mjs $E $args
+ls $E > $T/logs/evidence-list.txt
+wc -l < $T/logs/evidence-list.txt

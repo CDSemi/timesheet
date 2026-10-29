@@ -1,0 +1,12 @@
+WP5-UX5-FIX18 dist/ comparison: a clean build of a5cbc91 (export-base, own npm ci) against a clean build of the working tree (export-final, own npm ci).
+Raw `diff -rq`: 50-dist-compare-raw.txt (25 lines). Both trees hold 250 files.
+
+dist/server and dist/domain: identical (no line of the raw diff names them).
+dist/client differs in:
+  - the entry chunk: index-qNP6kTPW.js (+ .map) -> index-D6YCEv6o.js (+ .map), 492052 -> 492662 chars (the DayEditor and TimesheetScreen change, minified);
+  - index.html: only the script src (/assets/index-qNP6kTPW.js -> /assets/index-D6YCEv6o.js), see 50-dist-index-html.txt;
+  - five lazy chunks that import the entry chunk by its hashed name and so got new hashes: AdminScreen, ImportScreen, ReviewScreen, SettingsTransfer,
+    SettingsTransferFile (each .js and .js.map). With the old entry name renamed to the new one inside the base files, their content is equal
+    (normcmp.mjs.txt, 50-dist-normcmp.txt: "only renamed chunk names", equal length; lines 1 and 4 of that file, "index-BPe2s9pl.css -> index-D6YCEv6o.js"
+    and index.html, are artefacts of the script's stem matching and of its not renaming the entry name in the html: the css is byte-identical, cmp exit 0, and the html differs only in the script src).
+  - the style sheet index-BPe2s9pl.css is byte-identical.

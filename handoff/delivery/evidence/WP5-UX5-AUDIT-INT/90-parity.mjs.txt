@@ -1,0 +1,48 @@
+// EN/VI structural parity of document pairs: line count, heading levels in order, list and numbered items, table rows, fences,
+// and the inline code spans per section (as multisets). Usage: node parity.mjs <root> <doc base names...>
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [root, ...names] = process.argv.slice(2);
+const shape = (text) => {
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  let fenced = false;
+  const out = { lines: lines.length, headings: [], bullets: 0, numbered: 0, tableRows: 0, fences: 0, sections: [[]] };
+  lines.forEach((line) => {
+    if (/^\s*(```|~~~)/.test(line)) {
+      fenced = !fenced;
+      out.fences += 1;
+      return;
+    }
+    if (fenced) return;
+    const heading = /^(#{1,6})\s/.exec(line);
+    if (heading) {
+      out.headings.push(heading[1].length);
+      out.sections.push([]);
+    } else if (/^\s*[-*]\s/.test(line)) out.bullets += 1;
+    else if (/^\s*\d+\.\s/.test(line)) out.numbered += 1;
+    else if (/^\|/.test(line)) out.tableRows += 1;
+    for (const match of line.matchAll(/`([^`]+)`/g)) out.sections.at(-1).push(match[1]);
+  });
+  return out;
+};
+let differences = 0;
+for (const name of names) {
+  const en = shape(readFileSync(join(root, 'docs', `${name}.md`), 'utf8'));
+  const vi = shape(readFileSync(join(root, 'docs', `${name}.vi.md`), 'utf8'));
+  const structure = JSON.stringify(en.headings) === JSON.stringify(vi.headings) && en.bullets === vi.bullets && en.numbered === vi.numbered && en.tableRows === vi.tableRows && en.fences === vi.fences;
+  const codeDiffs = [];
+  en.sections.forEach((section, index) => {
+    const a = [...section].sort();
+    const b = [...(vi.sections[index] ?? [])].sort();
+    if (JSON.stringify(a) !== JSON.stringify(b)) {
+      const onlyEn = a.filter((item) => !b.includes(item));
+      const onlyVi = b.filter((item) => !a.includes(item));
+      codeDiffs.push(`section ${index}: EN-only [${onlyEn.slice(0, 6).join(', ')}] VI-only [${onlyVi.slice(0, 6).join(', ')}] counts ${a.length}/${b.length}`);
+    }
+  });
+  if (!structure || codeDiffs.length > 0) differences += 1;
+  console.log(`${name}: structure ${structure ? 'same' : 'DIFFERENT'}; lines ${en.lines}/${vi.lines}; headings ${en.headings.length}/${vi.headings.length}; bullets ${en.bullets}/${vi.bullets}; numbered ${en.numbered}/${vi.numbered}; table rows ${en.tableRows}/${vi.tableRows}; fences ${en.fences}/${vi.fences}; code spans per section ${codeDiffs.length === 0 ? 'same' : 'DIFFERENT'}`);
+  for (const line of codeDiffs) console.log(`  ${line}`);
+}
+console.log(`pairs with a difference: ${differences}`);

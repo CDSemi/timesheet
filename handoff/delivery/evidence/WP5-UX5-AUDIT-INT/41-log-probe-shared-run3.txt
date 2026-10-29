@@ -1,0 +1,55 @@
+== probe-shared-run3: real start 2026-10-29T08:46:32Z, simulated start real, AB8_SHIFT_MS=0
+process clock 2026-10-29T08:46:32.796Z (Date.now 1793263592806); America/Los_Angeles Thu, 2026-10-29, 01:46; shift ms 0; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/zz-int-shared.spec.ts --project=desktop --workers=1 --output=<task>\pw-probe-shared-run3
+
+Running 2 tests using 1 worker
+
+(node:109584) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  1 [desktop] › tests\e2e\zz-int-shared.spec.ts:75:3 › audit-int: a shared view (view) with the round-5 header, sheet and dialogs (10.3s)
+(node:48588) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 2 [desktop] › tests\e2e\zz-int-shared.spec.ts:75:3 › audit-int: a shared view (edit) with the round-5 header, sheet and dialogs (4.2s)
+
+
+  1) [desktop] › tests\e2e\zz-int-shared.spec.ts:75:3 › audit-int: a shared view (view) with the round-5 header, sheet and dialogs 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByRole('dialog', { name: /Day/ }).first()
+    Expected: 0
+    Received: 1
+    Timeout:  7000ms
+
+    Call log:
+      - Expect "toHaveCount" getByRole('dialog', { name: /Day/ }).first() with timeout 7000ms
+      - waiting for getByRole('dialog', { name: /Day/ }).first()
+        18 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      149 |       if (project === 'desktop') {
+      150 |         const where = await outsidePress(page);
+    > 151 |         await expect(editor).toHaveCount(0);
+          |                              ^
+      152 |         log(`outside press (${where}), nothing unsaved: editor ${await editor.isVisible()}, question ${await page.getByRole('alertdialog', { name: 'Discard your changes?' }).isVisible()}`);
+      153 |       }
+      154 |     }
+        at <task>\export-probe\tests\e2e\zz-int-shared.spec.ts:151:30
+
+    Error Context: ..\pw-probe-shared-run3\zz-int-shared-audit-int-a--7920b--5-header-sheet-and-dialogs-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-probe-shared-run3\zz-int-shared-audit-int-a--7920b--5-header-sheet-and-dialogs-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-probe-shared-run3\zz-int-shared-audit-int-a--7920b--5-header-sheet-and-dialogs-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\zz-int-shared.spec.ts:75:3 › audit-int: a shared view (view) with the round-5 header, sheet and dialogs 
+  1 passed (19.1s)
+exit=1
+process clock 2026-10-29T08:46:52.307Z (Date.now 1793263612316); America/Los_Angeles Thu, 2026-10-29, 01:46; shift ms 0; instanceof true
+== probe-shared-run3 real end 2026-10-29T08:46:52Z

@@ -1,0 +1,15 @@
+# Usage: bash census.sh <label>
+# Host census, read-only and inline: total processor load (percent of 32 logical processors) and the busiest process names with their IDs and CPU times.
+# No command line of any process is read or written.
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX18/env.sh.txt
+L=$1
+{
+  echo "census $L at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  echo "total processor load percent (two samples):"
+  powershell.exe -NoProfile -Command "(Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter \"Name='_Total'\").PercentProcessorTime"
+  powershell.exe -NoProfile -Command "(Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter \"Name='_Total'\").PercentProcessorTime"
+  echo "busiest by CPU time (name, id, user and kernel 100 ns units):"
+  powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Select-Object Name,ProcessId,UserModeTime,KernelModeTime | Sort-Object -Property UserModeTime -Descending | Select-Object -First 8 | Format-Table -AutoSize"
+  echo "counts of mission-relevant names:"
+  powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.Name -match '^(node|msedge|chrome|chromium|headless_shell)' } | Group-Object Name | Select-Object Name,Count | Format-Table -AutoSize"
+} > $E/10-census-$L.txt 2>&1

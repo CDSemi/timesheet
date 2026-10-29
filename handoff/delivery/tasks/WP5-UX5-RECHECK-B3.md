@@ -124,3 +124,56 @@
 - Return at most 200 words, beginning with your self-reported model.
 
 ## Results
+
+Auditor: timesheet-auditor, self-reported model claude-opus-5-5 (the strongest author model of the snapshot is the same), agent
+a7f3e75ac74c56f38, fresh context, attempt 1. Review pair: `handoff/delivery/WP5_UX5_RECHECK_B3.md` and `.vi.md`. Evidence:
+`handoff/delivery/evidence/WP5-UX5-RECHECK-B3/` (masked LF text; index `00-README.txt`).
+
+- **Decision: PASS.** No new finding (no F-UX5B4-n).
+- **Target.** `reviewed_commit` a5cbc91e6965633a0f9d1dd7e912577321cc71e3 = HEAD = local `origin/main` (no fetch); digest
+  69c6daff305dca839a7128e7b7509f3063c165fe5653d1c73159ea41c003e6bf, 882 files, equal in every form: `npm run digest` and `git
+  ls-tree` of HEAD and of the SHA before; the same plus three clean exports after. Delta be2afa2..a5cbc91 outside `handoff/`: `restore.ts` (one
+  predicate and its comment), `restore.test.ts`, `timesheet-api.test.ts`, docs/05 EN and VI, and FIX17's two e2e files.
+- **F-UX5B3-1: closed.** RECHECK-B2's in-process probe, unmodified, 12 of 12 pass (F1, U1, U2, U4, R1 and D1 now refused
+  `superseded_by_later_send`, revision 1 never sent); its HTTP and CLI probe, unmodified, sections A to D 13 PASS, 0 failures. Every
+  `intervention` form is refused by id and in bulk; the same-revision repeat is refused, and `superseded_by_later_send` is the right
+  code (a later send of the period, the code the suite already pins for a queued or succeeded repeat; `delivery_attempt_open` wins
+  while the repeat's attempt is undecided). Own probe X1 to X6 (run 1 X1-X5 5/5; run 2 X1-X6 6/6): retry-ladder exhaustion and a
+  failed resend refused; no over-blocking by an earlier failed or decided job of the period; another period unaffected; the
+  release audit event holds the job id, kind, attempts and states only; X6 see R-UX5B4-5.
+- **The cancelled exception.** Each claim holds in the code: the only writer of `cancelled` is `dropHeldReminder`, which refuses
+  every kind but `send_reminder`, and has since 72ab2ed1, the only commit that ever added a cancel writer; docs/12:114 and docs/11:185
+  say a send job cannot be cancelled or dropped; the `jobs_closed` trigger freezes a cancelled job. The exception is right and
+  unreachable for send jobs. docs/05:72 (EN and VI) states the build exactly; docs/11:178 needs no change and is still true, but
+  its reasons do not name one conservative edge (R-UX5B4-5).
+- **E1 and the midnight second are real pins.** My precise order mutant N5 (`j.rowid <> ?`) fails E1 at `restore.test.ts:938`
+  (blocker `superseded_by_later_send` instead of `null`); FIX16's K2 also fails it but blocks every held send itself. FIX16's T4
+  fails only `timesheet-api.test.ts:148`, the new assertion. RECHECK-B2's midnight and DST probe passes 11 of 11 on the target.
+- **Regressions:** none in restore, hold, resume, release, `releaseAllHeldJobs`, other periods or owners, or audit events. The
+  drill's restore stage carries forward from REGATE11 (209 PASS; `src/` and `scripts/` unchanged since 1fe5ad3, `dist/` identical
+  per REGATE12).
+- **Mutants:** 11 own (N1 to N10, T6; N5, N10 and T6 also run against the probes) plus FIX16's K2, T4, M1, C1: 9 of my 11
+  killed by the suite at the assertion that names the rule (N6 incidentally, by the cancelled case); N10 and T6 survive all 2,397
+  tests and are caught by the probes. All restored byte-identical.
+- **Mandatory checks** (clean export, Node 24.21.0): typecheck, lint, build 0; `npm test` 101 files / 2,397 tests; 21 area-B
+  integration files 503 tests; AC-13 under Asia/Tokyo 1/1; real-clock FULL e2e (07:28Z to 07:49Z) exit 0, desktop 469 ok /
+  35 skipped / 0 failed, mobile 407 / 97 / 0, 20.3 min. No rerun was needed. No deprecation line anywhere.
+- **Dispositions:** F-UX5B3-1 closed; R-UX5B3-1 closed (the 07:00:00Z check-in is pinned); R-UX5B3-2 closed (E1 pins the order).
+- **Optional risks (no fix needed):** R-UX5B4-1 retry-ladder exhaustion not named by the suite (N10); R-UX5B4-2 the second
+  before the midnight not pinned (T6; the test comment claims it); R-UX5B4-3 the cancelled exception rests on "no path cancels a
+  send job" and the code comment's "it never ran" is imprecise; R-UX5B4-4 stale comment at `restore.test.ts:616`; R-UX5B4-5
+  docs/11:178 does not explain the refusal when the only later send is the owner's same-revision repeat that delivered nothing
+  (conservative: the copy stays held, the owner can send again; probe X6). R-UX5B2-1 and R-UX5B2-2 unchanged; R-UX5B2-3
+  documented.
+- **Process notes.** No rule slip that I know of: no heredoc, no stdin to node or python, no pipe into head, tail or cat, no
+  /dev/null, no sleep, no PID kill, no git configuration change, nothing staged or committed. Honest record: (a) my first docs
+  parity run named a missing file (`02_REQUIREMENTS`) and exited 1; it was rerun with the right names and the file overwritten;
+  (b) while the mutants and the e2e ran I checked progress with many read-only `grep -c` counts of my own logs; (c) a trial evidence
+  collect ran before the e2e and the final collect overwrote it; (d) X6 was added to my probe after run 1 (R-UX5B4-5), so run 2
+  repeats X1 to X5 unchanged and adds X6; the N5p and N10p mutant runs used the run-1 source; T6p ran in a second, separate
+  invocation of the mutant script; (e) the e2e log's only warnings are Node's `NO_COLOR`/`FORCE_COLOR` notice from my own
+  environment. Host load: about 5 busy cores at the start, 3 to 4 during the e2e, 2 at the end. Nothing of this task is left
+  running (no process, no listening socket in 51420-51449).
+- **Next action:** WP5-UX5-AUDIT-INT on a5cbc91 / 69c6daff.
+
+Status: done

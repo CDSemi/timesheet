@@ -1,0 +1,15 @@
+// Read-only: full decision / gate_notes / review_notes / first_stop of WP5-UX4 and WP5-UX5 gates, diagnoses, fixes and audits.
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const board = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+const kinds = new Set(process.argv[4].split(','));
+const out = [];
+for (const t of board.tasks) {
+  if (!/^WP5-UX[45]-/.test(t.id) || !kinds.has(t.kind)) continue;
+  out.push(`### ${t.id} (${t.kind}, ${t.status}, attempt ${t.attempt}) rc=${t.reviewed_commit ?? t.freeze_commit ?? ''} sd=${t.source_digest ?? ''}`);
+  for (const key of ['decision', 'gate_notes', 'review_notes', 'findings', 'first_stop', 'superseded_by', 'addresses_gate', 'addresses_audit', 'routing_note']) {
+    if (t[key] !== undefined && t[key] !== null) out.push(`${key}: ${typeof t[key] === 'string' ? t[key] : JSON.stringify(t[key])}`);
+  }
+  out.push('');
+}
+writeFileSync(process.argv[3], out.join('\n') + '\n');

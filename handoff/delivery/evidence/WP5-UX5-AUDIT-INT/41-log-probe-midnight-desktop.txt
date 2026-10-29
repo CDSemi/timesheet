@@ -1,0 +1,69 @@
+== probe-midnight-desktop: real start 2026-10-29T08:48:54Z, simulated start 2026-10-27T06:58:00Z, AB8_SHIFT_MS=-179454478
+process clock 2026-10-27T06:58:00.086Z (Date.now 1793084280096); America/Los_Angeles Mon, 2026-10-26, 23:58; shift ms -179454478; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/zz-int-midnight.spec.ts --project=desktop --workers=1 --output=<task>\pw-probe-midnight-desktop
+
+Running 1 test using 1 worker
+
+(node:106716) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  1 [desktop] › tests\e2e\zz-int-midnight.spec.ts:27:1 › audit-int: the Day editor guard with a check-in running across the reporting-zone midnight (5.0m)
+
+
+  1) [desktop] › tests\e2e\zz-int-midnight.spec.ts:27:1 › audit-int: the Day editor guard with a check-in running across the reporting-zone midnight 
+
+    Test timeout of 300000ms exceeded.
+
+    Error: locator.click: Test timeout of 300000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Check out' })
+        - locator resolved to <button type="button" class="clock-button">Check out</button>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is visible, enabled and stable
+          - scrolling into view if needed
+          - done scrolling
+          - <h2 tabindex="-1" id="day-editor-title">…</h2> from <div class="sheet-area" data-editor-layout="floating">…</div> subtree intercepts pointer events
+        - retrying click action
+        - waiting 20ms
+        2 × waiting for element to be visible, enabled and stable
+          - element is visible, enabled and stable
+          - scrolling into view if needed
+          - done scrolling
+          - <h2 tabindex="-1" id="day-editor-title">…</h2> from <div class="sheet-area" data-editor-layout="floating">…</div> subtree intercepts pointer events
+        - retrying click action
+          - waiting 100ms
+        353 × waiting for element to be visible, enabled and stable
+            - element is visible, enabled and stable
+            - scrolling into view if needed
+            - done scrolling
+            - <h2 tabindex="-1" id="day-editor-title">…</h2> from <div class="sheet-area" data-editor-layout="floating">…</div> subtree intercepts pointer events
+          - retrying click action
+            - waiting 500ms
+
+
+      130 |
+      131 |     // Check out from the bar while the editor holds the unsaved note.
+    > 132 |     await page.getByRole('button', { name: 'Check out' }).click();
+          |                                                           ^
+      133 |     log(`Check out pressed with the note: question shown ${await discard(page).isVisible()}; Check out dialog shown ${await page.getByRole('dialog', { name: 'Check out' }).isVisible()}`);
+      134 |     if (await discard(page).isVisible()) await discard(page).getByRole('button', { name: 'Keep editing' }).click();
+      135 |     const checkOut = page.getByRole('dialog', { name: 'Check out' });
+        at <task>\export-probe\tests\e2e\zz-int-midnight.spec.ts:132:59
+
+    Error Context: ..\pw-probe-midnight-desktop\zz-int-midnight-audit-int--674df-the-reporting-zone-midnight-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-probe-midnight-desktop\zz-int-midnight-audit-int--674df-the-reporting-zone-midnight-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-probe-midnight-desktop\zz-int-midnight-audit-int--674df-the-reporting-zone-midnight-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  Slow test file: [desktop] › tests\e2e\zz-int-midnight.spec.ts (5.0m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  1 failed
+    [desktop] › tests\e2e\zz-int-midnight.spec.ts:27:1 › audit-int: the Day editor guard with a check-in running across the reporting-zone midnight 
+exit=1
+process clock 2026-10-27T07:03:04.357Z (Date.now 1793084584367); America/Los_Angeles Tue, 2026-10-27, 00:03; shift ms -179454478; instanceof true
+== probe-midnight-desktop real end 2026-10-29T08:53:58Z

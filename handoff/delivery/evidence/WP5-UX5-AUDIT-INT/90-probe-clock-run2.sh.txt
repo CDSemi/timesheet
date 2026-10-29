@@ -1,0 +1,9 @@
+# Run 2 of the clock-editor probe with the added unsaved-note case (1440px), desktop only, real clock.
+. <task>/env.sh
+cd $T
+X=$T/export-probe
+O=$T/out
+cp probes/zz-int-clock-editor.spec.ts $X/tests/e2e/
+mv $O/44-obs-clock-editor.txt $O/44-obs-clock-editor-run1.txt
+SHIFT_EXPORT=$X bash run-shift.sh probe-clock-editor-run2 real tests/e2e/zz-int-clock-editor.spec.ts --project=desktop --workers=1 > $O/41-log-probe-clock-editor-run2.txt 2>&1
+echo "probe-clock-editor-run2 exit $(grep -E '^exit=' $O/41-log-probe-clock-editor-run2.txt)" >> $O/40-probe-exits-run2.txt

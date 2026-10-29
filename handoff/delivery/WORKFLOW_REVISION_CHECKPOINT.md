@@ -2923,8 +2923,85 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - REGATE12 is registered with its brief: scoped, tests only, all six sweeps, under the new
     load rule.
   - RECHECK-B3 and AUDIT-INT now depend on REGATE12, and target the FIX17 digest.
-- **Running now:** WP5-UX5-FIX17-FREEZE (committer). The coordinator writes no file while it
-  runs.
+- **WP5-UX5-FIX17-FREEZE done.**
+  - Commit a5cbc91e6965633a0f9d1dd7e912577321cc71e3 on main. It was pushed as a fast-forward
+    from 1fe5ad3.
+  - D_PRE equals the HEAD digest, 69c6daff. 404 paths were staged.
+  - Every check exited 0.
+- **WP5-UX5-REGATE12, attempt 1:** it stopped correctly at the entry census. The host
+  carried 4.6 to 4.7 busy cores of non-mission load, over the 4-core limit. Nothing ran.
+- **Coordinator (brief Addendum 1).** The entry limit is raised to about 8 cores, on DIAG10's
+  measured evidence:
+  - 0 failures at 3 to 8 cores in 198 runs;
+  - 0 failures in a 1,068-test mixed run at 10 to 14 cores;
+  - failures only at saturation.
+
+  The starvation rule is unchanged.
+- **WP5-UX5-REGATE12 PASS** (attempt 2, verifier, self-reported claude-sonnet-5-5) on
+  a5cbc91 / 69c6daff.
+  - The entry census showed 6.7 and 6.1 cores, under the limit of 8. No failure.
+  - `dist/` is identical, so the drill, `npm audit` and axe carry forward.
+  - `npm test`: 2,397.
+  - FULL: 469/407, 0 failed. All six sweeps: 0 failed.
+    - The longest logo test took 53, 66 and 96 s; the crossing test took 55 s.
+  - Stress, including the 48-thread burner: 0 failed. The mutants are caught.
+- **WP5-UX5-RECHECK-B3 PASS** (auditor, self-reported claude-opus-5-5) on a5cbc91 /
+  69c6daff. No new finding.
+  - F-UX5B3-1 is closed: RECHECK-B2's probes pass 12/12 and A–D.
+  - The cancelled exception holds in the code and the history. docs/05:72 is exact in EN
+    and VI.
+  - E1 and the midnight second are real pins.
+  - Every mandatory check passed: 2,397 tests and FULL 0 failed.
+  - 9 of its 11 own mutants were killed. Optional risks: R-UX5B4-1..5.
+  - On the board it names `superseded_by: WP5-UX5-AUDIT-INT` until the re-accept.
+- **WP5-UX5-AUDIT-INT: FIX REQUIRED** (auditor, self-reported claude-opus-5-5) on a5cbc91.
+  - **F-UX5I-1 (Low).** On desktop, the open Day editor does not re-read its day after the
+    page's Check in or Check out. A note typed first is refused on save, and "Reload day"
+    drops it.
+    - Cause: `TimesheetScreen.tsx` reloads only the period. `DayEditor.tsx` re-reads the
+      day only on mount, after its own writes, and after label or batch commits.
+    - Nothing is stored wrongly or lost silently: the version check refuses the stale save.
+  - Everything else passed:
+    - the rounds are integrated: every finding closed, every owner item and gate failure
+      mapped;
+    - RECHECK-A2 and RECHECK-B3 still hold;
+    - the cross-area probes passed;
+    - AC-13 passed in three zones;
+    - the docs agree in EN and VI;
+    - FULL: 0 failed.
+  - Optional risks R-UX5I-1..4, and a backlog for the WP5 handoff.
+- **Coordinator.**
+  - RECHECK-A2 and RECHECK-B3 now name `superseded_by: WP5-UX5-AUDIT-INT2`, the
+    integration recheck.
+  - Four tasks are registered, each with its brief:
+    - FIX18 (worker-high, sonnet). The version check stays for changes made elsewhere,
+      and stale day fields are never sent with a fresh version.
+    - FIX18-FREEZE.
+    - REGATE13: a client change, with axe on the open editor.
+    - AUDIT-INT2.
+- **WP5-UX5-FIX18 done** (worker-high, self-reported claude-sonnet-5-5). It is uncommitted.
+  Digest 6937d79c.
+  - The open desktop Day editor now re-reads its day when the clock version changes. It
+    keeps the forms (no `generation` bump). It takes the fresh day only when the day fields
+    on the server equal what it holds, and not while a session dialog is open.
+    - The same counter also fires when the tab returns into view, under the same guards.
+      AUDIT-INT2 judges that.
+  - A clock action changes no day field.
+  - Tests: four new desktop tests (1440 px, 1280 px, a change from elsewhere, a session
+    dialog) and one phone test.
+  - docs/04: one sentence, EN and VI.
+  - Mutants M1 to M5 are killed. M6 cannot be told apart.
+  - Only `dist/client` changed.
+  - `npm test`: 2,397. FULL: 473/36/0 and 408/101/0. The midnight run: 0 failed.
+  - Tooling: `npm run digest` fails with ENOBUFS while many `handoff/` files are untracked.
+    It goes to the backlog.
+- **Running now:** WP5-UX5-FIX18-FREEZE (committer). It stages before it computes D_PRE.
+  The coordinator writes no file while it runs.
+- **Next:**
+  - REGATE13 and AUDIT-INT2;
+  - ACCEPT-DOCS: the WP5 handoff backlog, the pilot packet's release identity, and the
+    real-device touch check;
+  - the WP5 re-accept.
 - **Next:** a fix if one is needed, then a regate on a host within the limit. RECHECK-B3
   and AUDIT-INT move to depend on the new regate.
 - **Then:**

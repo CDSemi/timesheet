@@ -1,0 +1,114 @@
+
+ RUN  v5.0.2 <task>/probe
+
+ ❯ tests/integration/zz-recheck-b3-restore.test.ts (5 tests | 2 failed) 3433ms
+   ❯ RECHECK-B3: FIX16 rule in further shapes (5)
+     × X3 no over-blocking: an EARLIER failed job of the period does not hold the newest revision's held send; release audited with ids and kind only 627ms
+     × X4 no over-blocking: the held resend the owner chose in the source is releasable although the earlier uncertain job exists 579ms
+ ❯ tests/integration/zz-recheck-b2-restore.test.ts (12 tests | 2 failed) 6995ms
+   ❯ RECHECK-B2: release of a held superseded send after a restore (12)
+     × E1 a held send of the NEWEST revision is releasable although an older revision was delivered before it (no over-blocking) 491ms
+     × D1 a second restore taken while the correction waited holds both jobs; the superseded one must stay held 612ms
+
+ Test Files  2 failed (2)
+      Tests  4 failed | 13 passed (17)
+   Start at  00:23:20
+   Duration  8.05s (tests 84%, transform 9%, import 7%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/zz-recheck-b2-restore.test.ts > RECHECK-B2: release of a held superseded send after a restore > E1 a held send of the NEWEST revision is releasable although an older revision was delivered before it (no over-blocking)
+AssertionError: expected { outcome: 'refused', …(1) } to deeply equal { outcome: 'released' }
+
+- Expected
++ Received
+
+  {
+-   "outcome": "released",
++   "code": "superseded_by_later_send",
++   "outcome": "refused",
+  }
+
+ ❯ tests/integration/zz-recheck-b2-restore.test.ts:349:21
+    347|     const release = releaseHeldJob(db, clock, held);
+    348|     note('E1', 'releaseHeldJob(revision 2 job)', release);
+    349|     expect(release).toEqual({ outcome: 'released' });
+       |                     ^
+    350|   });
+    351|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-restore.test.ts > RECHECK-B2: release of a held superseded send after a restore > D1 a second restore taken while the correction waited holds both jobs; the superseded one must stay held
+AssertionError: expected { released: +0, refused: { …(1) } } to deeply equal { released: 1, refused: { …(1) } }
+
+- Expected
++ Received
+
+  {
+    "refused": {
+-     "superseded_by_later_send": 1,
++     "superseded_by_later_send": 2,
+    },
+-   "released": 1,
++   "released": 0,
+  }
+
+ ❯ tests/integration/zz-recheck-b2-restore.test.ts:373:18
+    371|     note('D1', 'capture pass', await capturePass(r2, 'rb2-d1'));
+    372|     note('D1', 'attempts in order', attempts(db2).map((a) => [a.revisi…
+    373|     expect(bulk).toEqual({ released: 1, refused: { superseded_by_later…
+       |                  ^
+    374|   });
+    375| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  tests/integration/zz-recheck-b3-restore.test.ts > RECHECK-B3: FIX16 rule in further shapes > X3 no over-blocking: an EARLIER failed job of the period does not hold the newest revision's held send; release audited with ids and kind only
+AssertionError: expected [ [ 'revision 2 held', …(1) ] ] to deeply equal [ [ 'revision 2 held', null ] ]
+
+- Expected
++ Received
+
+  [
+    [
+      "revision 2 held",
+-     null,
++     "superseded_by_later_send",
+    ],
+  ]
+
+ ❯ tests/integration/zz-recheck-b3-restore.test.ts:258:22
+    256|     }));
+    257|     note('X3', 'release audit events', audits);
+    258|     expect(blockers).toEqual([['revision 2 held', null]]);
+       |                      ^
+    259|     expect(bulk).toEqual({ released: 1, refused: {} });
+    260|     expect(attempts(r.db)).toEqual([
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  tests/integration/zz-recheck-b3-restore.test.ts > RECHECK-B3: FIX16 rule in further shapes > X4 no over-blocking: the held resend the owner chose in the source is releasable although the earlier uncertain job exists
+AssertionError: expected [ [ 'the resend job (held)', …(1) ] ] to deeply equal [ [ 'the resend job (held)', null ] ]
+
+- Expected
++ Received
+
+  [
+    [
+      "the resend job (held)",
+-     null,
++     "superseded_by_later_send",
+    ],
+  ]
+
+ ❯ tests/integration/zz-recheck-b3-restore.test.ts:294:22
+    292|     await capturePass(r, 'rb3-x4b');
+    293|     note('X4', 'attempts after capture passes', attempts(r.db));
+    294|     expect(blockers).toEqual([['the resend job (held)', null]]);
+       |                      ^
+    295|     expect(byId).toEqual({ outcome: 'released' });
+    296|     expect(attempts(r.db)).toEqual([
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯

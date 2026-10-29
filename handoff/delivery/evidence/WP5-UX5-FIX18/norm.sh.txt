@@ -1,0 +1,8 @@
+# Normalises the shell-written evidence text files in place: LF line ends (the PowerShell census wrote CRLF), no ANSI colour codes (npm and vite output),
+# no trailing blank lines, exactly one newline at the end. Files that are empty are left alone (written by hand afterwards). Scripts are not touched.
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-FIX18/env.sh.txt
+for f in $E/*.txt; do
+  case "$f" in *.sh.txt|*.mjs.txt|*.ts.txt) continue ;; esac
+  [ -s "$f" ] || continue
+  awk '{ sub(/\r$/, ""); gsub(/\033\[[0-9;]*m/, ""); a[NR] = $0; if ($0 != "") last = NR } END { for (i = 1; i <= last; i++) print a[i] }' "$f" > "$f.norm" && mv "$f.norm" "$f"
+done

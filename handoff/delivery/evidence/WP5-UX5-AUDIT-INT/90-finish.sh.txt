@@ -1,0 +1,10 @@
+# The last checks: digest after (three forms), HEAD and status after, process-name counts (no command lines).
+. <task>/env.sh
+O=$T/out
+bash $T/digest.sh after > $T/logs/digest-after.txt 2>&1
+cd $REPO
+{ echo "HEAD $(git rev-parse HEAD)"; echo "origin/main $(git rev-parse origin/main)"; echo "branch $(git branch --show-current)"; } > $O/00-head-after.txt 2>&1
+git status --short -- . ':!handoff' > $O/00-nonhandoff-status-after.txt 2>&1
+echo "non-handoff status lines: $(wc -l < $O/00-nonhandoff-status-after.txt)" >> $O/00-nonhandoff-status-after.txt
+powershell.exe -NoProfile -Command "Get-Process | Group-Object ProcessName | Where-Object { \$_.Name -in @('node','msedge','bash','playwright') } | Select-Object Name,Count | Format-Table -AutoSize | Out-String -Width 200" > $O/99-process-counts-end.txt 2>&1
+echo finish-done > $O/finish.done

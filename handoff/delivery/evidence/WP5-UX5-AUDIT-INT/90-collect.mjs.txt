@@ -1,0 +1,34 @@
+// Copies task outputs into the evidence folder as masked LF text with exactly one trailing newline.
+// Usage: node collect.mjs <evidenceDir> <src>=<name> [<src>=<name> ...]   (name must end in .txt or -synthetic.png)
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
+
+const [dest, ...pairs] = process.argv.slice(2);
+mkdirSync(dest, { recursive: true });
+const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]/g;
+const masks = [
+  [/D:\\\\?\.claude-tmp\\\\?timesheet\\\\?WP5-UX5-AUDIT-INT/gi, '<task>'],
+  [/D:\/\.claude-tmp\/timesheet\/WP5-UX5-AUDIT-INT/gi, '<task>'],
+  [/\/d\/\.claude-tmp\/timesheet\/WP5-UX5-AUDIT-INT/gi, '<task>'],
+  [/D:\\\\?Dropbox\\\\?Work\.CDSemi\\\\?timesheet/gi, '<repo>'],
+  [/D:\/Dropbox\/Work\.CDSemi\/timesheet/gi, '<repo>'],
+  [/\/d\/Dropbox\/Work\.CDSemi\/timesheet/gi, '<repo>'],
+  [/([A-Za-z]:[\\/]+Users[\\/]+)[^\\/\s'"]+/gi, '$1<user>'],
+  [/(\/[a-z]\/Users\/)[^/\s'"]+/gi, '$1<user>'],
+  [/D:\\\\?\.claude-tmp\\\\?claude[^\s'"]*/gi, '<claude-tmp>'],
+];
+for (const pair of pairs) {
+  const index = pair.lastIndexOf('=');
+  const src = pair.slice(0, index);
+  const name = pair.slice(index + 1) || basename(src);
+  if (name.endsWith('-synthetic.png')) {
+    copyFileSync(src, join(dest, name));
+    continue;
+  }
+  if (!name.endsWith('.txt')) throw new Error(`evidence name must end in .txt or -synthetic.png: ${name}`);
+  let text = readFileSync(src, 'utf8').replace(/\r\n?/g, '\n').replace(ANSI, '');
+  for (const [pattern, replacement] of masks) text = text.replace(pattern, replacement);
+  text = `${text.replace(/\n+$/, '')}\n`;
+  writeFileSync(join(dest, name), text);
+}
+console.log(`collected ${pairs.length} files into ${dest.replace(/.*evidence/, 'evidence')}`);

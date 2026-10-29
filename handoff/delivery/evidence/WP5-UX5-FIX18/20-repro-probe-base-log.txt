@@ -1,0 +1,46 @@
+== probe-base: real start 2026-10-29T09:23:51Z, simulated start real, AB8_SHIFT_MS=0, export export-base
+process clock 2026-10-29T09:23:51.405Z (Date.now 1793265831415); America/Los_Angeles Thu, 2026-10-29, 02:23; shift ms 0; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/zz-int-clock-editor.spec.ts --project=desktop --workers=1 --output=<task>/pw-probe-base
+
+Running 3 tests using 1 worker
+
+  x  1 [desktop] › tests\e2e\zz-int-clock-editor.spec.ts:17:1 › audit-int: an unsaved note in the open Day editor across a check in and out from the page (1440px) (10.5s)
+  ok 2 [desktop] › tests\e2e\zz-int-clock-editor.spec.ts:56:3 › audit-int: the open Day editor and a check in and out from the page (1440px) (3.5s)
+  ok 3 [desktop] › tests\e2e\zz-int-clock-editor.spec.ts:56:3 › audit-int: the open Day editor and a check in and out from the page (1280px) (3.3s)
+
+
+  1) [desktop] › tests\e2e\zz-int-clock-editor.spec.ts:17:1 › audit-int: an unsaved note in the open Day editor across a check in and out from the page (1440px) 
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "Synthetic unsaved note, clock probe"
+    Received: ""
+
+    Call Log:
+    - Timeout 7000ms exceeded while waiting on the predicate
+
+      47 |   log(`after Check out: note "${await notes.inputValue()}"; editor cards: ${await cards(editor)}; server ${(await employeeSeed.dayView(todayLocal)).sessions.map((session) => (session.end_utc === null ? 'running' : 'ended')).join(', ')}`);
+      48 |   await editor.getByRole('button', { name: 'Save day fields' }).click();
+    > 49 |   await expect.poll(async () => (await employeeSeed.dayView(todayLocal)).entry?.notes ?? '').toBe('Synthetic unsaved note, clock probe');
+         |                                                                                              ^
+      50 |   log(`Save day fields after the clock actions: saved note "${(await employeeSeed.dayView(todayLocal)).entry?.notes ?? ''}"; editor cards: ${await cards(editor)}`);
+      51 |   await employeeSeed.clearSessions(todayLocal, 'audit-int probe cleanup');
+      52 |   await employeeSeed.resetDay(todayLocal).catch(() => undefined);
+        at D:\.claude-tmp\timesheet\WP5-UX5-FIX18\export-base\tests\e2e\zz-int-clock-editor.spec.ts:49:94
+
+    Error Context: ..\pw-probe-base\zz-int-clock-editor-audit--c9f9b-d-out-from-the-page-1440px--desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-probe-base\zz-int-clock-editor-audit--c9f9b-d-out-from-the-page-1440px--desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-probe-base\zz-int-clock-editor-audit--c9f9b-d-out-from-the-page-1440px--desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\zz-int-clock-editor.spec.ts:17:1 › audit-int: an unsaved note in the open Day editor across a check in and out from the page (1440px) 
+  2 passed (22.2s)
+exit=1
+process clock 2026-10-29T09:24:14.012Z (Date.now 1793265854021); America/Los_Angeles Thu, 2026-10-29, 02:24; shift ms 0; instanceof true
+== probe-base real end 2026-10-29T09:24:14Z

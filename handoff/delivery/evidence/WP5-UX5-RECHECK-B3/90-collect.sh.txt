@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# Copies the task's logs and scripts into the evidence folder as masked LF .txt (mask.mjs), one final newline each.
+source <task>/env.sh
+EV="$REPO/handoff/delivery/evidence/WP5-UX5-RECHECK-B3"
+mkdir -p "$EV"
+TW=$(cygpath -m "$T")
+L=$TW/logs
+pairs=(
+  "$TW/evidence-README.txt=00-README.txt"
+  "$L/digest-before.txt=00-digest-before.txt"
+  "$L/digest-after.txt=00-digest-after.txt"
+  "$L/01-author-models.txt=01-author-models.txt"
+  "$L/namestatus.txt=02-change-scope.txt"
+  "$L/diff-src-docs.txt=02-diff-src-docs.txt"
+  "$L/diff-tests-integ.txt=02-diff-tests-integration.txt"
+  "$L/diff-stat-fix17.txt=02-diffstat-fix17.txt"
+  "$L/census-start.txt=03-census-start.txt"
+  "$L/census-end.txt=03-census-end.txt"
+  "$L/setup.txt=10-setup.txt"
+  "$L/chain1-exits.txt=10-chain1-exits.txt"
+  "$L/chain1-summary.txt=10-chain1-summary.txt"
+  "$L/c1-typecheck.log=10-chain1-typecheck.txt"
+  "$L/c1-lint.log=10-chain1-lint.txt"
+  "$L/c1-build.log=10-chain1-build.txt"
+  "$L/c1-test.log=10-chain1-test.txt"
+  "$L/c1-integ.log=10-chain1-integration.txt"
+  "$L/c1-ac13.log=10-chain1-ac13-tokyo.txt"
+  "$L/e2e-exits.txt=11-e2e-exits.txt"
+  "$L/e2e-summary.txt=11-e2e-summary.txt"
+  "$L/e2e-run1.log=11-e2e-run1.txt"
+  "$L/cancelled-history.txt=20-cancelled-writers-and-docs.txt"
+  "$L/cancelled-history2.txt=20-cancelled-writers-history.txt"
+  "$L/cancelled-history3.txt=20-cancelled-drop-guard-original.txt"
+  "$L/docs-parity.txt=21-docs-parity.txt"
+  "$L/docs-linecounts.txt=21-docs-linecounts.txt"
+  "$L/drill-grep.txt=22-drill-release-grep.txt"
+  "$L/diff-e2e-fix17.txt=23-diff-e2e-fix17.txt"
+  "$L/probes-exits.txt=40-probes-exits.txt"
+  "$L/b2-restore-probe-run1-vitest.txt=40-b2-restore-probe-vitest.txt"
+  "$L/b2-restore-probe-run1.jsonl=40-b2-restore-probe-observations.txt"
+  "$L/b3-restore-probe-run1-vitest.txt=41-b3-restore-probe-run1-vitest.txt"
+  "$L/b3-restore-probe-run1.jsonl=41-b3-restore-probe-run1-observations.txt"
+  "$TW/zz-recheck-b3-restore-run1.test.ts=41-b3-restore-probe-run1.ts.txt"
+  "$L/b3-restore-probe-run2-vitest.txt=41-b3-restore-probe-run2-vitest.txt"
+  "$L/b3-restore-probe-run2.jsonl=41-b3-restore-probe-run2-observations.txt"
+  "$TW/zz-recheck-b3-restore.test.ts=41-b3-restore-probe-run2.ts.txt"
+  "$TW/probes2.sh=90-probes2.sh.txt"
+  "$TW/finish.sh=90-finish.sh.txt"
+  "$L/reasons-all.txt=60-mutants-failing-lines.txt"
+  "$L/census-pre-e2e.txt=03-census-pre-e2e.txt"
+  "$L/census-mid-e2e.txt=03-census-mid-e2e.txt"
+  "$L/stale-predicate-grep.txt=24-stale-predicate-grep.txt"
+  "$L/b2-http-restore-run1.txt=50-b2-http-restore.txt"
+  "$L/b2-http-restore-run1.stdout.txt=50-b2-http-restore-stdout.txt"
+  "$L/probe-build.txt=50-probe-export-build.txt"
+  "$L/midnight-exits.txt=42-b2-midnight-probe-exits.txt"
+  "$L/b2-midnight-probe-vitest.txt=42-b2-midnight-probe-vitest.txt"
+  "$L/b2-midnight-probe.jsonl=42-b2-midnight-probe-observations.txt"
+  "$TW/mutants.mjs=60-mutants.mjs.txt"
+  "$L/mutants-summary.txt=60-mutants-summary.txt"
+  "$L/mut-N5-E1-detail.txt=60-mutant-N5-E1-detail.txt"
+  "$TW/env.sh=90-env.sh.txt"
+  "$TW/setup.sh=90-setup.sh.txt"
+  "$TW/chain1.sh=90-chain1.sh.txt"
+  "$TW/probes.sh=90-probes.sh.txt"
+  "$TW/midnight.sh=90-midnight.sh.txt"
+  "$TW/e2e.sh=90-e2e.sh.txt"
+  "$TW/digest.sh=90-digest.sh.txt"
+  "$TW/lstree-digest.mjs=90-lstree-digest.mjs.txt"
+  "$TW/exportdigest.mjs=90-exportdigest.mjs.txt"
+  "$TW/mask.mjs=90-mask.mjs.txt"
+  "$TW/parity.mjs=90-parity.mjs.txt"
+  "$TW/board-authors.mjs=90-board-authors.mjs.txt"
+  "$TW/run-tz.mjs=90-run-tz.mjs.txt"
+  "$TW/tzprobe.mjs=90-tzprobe.mjs.txt"
+  "$TW/collect.sh=90-collect.sh.txt"
+  "$L/leftover-check.txt=99-leftover-check.txt"
+)
+for f in "$T"/logs/mut-*-targeted.log "$T"/logs/mut-*-full.log; do
+  [ -f "$f" ] || continue
+  b=$(basename "$f" .log)
+  pairs+=("$L/$b.log=61-$b.txt")
+done
+for f in "$T"/logs/mut-*-reasons.txt; do
+  [ -f "$f" ] || continue
+  b=$(basename "$f" .txt)
+  pairs+=("$L/$b.txt=61-$b.txt")
+done
+for f in "$T"/logs/mut-*.jsonl; do
+  [ -f "$f" ] || continue
+  b=$(basename "$f" .jsonl)
+  pairs+=("$L/$b.jsonl=61-$b-observations.txt")
+done
+node "$T/mask.mjs" "$(cygpath -w "$EV")" "${pairs[@]}" > "$T/logs/collect-out.txt" 2>&1
+echo "collect exit=$?" >> "$T/logs/collect-out.txt"

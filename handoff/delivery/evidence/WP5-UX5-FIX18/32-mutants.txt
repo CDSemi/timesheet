@@ -1,0 +1,20 @@
+WP5-UX5-FIX18 mutants. Lab: export-fix (a scratch export of the working tree, own npm ci). Each mutant: one edit by the Edit tool, `npm run build:client` (mutrun.sh.txt), then the
+tests of the FIX18 describe on the desktop project, real clock, one worker. After each run the file was copied back from a byte copy of the repository file (orig/) and
+compared with the repository file (cmp exit 0, 31-mutants-restored-cmp.txt); after the last restore the client was rebuilt and `diff -rq export-fix/dist export-final/dist` is empty.
+The four FIX18 tests: T1 = Check in and Check out at 1440px, T2 = the same at 1280px, T3 = the change-from-elsewhere case, T4 = the open session dialog when the tab comes back into view.
+
+M1 the clock-version refresh removed (TimesheetScreen: `setEditorFollow(...)` deleted)            log 30-mut-m1-no-follow-log.txt        T1 T2 T3 T4 all failed (4 failed)
+   T1/T2 fail at the Running card ("Expected 1, received 0"); T3/T4 fail at the wait for the editor's read of its day.
+M2 a refresh with a generation bump (the forms restart; `setGeneration(+1)` after `setDay`)        log 30-mut-m2-generation-bump-log.txt   T1 T2 failed (2 failed, "toHaveValue": the note is gone); T3 T4 passed
+M3 the field guard removed (`setDay(fresh)` for any fresh day)                                     log 30-mut-m3-no-field-guard-log.txt    T3 failed (the stale notice never shows, the save overwrites the other device's note); T1 T2 T4 passed
+M4 the dialog-open guard removed (a read arriving under an open session dialog is taken)           log 30-mut-m4-no-nested-guard-log.txt   T4 failed (the typed End time is gone); T1 T2 T3 passed
+M5 the phone gate removed (`if (modal) return;` deleted)                                           log 30-mut-m5-no-modal-gate-log.txt     the probe reads the bottom sheet's day once (mobile "1 read(s) of the open day" instead of 0);
+                                                                                                   log 30-mut-m5-phone-test-log.txt        the added phone test failed ("Received length: 1")
+M6 the follow raised on every period reload, not only on a clock-version change                   log 30-mut-m6-follow-on-any-reload-log.txt  all passed (4 + the two existing stale tests): see below
+
+M6 cannot be told apart by the suite, and cannot in the product either. The clock context raises one counter, `version`, for the page's own Check in and Check out and also when the tab
+comes back into view on the Timesheet page (ClockProvider.tsx, `afterAction` and `onVisible`; that file is not an owned path of this task). So the page cannot tell the page's own action from a
+return to the tab, and a refresh "on any change" is the same refresh. What keeps a change from elsewhere safe is the data guard, not the trigger: the fresh day is taken only when the day's
+fields equal the day the editor holds (sameDayFields) and no session dialog or delete confirmation is open. M3 and M4 remove those two guards and the suite kills both; M6 only widens the trigger,
+and the guards still decide, so every test passes by design. The existing "a day changed elsewhere reports a stale version and reloads" and "a stale session version at save reports the
+conflict" pass on the unchanged product (21-newtest-on-base-log.txt, the first of the two), on the fix (24-newtest-on-fix-log.txt) and under M6.

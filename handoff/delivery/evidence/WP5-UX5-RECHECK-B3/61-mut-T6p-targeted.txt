@@ -1,0 +1,171 @@
+
+ RUN  v5.0.2 <task>/probe
+
+ ❯ tests/integration/zz-recheck-b2-midnight.test.ts (11 tests | 7 failed) 2687ms
+   ❯ RECHECK-B2: check-in dates at the reporting-zone midnight (4)
+     × M1 2026-10-27T07:00:00Z (PDT midnight, mid-period): -1 s files 10-26, 0 s and +1 s file 10-27 227ms
+     × M2 overnight from 06:59:59Z: open on 10-26 after the midnight, found by the page, checked out after it, still 10-26 191ms
+     × M4 a period-boundary midnight: the session of the last day of a period is still found by the page after the midnight 405ms
+   ❯ RECHECK-B2: what the page shows for the overnight session (client model, rule 7) (1)
+     × M5 the running session found after the midnight reads "since 23:59, Mon 10/26" in LA and the instant in another device zone; its day stays 10-26 206ms
+   ❯ RECHECK-B2: the DST nights of America/Los_Angeles (6)
+     × N1 2026-11-01 (fall back): midnight 07:00Z files -1 s on 10-31 and +1 s on 11-01; the 25-hour day ends at 08:00Z on 11-02 196ms
+     × N4 2027-03-14 (spring forward): midnight 08:00Z files -1 s on 03-13 and +1 s on 03-14; the 23-hour day ends at 07:00Z on 03-15 198ms
+     × N6 the DST-night midnight sessions open across the midnight and are found by the page (11-01 and 03-14) 212ms
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 4 passed (11)
+   Start at  00:28:05
+   Duration  3.55s (tests 78%, transform 14%, import 8%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/zz-recheck-b2-midnight.test.ts > RECHECK-B2: check-in dates at the reporting-zone midnight > M1 2026-10-27T07:00:00Z (PDT midnight, mid-period): -1 s files 10-26, 0 s and +1 s file 10-27
+AssertionError: expected { …(9) } to match object { work_date: '2026-10-26', …(3) }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "end_utc": null,
+    "input_zone": "America/Los_Angeles",
+    "start_utc": "2026-10-27T06:59:59Z",
+-   "work_date": "2026-10-26",
++   "work_date": "2026-10-27",
+  }
+
+ ❯ boundary tests/integration/zz-recheck-b2-midnight.test.ts:50:30
+     48|     note(caseId, `check-in at ${iso(offset)} (${label})`, [res.status,…
+     49|     expect(res.status, JSON.stringify(res.body)).toBe(201);
+     50|     expect(res.body.session).toMatchObject({ work_date: expected, star…
+       |                              ^
+     51|     results.push([label, res.body.session.work_date]);
+     52|     c.t.close();
+ ❯ tests/integration/zz-recheck-b2-midnight.test.ts:60:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-midnight.test.ts > RECHECK-B2: check-in dates at the reporting-zone midnight > M2 overnight from 06:59:59Z: open on 10-26 after the midnight, found by the page, checked out after it, still 10-26
+AssertionError: expected { …(9) } to match object { work_date: '2026-10-26', …(1) }
+(7 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "end_utc": null,
+-   "work_date": "2026-10-26",
++   "work_date": "2026-10-27",
+  }
+
+ ❯ tests/integration/zz-recheck-b2-midnight.test.ts:66:33
+     64|     const c = await at('2026-10-27T06:59:59Z');
+     65|     const opened = await clockIn(c);
+     66|     expect(opened.body.session).toMatchObject({ work_date: '2026-10-26…
+       |                                 ^
+     67|     c.t.clock.set('2026-10-27T07:30:00Z');
+     68|     const finds = await pageFinds(c);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-midnight.test.ts > RECHECK-B2: check-in dates at the reporting-zone midnight > M4 a period-boundary midnight: the session of the last day of a period is still found by the page after the midnight
+AssertionError: expected '2026-11-09' to be '2026-11-08' // Object.is equality
+
+Expected: "2026-11-08"
+Received: "2026-11-09"
+
+ ❯ tests/integration/zz-recheck-b2-midnight.test.ts:112:43
+    110|     const c = await at(new Date(Date.parse(midnight) - 1000).toISOStri…
+    111|     const opened = await clockIn(c);
+    112|     expect(opened.body.session.work_date).toBe(lastDay);
+       |                                           ^
+    113|     c.t.clock.set(new Date(Date.parse(midnight) + 3600000).toISOString…
+    114|     const finds = await pageFinds(c);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-midnight.test.ts > RECHECK-B2: what the page shows for the overnight session (client model, rule 7) > M5 the running session found after the midnight reads "since 23:59, Mon 10/26" in LA and the instant in another device zone; its day stays 10-26
+AssertionError: expected '2026-10-27' to be '2026-10-26' // Object.is equality
+
+Expected: "2026-10-26"
+Received: "2026-10-27"
+
+ ❯ tests/integration/zz-recheck-b2-midnight.test.ts:138:26
+    136|     const tokyo = running === undefined ? null : clockedInText(running…
+    137|     note('M5', 'running session day / text in LA / text in Asia/Tokyo'…
+    138|     expect(dayOfRunning).toBe('2026-10-26');
+       |                          ^
+    139|     expect(la).toEqual({ time: '23:59', day: 'Mon 10/26' });
+    140|     expect(tokyo).toEqual({ time: '15:59', day: 'Tue 10/27' });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-midnight.test.ts > RECHECK-B2: the DST nights of America/Los_Angeles > N1 2026-11-01 (fall back): midnight 07:00Z files -1 s on 10-31 and +1 s on 11-01; the 25-hour day ends at 08:00Z on 11-02
+AssertionError: expected { …(9) } to match object { work_date: '2026-10-31', …(3) }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "end_utc": null,
+    "input_zone": "America/Los_Angeles",
+    "start_utc": "2026-11-01T06:59:59Z",
+-   "work_date": "2026-10-31",
++   "work_date": "2026-11-01",
+  }
+
+ ❯ boundary tests/integration/zz-recheck-b2-midnight.test.ts:50:30
+     48|     note(caseId, `check-in at ${iso(offset)} (${label})`, [res.status,…
+     49|     expect(res.status, JSON.stringify(res.body)).toBe(201);
+     50|     expect(res.body.session).toMatchObject({ work_date: expected, star…
+       |                              ^
+     51|     results.push([label, res.body.session.work_date]);
+     52|     c.t.close();
+ ❯ tests/integration/zz-recheck-b2-midnight.test.ts:146:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-midnight.test.ts > RECHECK-B2: the DST nights of America/Los_Angeles > N4 2027-03-14 (spring forward): midnight 08:00Z files -1 s on 03-13 and +1 s on 03-14; the 23-hour day ends at 07:00Z on 03-15
+AssertionError: expected { …(9) } to match object { work_date: '2027-03-13', …(3) }
+(5 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "end_utc": null,
+    "input_zone": "America/Los_Angeles",
+    "start_utc": "2027-03-14T07:59:59Z",
+-   "work_date": "2027-03-13",
++   "work_date": "2027-03-14",
+  }
+
+ ❯ boundary tests/integration/zz-recheck-b2-midnight.test.ts:50:30
+     48|     note(caseId, `check-in at ${iso(offset)} (${label})`, [res.status,…
+     49|     expect(res.status, JSON.stringify(res.body)).toBe(201);
+     50|     expect(res.body.session).toMatchObject({ work_date: expected, star…
+       |                              ^
+     51|     results.push([label, res.body.session.work_date]);
+     52|     c.t.close();
+ ❯ tests/integration/zz-recheck-b2-midnight.test.ts:175:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  tests/integration/zz-recheck-b2-midnight.test.ts > RECHECK-B2: the DST nights of America/Los_Angeles > N6 the DST-night midnight sessions open across the midnight and are found by the page (11-01 and 03-14)
+AssertionError: expected '2026-11-01' to be '2026-10-31' // Object.is equality
+
+Expected: "2026-10-31"
+Received: "2026-11-01"
+
+ ❯ tests/integration/zz-recheck-b2-midnight.test.ts:203:45
+    201|       const d = await day(c, startDate);
+    202|       note('N6', `check-in ${start}, read at ${later}`, [opened.body.s…
+    203|       expect(opened.body.session.work_date).toBe(startDate);
+       |                                             ^
+    204|       expect(finds.found.some((item) => item.endsWith(`:${startDate}`)…
+    205|       c.t.close();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯

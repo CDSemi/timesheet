@@ -1,0 +1,25 @@
+// One Playwright run under a self-stopping CPU burner, with a census calculation right after.
+// Usage: node burnrun.mjs <label> <burnerThreads> <burnerSeconds> <instant|real> <playwright args...>
+// Env SHIFT_EXPORT selects the export (default: the pristine export). The burner ends by itself at its deadline; this driver waits for it.
+import { spawn } from 'node:child_process';
+
+const [label, threads, seconds, instant, ...extra] = process.argv.slice(2);
+const T = '<task>';
+const bash = 'C:\\Program Files\\Git\\bin\\bash.exe';
+
+function run(command, args) {
+  return new Promise((resolve) => {
+    const child = spawn(command, args, { stdio: 'inherit', env: process.env });
+    child.on('exit', (code) => resolve(code ?? -1));
+  });
+}
+
+let burnerDone = Promise.resolve(0);
+if (Number(threads) > 0) {
+  burnerDone = run(process.execPath, ['<task>/burn.mjs', threads, seconds]);
+}
+console.log(`burnrun ${label}: start ${new Date().toISOString()}`);
+const code = await run(bash, [`${T}/run-shift.sh`, label, instant, ...extra]);
+console.log(`burnrun ${label}: playwright wrapper exit ${code} at ${new Date().toISOString()}`);
+await burnerDone;
+console.log(`burnrun ${label}: burner ended ${new Date().toISOString()}`);

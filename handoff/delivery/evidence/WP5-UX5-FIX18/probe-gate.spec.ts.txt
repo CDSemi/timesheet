@@ -1,0 +1,33 @@
+// WP5-UX5-FIX18 probe (the worker's own, not part of the repository): does the open Day editor read its day again when the clock version changes?
+// Run in a scratch export as tests/e2e/zz-fix18-gate.spec.ts, on both projects. The tab coming back into view raises the clock version on the
+// Timesheet page (the period reloads). The drawer (desktop) then reads its day once more; the phone's modal bottom sheet must not.
+// The count of GET /api/days/<date> after the event goes to FIX18_OUT.
+import { appendFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { expect, test } from './fixtures.ts';
+
+const OUT = process.env.FIX18_OUT ?? join(resolve(import.meta.dirname, '..', '..'), '..', 'fix18-gate-obs.txt');
+
+test('fix18 gate: GET /api/days/<date> after the clock version changes with the editor open', async ({ page, employeeSeed, signInThroughUi }, testInfo) => {
+  const [date = ''] = await employeeSeed.displayedPeriodFreeWorkdays();
+  expect(date).not.toBe('');
+  await signInThroughUi();
+  await expect(page.locator('[data-day]').first()).toBeVisible();
+  await page.getByLabel('Open a day').fill(date);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('heading', { name: 'Times', exact: true })).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  const reads: string[] = [];
+  page.on('request', (request) => {
+    const { pathname } = new URL(request.url());
+    if (request.method() === 'GET' && (pathname === `/api/days/${date}` || pathname.startsWith('/api/timesheets/'))) reads.push(pathname);
+  });
+  // The tab becomes visible again: the clock provider raises its version, the sheet reloads its period.
+  await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
+  await expect.poll(() => reads.filter((path) => path.startsWith('/api/timesheets/')).length).toBeGreaterThan(0);
+  await page.waitForLoadState('networkidle');
+  const days = reads.filter((path) => path === `/api/days/${date}`).length;
+  appendFileSync(OUT, `[${testInfo.project.name}] modal sheet ${testInfo.project.name === 'mobile'}; after the event: ${reads.filter((path) => path.startsWith('/api/timesheets/')).length} period read(s), ${days} read(s) of the open day\n`);
+});

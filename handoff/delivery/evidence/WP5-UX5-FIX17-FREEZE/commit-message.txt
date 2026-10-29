@@ -1,0 +1,21 @@
+Keep e2e steps off browser tabs that are behind, so a busy host cannot starve them
+
+- test(e2e):
+  - import.spec.ts: bringToFront before each step on a tab that may be behind, in
+    its two two-tab tests. On a saturated host, Chromium ran the tab behind at idle
+    priority. The Confirm click then never completed, and the test timed out,
+    although the server answered in milliseconds.
+  - today.spec.ts: the midnight-crossing test opens its second page in a browser
+    context of its own. Before, a second tab put the first page behind. A context of
+    its own also leaves the focus and visibility events, which the test is about,
+    unchanged.
+- docs(handoff): REGATE11 (FAIL), DIAG10 and FIX17, the FIX16-FREEZE outputs, the
+  REGATE12 brief, the RECHECK-B3 and AUDIT-INT briefs moved to REGATE12, the board,
+  the checkpoint (+ vi), STATE and NEXT_ACTION (+ vi).
+
+Task: WP5-UX5-FIX17 (after WP5-UX5-REGATE11; diagnosis WP5-UX5-DIAG10)
+Gate: WP5-UX5-REGATE11 FAIL on 1fe5ad3; REGATE12 pending
+Audit: WP5-UX5-RECHECK-B3 and WP5-UX5-AUDIT-INT pending
+Digest: 69c6daff305dca839a7128e7b7509f3063c165fe5653d1c73159ea41c003e6bf
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

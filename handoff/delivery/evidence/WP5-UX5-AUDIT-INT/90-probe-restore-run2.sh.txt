@@ -1,0 +1,21 @@
+# Reruns after probe defects of run 1, and one more probe (started beside the rest of master2; the harness port helper moves to the next
+# free port in 51470-51489 when one is taken; every run has its own output folder and observation file).
+# - restore probe: run 1 read the CLI's JSON together with a Node warning on stderr (so the held job id was empty and the release printed
+#   the usage) and its stop() waited for an exit that had already happened (the test then ran into its 15-minute timeout);
+# - shared-view probe: run 1 pressed the page title where the floating drawer covered it (the click waited until the test timeout) and
+#   ran axe right after a colour-scheme change, while the colours were still in transition;
+# - clock-editor probe (new): the open Day editor and a check in and out from the page.
+. <task>/env.sh
+cd $T
+X=$T/export-probe
+O=$T/out
+P=$O/40-probe-exits-run2.txt
+cp probes/zz-int-restore.spec.ts probes/zz-int-clock-editor.spec.ts probes/zz-int-shared.spec.ts $X/tests/e2e/
+bash census.sh pre-probe-restore-run2 5
+INT_WORK="$TW\\probe-work\\restore-run2" SHIFT_EXPORT=$X bash run-shift.sh probe-restore-run2 real tests/e2e/zz-int-restore.spec.ts --project=desktop --workers=1 > $O/41-log-probe-restore-run2.txt 2>&1
+echo "probe-restore-run2 exit $(grep -E '^exit=' $O/41-log-probe-restore-run2.txt)" >> $P
+SHIFT_EXPORT=$X bash run-shift.sh probe-clock-editor real tests/e2e/zz-int-clock-editor.spec.ts --project=desktop --workers=1 > $O/41-log-probe-clock-editor.txt 2>&1
+echo "probe-clock-editor exit $(grep -E '^exit=' $O/41-log-probe-clock-editor.txt)" >> $P
+INT_OUT="$TW\\out\\43-obs-shared-run2.txt" SHIFT_EXPORT=$X bash run-shift.sh probe-shared-run2 real tests/e2e/zz-int-shared.spec.ts --workers=1 > $O/41-log-probe-shared-run2.txt 2>&1
+echo "probe-shared-run2 exit $(grep -E '^exit=' $O/41-log-probe-shared-run2.txt)" >> $P
+echo run2-done > $O/run2.done
