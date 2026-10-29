@@ -1,0 +1,104 @@
+"""Read-only comparison of three sample sets: T06 (69d6340), REGATE15 (dc487c6) and the auditor's own run (dc487c6).
+
+usage: python compare_samples.py <t06-dir> <regate15-dir> <own-dir> <out.txt>
+Pairs messages by envelope recipients + Subject (+ revision for the manual pair). Excluded: the comment lines
+(capture label, folder, eml sha256, pdf sha256/bytes, compared separately), Message-ID, MIME boundary strings.
+The submission ID TS-<yyyymmdd>-<10 hex> is normalised to TS-<id>. The Date header is reported separately.
+"""
+import glob
+import json
+import os
+import re
+import sys
+
+dirs = {"T06": sys.argv[1], "REGATE15": sys.argv[2], "OWN": sys.argv[3]}
+out_path = sys.argv[4]
+SID = re.compile(r"TS-\d{8}-[0-9a-f]{10}")
+BOUND = re.compile(r'boundary="[^"]*"')
+
+
+def load(d):
+    msgs = {}
+    for path in sorted(glob.glob(os.path.join(d, "msg-*.txt"))):
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        lines = text.split("\n")
+        env_to = next(l for l in lines if l.startswith("# Envelope to: "))[len("# Envelope to: "):]
+        subject = next(l for l in lines if l.startswith("Subject: "))[len("Subject: "):]
+        pdf_line = next((l for l in lines if l.startswith("# pdf sha256: ")), None)
+        body_start = lines.index("--- body (decoded) ---")
+        head_start = lines.index("--- headers (raw, as captured) ---")
+        headers = [l for l in lines[head_start + 1:body_start] if l.strip() != ""]
+        date = next((h for h in headers if h.startswith("Date: ")), "")
+        headers_cmp = [BOUND.sub('boundary="<b>"', h) for h in headers if not h.startswith("Message-ID: ") and not h.startswith("Date: ")]
+        body = "\n".join(lines[body_start + 1:]).rstrip("\n")
+        rev = re.search(r"revision (\d+)\.", body)
+        label = os.path.basename(path)[len("msg-"):-len(".txt")]
+        key = f"{env_to} | {subject} | rev {rev.group(1) if rev else '-'}"
+        pdf = None
+        if pdf_line:
+            m = re.match(r"# pdf sha256: ([0-9a-f]{64}) \((\d+) bytes\), attachments: (.*), mime parts: (.*)$", pdf_line)
+            pdf = {"sha": m.group(1), "bytes": int(m.group(2)), "att": m.group(3), "mime": m.group(4)}
+            tpath = os.path.join(d, f"pdf-text-{label}.txt")
+            with open(tpath, encoding="utf-8") as fh:
+                pdf["text"] = fh.read()
+        sid = SID.findall(body)
+        msgs[key] = {"label": label, "date": date, "headers": headers_cmp, "body": body, "pdf": pdf, "sid": sid}
+    return msgs
+
+
+sets = {k: load(v) for k, v in dirs.items()}
+out = []
+out.append("Sample comparison T06 (69d6340) / REGATE15 (dc487c6) / OWN (auditor's run, dc487c6)")
+out.append("Excluded: capture label, folder and eml sha256 comment lines, Message-ID, MIME boundary; submission ID normalised to TS-<id>; Date reported separately.")
+out.append(f"counts: T06 {len(sets['T06'])}, REGATE15 {len(sets['REGATE15'])}, OWN {len(sets['OWN'])}")
+keys = sorted(set().union(*[set(s) for s in sets.values()]))
+summary = {"identical_all": 0, "sid_only": 0, "other": 0}
+for key in keys:
+    out.append("")
+    out.append(f"KEY {key}")
+    present = {k: s.get(key) for k, s in sets.items()}
+    for k, v in present.items():
+        out.append(f"  {k}: {v['label'] if v else 'MISSING'}; {v['date'] if v else ''}; sid {v['sid'] if v else ''}")
+    if not all(present.values()):
+        summary["other"] += 1
+        continue
+    base = present["T06"]
+    verdicts = []
+    for k in ("REGATE15", "OWN"):
+        cur = present[k]
+        h_eq = cur["headers"] == base["headers"]
+        b_raw = cur["body"] == base["body"]
+        b_norm = SID.sub("TS-<id>", cur["body"]) == SID.sub("TS-<id>", base["body"])
+        d_eq = cur["date"] == base["date"]
+        line = f"  {k} vs T06: headers(excl. Date) equal {h_eq}; Date equal {d_eq}; body equal {b_raw}; body equal after ID normalised {b_norm}"
+        if base["pdf"] is not None:
+            p, q = base["pdf"], cur["pdf"]
+            t_raw = p["text"] == q["text"]
+            t_norm = SID.sub("TS-<id>", p["text"]) == SID.sub("TS-<id>", q["text"])
+            line += f"; pdf sha equal {p['sha'] == q['sha']} ({p['bytes']} vs {q['bytes']} bytes); attachment and MIME equal {p['att'] == q['att'] and p['mime'] == q['mime']}; pdf text equal {t_raw}; after ID normalised {t_norm}"
+            ok_norm = h_eq and b_norm and t_norm and p["att"] == q["att"] and p["mime"] == q["mime"]
+        else:
+            ok_norm = h_eq and b_norm
+        out.append(line)
+        if not h_eq:
+            for a, b in zip(base["headers"], cur["headers"]):
+                if a != b:
+                    out.append(f"    header diff: T06 {a!r} | {k} {b!r}")
+        if not b_norm:
+            out.append(f"    body T06: {base['body']!r}")
+            out.append(f"    body {k}: {cur['body']!r}")
+        verdicts.append((ok_norm, b_raw and h_eq and (base['pdf'] is None or base['pdf']['sha'] == cur['pdf']['sha']), d_eq))
+    if all(v[1] and v[2] for v in verdicts):
+        summary["identical_all"] += 1
+        out.append("  RESULT: identical in all three (Date included)")
+    elif all(v[0] for v in verdicts):
+        summary["sid_only"] += 1
+        out.append("  RESULT: equal after the submission ID is normalised" + ("" if all(v[2] for v in verdicts) else "; Date differs (see above)"))
+    else:
+        summary["other"] += 1
+        out.append("  RESULT: DIFFERS beyond the submission ID")
+out.append("")
+out.append(f"SUMMARY {json.dumps(summary)}")
+with open(out_path, "w", encoding="utf-8", newline="\n") as fh:
+    fh.write("\n".join(out) + "\n")

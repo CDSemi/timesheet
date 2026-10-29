@@ -1,0 +1,38 @@
+"""Read-only extraction of named tasks from the board. usage: python board_extract.py <board.json> <out.txt> <id-regex>"""
+import json
+import re
+import sys
+
+board_path, out_path, pattern = sys.argv[1], sys.argv[2], sys.argv[3]
+with open(board_path, encoding="utf-8") as fh:
+    board = json.load(fh)
+
+rx = re.compile(pattern)
+found = []
+
+
+def walk(node):
+    if isinstance(node, dict):
+        if isinstance(node.get("id"), str) and rx.fullmatch(node["id"]) and "kind" in node:
+            found.append(node)
+        for value in node.values():
+            walk(value)
+    elif isinstance(node, list):
+        for value in node:
+            walk(value)
+
+
+walk(board)
+keys = ["id", "kind", "status", "decision", "freeze_commit", "reviewed_commit", "commit_sha",
+        "baseline_commit", "source_digest", "reviewed_digest", "actual_model", "agent_id",
+        "author_agent_ids", "depends_on"]
+with open(out_path, "w", encoding="utf-8", newline="\n") as out:
+    for task in found:
+        for key in keys:
+            if key in task:
+                out.write(f"{key}: {task[key]}\n")
+        for key in ("gate_notes", "review_notes", "next_action"):
+            if key in task and task[key]:
+                out.write(f"{key}: {task[key]}\n")
+        out.write("\n")
+    out.write(f"matched {len(found)}\n")

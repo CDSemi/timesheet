@@ -1,0 +1,81 @@
+"""Read-only document checks on a clean export of the target.
+
+usage: python doccheck.py <export-root> <out.txt>
+For README.md / README.vi.md and docs/12_RELEASE_NOTES.md / .vi.md:
+- every markdown link target (relative, anchors stripped) exists in the export;
+- headings (levels), SHAs (hex 7..64 in backticks), task/decision IDs, numbers with units and link targets are compared EN vs VI.
+"""
+import os
+import re
+import sys
+
+root, out_path = sys.argv[1], sys.argv[2]
+pairs = [("README.md", "README.vi.md"), ("docs/12_RELEASE_NOTES.md", "docs/12_RELEASE_NOTES.vi.md")]
+link_rx = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
+sha_rx = re.compile(r"`([0-9a-f]{7,64})`")
+id_rx = re.compile(r"\b(?:WP\d(?:-UX\d?)?-[A-Z0-9]+(?:-[A-Z0-9]+)*|[DFGHE]-\d+|R-[A-Z0-9]+(?:-\d+)?|Q0|AC-\d+)\b")
+num_rx = re.compile(r"\b\d[\d,.]*\s?(?:px|PASS|FAIL|files|KB|pt|minutes|characters)\b")
+heading_rx = re.compile(r"^(#+)\s")
+lines_out = []
+
+
+def read(rel):
+    with open(os.path.join(root, rel), encoding="utf-8") as fh:
+        return fh.read()
+
+
+def norm_num(s):
+    return s.replace(",", "").replace(" ", "")
+
+
+for en, vi in pairs:
+    texts = {en: read(en), vi: read(vi)}
+    lines_out.append(f"== pair {en} / {vi}")
+    facts = {}
+    for rel, text in texts.items():
+        base = os.path.dirname(rel)
+        links = link_rx.findall(text)
+        missing = []
+        for target in links:
+            if re.match(r"^[a-z]+:", target):
+                continue
+            path = target.split("#", 1)[0]
+            if path == "":
+                continue
+            full = os.path.normpath(os.path.join(root, base, path))
+            if not os.path.exists(full):
+                missing.append(target)
+        heads = [len(m.group(1)) for line in text.splitlines() if (m := heading_rx.match(line))]
+        facts[rel] = {
+            "links": sorted(links),
+            "shas": sorted(sha_rx.findall(text)),
+            "ids": sorted(set(id_rx.findall(text))),
+            "nums": sorted(norm_num(n) for n in num_rx.findall(text)),
+            "heads": heads,
+            "lines": len(text.splitlines()),
+        }
+        lines_out.append(f"{rel}: lines {facts[rel]['lines']}, links {len(links)}, missing targets {len(missing)} {missing}, headings {heads}")
+    a, b = facts[en], facts[vi]
+    for key in ("shas", "ids", "heads"):
+        same = a[key] == b[key]
+        lines_out.append(f"{key} equal: {same}")
+        if not same:
+            sa, sb = set(a[key]), set(b[key])
+            lines_out.append(f"  only EN: {sorted(sa - sb)}")
+            lines_out.append(f"  only VI: {sorted(sb - sa)}")
+    # Links: compare with .vi.md suffix removed on VI targets.
+    en_links = sorted(a["links"])
+    vi_links = sorted(re.sub(r"\.vi\.md", ".md", t) for t in b["links"])
+    same = en_links == vi_links
+    lines_out.append(f"link targets equal after mapping .vi.md to .md: {same}")
+    if not same:
+        from collections import Counter
+        ca, cb = Counter(en_links), Counter(vi_links)
+        lines_out.append(f"  only EN: {sorted((ca - cb).elements())}")
+        lines_out.append(f"  only VI: {sorted((cb - ca).elements())}")
+    vi_en_links = [t for t in b["links"] if t.endswith(".md") and not t.endswith(".vi.md") and not t.startswith("http")]
+    lines_out.append(f"VI links to an English .md file: {vi_en_links}")
+    lines_out.append("")
+
+with open(out_path, "w", encoding="utf-8", newline="\n") as out:
+    out.write("\n".join(lines_out) + "\n")

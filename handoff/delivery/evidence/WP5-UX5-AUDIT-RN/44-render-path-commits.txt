@@ -1,0 +1,72 @@
+===== commits and diffs on render paths 69d6340..dc487c6 (render-commits.txt)
+== commits 69d6340..dc487c6 touching src/server src/domain assets package.json package-lock.json migrations
+1fe5ad30 Keep a held superseded send held for every later send of the period except a cancelled one
+0f52300c Keep a held superseded send held after restore, and paint the week card focus ring on all edges
+94accda9 Fix round-5 audit findings: signed footer, keyboard and touch access, PDF leave line, in-flight sends
+f4049aa7 Pin patched dependencies and harden tests against host load
+== stat
+ package-lock.json                 | 26 ++++++++++++++++++--------
+ package.json                      |  4 ++--
+ src/server/ops/restore.ts         | 15 ++++++++++++---
+ src/server/pdf/timesheetPdf.ts    | 20 ++++++++++++--------
+ src/server/services/deliveries.ts | 13 ++++++++++---
+ 5 files changed, 54 insertions(+), 24 deletions(-)
+== package.json diff
+diff --git a/package.json b/package.json
+index d950fb24..84f5397a 100644
+--- a/package.json
++++ b/package.json
+@@ -33,11 +33,11 @@
+     "better-sqlite3": "13.0.3",
+     "dejavu-fonts-ttf": "2.37.3",
+     "hono": "4.13.11",
+-    "nodemailer": "10.0.14",
++    "nodemailer": "10.1.4",
+     "pdf-lib": "1.17.1",
+     "react": "19.3.0",
+     "react-dom": "19.3.0",
+-    "zod": "4.6.5"
++    "zod": "4.6.6"
+   },
+   "devDependencies": {
+     "@playwright/test": "1.63.0",
+== timesheetPdf.ts diff
+diff --git a/src/server/pdf/timesheetPdf.ts b/src/server/pdf/timesheetPdf.ts
+index a4686bdd..c4b9bebf 100644
+--- a/src/server/pdf/timesheetPdf.ts
++++ b/src/server/pdf/timesheetPdf.ts
+@@ -335,23 +335,27 @@ function drawCategory(canvas: Canvas, day: SnapshotDay, x: number, layout: WeekL
+   const category = cleanText(day.category ?? '');
+   const holiday = day.holiday_name !== null ? cleanText(day.holiday_name) : '';
+   const leave = day.leave_minutes > 0 ? `Leave ${formatHoursMinutes(day.leave_minutes)}` : '';
+-  const subText = [holiday, leave].filter((part) => part !== '').join(' ');
++  // Leave is payroll data and keeps its own whole line; a holiday name only repeats the calendar, so on a day with both it is
++  // shrunk to one line and cut first (F-UX5B-3). A day with only one of them is laid out exactly as before.
++  const both = holiday !== '' && leave !== '';
++  const subText = both ? holiday : [holiday, leave].filter((part) => part !== '').join(' ');
+   const face = canDraw(fonts.hand, category) ? fonts.hand : fonts.italic;
+   const measureFace = (target: Face) => (text: string, size: number) => target.font.widthOfTextAtSize(text, size);
+   const primary = category === '' ? { lines: [] as string[], size: 13 } : fitText(printable(face, category), face === fonts.hand ? 13 : 12, 8, width, subText === '' ? 2 : 1, measureFace(face));
+-  const sub = subText === '' ? { lines: [] as string[], size: 7 } : fitText(printable(fonts.sans, subText), 7, 5, width, 2, measureFace(fonts.sans));
++  const fitted = subText === '' ? { lines: [] as string[], size: 7 } : fitText(printable(fonts.sans, subText), 7, 5, width, both ? 1 : 2, measureFace(fonts.sans));
++  const sub = fitted.lines.map((line) => ({ text: line, size: fitted.size }));
++  if (both) sub.push({ text: leave, size: 7 });
+   const primaryLine = 15;
+-  const subLine = sub.size * 1.2;
+-  const block = primary.lines.length * primaryLine + sub.lines.length * subLine + (primary.lines.length > 0 && sub.lines.length > 0 ? 2 : 0);
++  const block = primary.lines.length * primaryLine + sub.reduce((sum, line) => sum + line.size * 1.2, 0) + (primary.lines.length > 0 && sub.length > 0 ? 2 : 0);
+   let cursor = layout.category.top + (layout.category.height - block) / 2;
+   for (const line of primary.lines) {
+     canvas.centered(face, line, centerX, cursor + primaryLine * 0.8, primary.size);
+     cursor += primaryLine;
+   }
+-  if (primary.lines.length > 0 && sub.lines.length > 0) cursor += 2;
+-  for (const line of sub.lines) {
+-    canvas.centered(fonts.sans, line, centerX, cursor + sub.size * 0.9, sub.size, MUTED);
+-    cursor += subLine;
++  if (primary.lines.length > 0 && sub.length > 0) cursor += 2;
++  for (const line of sub) {
++    canvas.centered(fonts.sans, line.text, centerX, cursor + line.size * 0.9, line.size, MUTED);
++    cursor += line.size * 1.2;
+   }
+ }

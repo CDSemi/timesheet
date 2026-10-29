@@ -23,7 +23,14 @@
   - HEAD may be a later commit that changes only `handoff/`.
   - Record HEAD, the digest before and after (three forms) and `reviewed_commit`.
   - Work on a clean `git archive` export or a scratch clone at TARGET_SHA.
-  - Target confirmation: (filled in at dispatch)
+  - Target confirmation:
+    - TARGET_SHA = dc487c6114dd488121b1de1444e11cdacf5c237b, the RELNOTES-FREEZE commit,
+      pushed. REGATE15 passed on it.
+    - TARGET_DIGEST = 2072e3f206ff2003a9c7563b23267da463eeae6373f3f4eb98e660137fefb99b
+      (882 files).
+    - The regenerated samples are in `handoff/delivery/evidence/WP5-UX5-REGATE15/samples/`.
+      These files are uncommitted evidence in the working tree. Their file numbers differ
+      from T06's.
 - **AGENTS.md on disk wins.**
 - Never touch `.claude/worktrees/` or its branch.
 
@@ -117,3 +124,27 @@
 - Return at most 200 words, beginning with your self-reported model.
 
 ## Results
+
+Self-reported model: claude-opus-5-5. **Decision: FIX REQUIRED** (one Low finding). Review pair `handoff/delivery/WP5_UX5_REVIEW_RN.md` and
+`.vi.md`; evidence `handoff/delivery/evidence/WP5-UX5-AUDIT-RN/` (index `00-README.txt`).
+
+1. **Identity and scope.**
+   - `reviewed_commit` dc487c6114dd488121b1de1444e11cdacf5c237b. HEAD = origin/main = dc487c6 before and after.
+   - Digest 2072e3f206ff2003a9c7563b23267da463eeae6373f3f4eb98e660137fefb99b, 882 files, before (17:48:53Z) and after (18:02:36Z). It is
+     the same in the ls-tree form, in `npm run digest` and in the export form, and also in `npm run digest` in a clean clone.
+   - The diff from 0b45781 outside `handoff/` is exactly the four documentation files.
+   - The clean builds of 0b45781 and dc487c6 have identical `dist/` (250 files). AUDIT-INT3's product verdict carries forward.
+2. **Changed statements.** Every one matches the board and the records:
+   - the release rule;
+   - the round gates and audits (REGATE8 and AB9, UX2-REGATE2 and AUDIT2, UX3-REGATE5 and AUDIT-INT, REGATE14 and INT3);
+   - the drill. REGATE11 ran it on 1fe5ad3: 209/0. `dist/server` and `dist/domain` are identical from 1fe5ad3 to dc487c6, verified by my
+     own builds.
+3. **Nothing lost.** No limit or risk was lost (one context clause dropped, R-UX5RN-2).
+4. **EN/VI.** EN and VI agree, and all 173 links resolve.
+5. **F-UX5RN-1 (Low).** `DEVELOPMENT.md:3` and `.vi.md:3` still say WP4 is "not accepted". This contradicts the README lines that point
+   to DEVELOPMENT. The fix is that line in both files, plus the release rule in docs/12:7.
+6. **Samples.** My own run from the target reproduces REGATE15's samples, synthetic and in capture mode. The submission ID and Date
+   differences are per run; no commit causes any. The review section 6 lists six section-3 statements for ACCEPT-DOCS.
+7. **Mandatory checks.** typecheck, lint and build exit 0; `npm test` passes 2,397 tests.
+
+Status: done (FIX REQUIRED).

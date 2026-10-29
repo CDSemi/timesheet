@@ -1,0 +1,95 @@
+// WP5-UX5-REGATE15 item 5: sample-by-sample comparison of the regenerated samples with WP5-UX5-T06.
+// Pairing key = envelope recipients + Subject + Date (the file numbers differ because messages with the same fixed instant
+// are ordered by their random capture-folder id).
+// Excluded from the message comparison: the "# Captured message" label line, the "# Capture folder" line, the "# eml sha256"
+// line (it covers the MIME boundary and the Message-ID), the Message-ID header, the MIME boundary string in Content-Type, and the
+// "# pdf sha256 ... (N bytes)" figures (the hash and size are compared on their own lines).
+// The submission ID (TS-<payroll date>-<10 hex>) is derived from the random user id of each run (submissionIdFor in
+// reviewPayload.ts), so a second normalised comparison replaces it by TS-<id>.
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [oldDir, newDir, outFile] = process.argv.slice(2);
+const read = (d, f) => readFileSync(join(d, f), 'utf8').replace(/\r\n/g, '\n');
+const TS = /TS-\d{8}-[0-9a-f]{10}/g;
+
+function load(dir) {
+  const items = [];
+  for (const f of readdirSync(dir).filter((x) => /^msg-.*\.txt$/.test(x))) {
+    const text = read(dir, f);
+    const to = /^# Envelope to: (.*)$/m.exec(text)[1];
+    const subject = /^Subject: (.*)$/m.exec(text)[1];
+    const date = /^Date: (.*)$/m.exec(text)[1];
+    const label = f.replace(/^msg-/, '').replace(/\.txt$/, '');
+    const pdfLine = /^# pdf sha256: (\S+) \((\d+) bytes\)/m.exec(text);
+    const num = label.slice(0, 2);
+    const pdfFile = readdirSync(dir).find((x) => x.startsWith(`pdf-text-${num}-`));
+    const kept = text
+      .split('\n')
+      .filter((l) => !/^# (Captured message|Capture folder|eml sha256)/.test(l) && !/^Message-ID:/i.test(l))
+      .map((l) => l.replace(/^(# pdf sha256: )\S+ \(\d+ bytes\)/, '$1<hash> (<size>)'))
+      .join('\n')
+      .replace(/boundary="[^"]*"/g, 'boundary="<excluded>"');
+    const [headersBlock, body = ''] = kept.split('--- body (decoded) ---');
+    items.push({ label, key: `${to} | ${subject} | ${date}`, subject, pdfSha: pdfLine ? pdfLine[1] : null, pdfBytes: pdfLine ? pdfLine[2] : null, pdfText: pdfFile ? read(dir, pdfFile) : null, pdfFile, headersBlock, body });
+  }
+  return items;
+}
+const a = load(oldDir), b = load(newDir);
+const out = [];
+const log = (s) => { out.push(s); };
+log(`Sample comparison: baseline (${oldDir.replace(/^.*[\\/]evidence[\\/]/, '')}, ${a.length} messages) versus new (${newDir.replace(/^.*[\\/]evidence[\\/]/, '')}, ${b.length} messages)`);
+log('Excluded from the message comparison: capture label and folder lines, eml sha256 line, Message-ID header, MIME boundary strings, and the hash and byte size inside the "# pdf sha256" line (compared separately below).');
+log('Pairing key: envelope recipients | Subject | Date header. The file numbers differ between runs (same-instant messages sort by random capture-folder id), so samples are paired by key, not by number.');
+log('Submission ID TS-<date>-<10 hex> comes from the run-specific random user id (submissionIdFor, unchanged in 69d6340..dc487c6); it is replaced by TS-<id> in the "normalised" lines.');
+const pairedFallback = new Set();
+let identical = 0, onlyId = 0, other = 0, unmatched = 0;
+const dupA = new Set(a.map((x) => x.key)).size !== a.length, dupB = new Set(b.map((x) => x.key)).size !== b.length;
+if (dupA || dupB) log(`WARNING: pairing key not unique (baseline ${!dupA}, new ${!dupB})`);
+const lineDiffs = (x, y, tag) => {
+  const la = x.split('\n'), lb = y.split('\n');
+  const r = [];
+  for (let i = 0; i < Math.max(la.length, lb.length); i += 1) if (la[i] !== lb[i]) r.push(`    ${tag} line ${i + 1}: baseline ${JSON.stringify(la[i])} | new ${JSON.stringify(lb[i])}`);
+  return r;
+};
+for (const y of [...b].sort((p, q) => p.label.localeCompare(q.label))) {
+  let x = a.find((z) => z.key === y.key);
+  let fallback = false;
+  if (!x) {
+    // Fallback pairing without the Date: recipients | Subject, only when unique on both sides and not already paired by the full key.
+    const rs = (z) => z.key.split(' | ').slice(0, 2).join(' | ');
+    const cand = a.filter((z) => rs(z) === rs(y) && !b.some((w) => w.key === z.key));
+    if (cand.length === 1 && b.filter((w) => rs(w) === rs(y) && !a.some((z) => z.key === w.key)).length === 1) { x = cand[0]; fallback = true; }
+  }
+  log('');
+  log(`SAMPLE ${y.label}   (baseline ${x ? x.label : 'NO MATCH'}${fallback ? ', paired by recipients and Subject only; the Date header differs' : ''})`);
+  log(`  key: ${y.key}`);
+  if (x && fallback) pairedFallback.add(x.label);
+  if (!x) { log('  RESULT: UNMATCHED, no baseline message with this key'); unmatched += 1; continue; }
+  const hdrSame = x.headersBlock === y.headersBlock, bodySame = x.body === y.body;
+  const hdrNorm = x.headersBlock.replace(TS, 'TS-<id>') === y.headersBlock.replace(TS, 'TS-<id>');
+  const bodyNorm = x.body.replace(TS, 'TS-<id>') === y.body.replace(TS, 'TS-<id>');
+  log(`  subject equal: ${x.subject === y.subject}; headers equal: ${hdrSame}; decoded body equal: ${bodySame}; body equal after the submission ID is normalised: ${bodyNorm}`);
+  if (!hdrNorm) for (const l of lineDiffs(x.headersBlock, y.headersBlock, 'header')) log(l);
+  if (!bodyNorm) for (const l of lineDiffs(x.body, y.body, 'body')) log(l);
+  else if (!bodySame) for (const l of lineDiffs(x.body, y.body, 'body')) log(l);
+  let pdfNorm = true, pdfSame = true;
+  if (y.pdfSha || x.pdfSha) {
+    pdfSame = x.pdfSha === y.pdfSha && x.pdfText === y.pdfText;
+    pdfNorm = (x.pdfText ?? '').replace(TS, 'TS-<id>') === (y.pdfText ?? '').replace(TS, 'TS-<id>');
+    log(`  PDF SHA-256 baseline: ${x.pdfSha} (${x.pdfBytes} bytes)`);
+    log(`  PDF SHA-256 new:      ${y.pdfSha} (${y.pdfBytes} bytes)`);
+    log(`  PDF SHA-256 equal: ${x.pdfSha === y.pdfSha}`);
+    log(`  PDF text identical: ${x.pdfText === y.pdfText}; identical after the submission ID is normalised: ${pdfNorm} (${x.pdfFile} vs ${y.pdfFile})`);
+    if (x.pdfText !== y.pdfText) for (const l of lineDiffs(x.pdfText ?? '', y.pdfText ?? '', 'pdf-text')) log(l);
+  }
+  const all = hdrSame && bodySame && pdfSame;
+  const norm = hdrNorm && bodyNorm && pdfNorm;
+  if (all) identical += 1; else if (norm) onlyId += 1; else other += 1;
+  log(`  RESULT: ${all ? 'IDENTICAL (headers, body, PDF hash, PDF text)' : norm ? 'DIFFERS ONLY BY THE RUN-SPECIFIC SUBMISSION ID (and the PDF bytes that carry it)' : 'DIFFERS BEYOND THE SUBMISSION ID'}`);
+}
+for (const x of a.filter((z) => !b.some((y) => y.key === z.key) && !pairedFallback.has(z.label))) { log(`baseline message with no match in the new set: ${x.label} ${x.key}`); unmatched += 1; }
+log('');
+log(`SUMMARY: ${b.length} new messages; fully identical ${identical}; differing only by the submission ID ${onlyId}; differing beyond it ${other}; unmatched ${unmatched}`);
+writeFileSync(outFile, `${out.join('\n')}\n`);
+console.log(`SUMMARY: ${b.length} new; identical ${identical}; ID only ${onlyId}; beyond ${other}; unmatched ${unmatched}`);

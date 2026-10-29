@@ -1,0 +1,17 @@
+# usage: bash digest-export.sh <label>   fresh git archive of the target into $T/export-digest-<label>, export-form digest
+# Export form: every file of the export outside handoff/, "<path> <blob>" lines sorted (LC_ALL=C), SHA-256.
+. /d/.claude-tmp/timesheet/WP5-UX5-AUDIT-RN/env.sh
+X="$T/export-digest-$1"
+OUT="$E/01-digest-export-$1.txt"
+if [ -e "$X" ]; then echo "exists: $X" > "$OUT"; exit 3; fi
+mkdir -p "$X"
+( cd "$R" && git archive "$TARGET" ) | tar -x -C "$X"
+cd "$X" || exit 2
+find . -type f -not -path './handoff/*' | sed 's#^\./##' | LC_ALL=C sort > "$T/exp-$1.files"
+git hash-object --stdin-paths < "$T/exp-$1.files" > "$T/exp-$1.blobs"
+paste -d' ' "$T/exp-$1.files" "$T/exp-$1.blobs" > "$T/exp-$1.lines"
+{
+  printf 'time_utc %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf 'export of %s (git archive, handoff/ excluded)\n' "$TARGET"
+  printf '%s  (%s files)\n' "$(sha256sum "$T/exp-$1.lines" | cut -d' ' -f1)" "$(wc -l < "$T/exp-$1.files")"
+} > "$OUT"

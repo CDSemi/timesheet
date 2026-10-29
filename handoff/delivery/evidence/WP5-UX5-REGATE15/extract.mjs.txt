@@ -1,0 +1,144 @@
+// WP5-PILOT: turns the capture folders into masked LF .txt (subject, headers, body, PDF facts) and renders each
+// PDF page in the installed Edge to *-synthetic.png. Synthetic data only.
+import { createHash } from 'node:crypto';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+
+const REPO = process.env.PILOT_REPO;
+const RUN = process.env.RUN_DIR;
+const OUT = process.env.OUT_DIR;
+mkdirSync(OUT, { recursive: true });
+const requireRepo = createRequire(join(REPO, 'package.json'));
+const pdfjs = await import(pathToFileURL(join(REPO, 'node_modules/pdfjs-dist/legacy/build/pdf.mjs')).href);
+const capture = join(RUN, 'private-data', 'mail-capture');
+
+function decodeBody(headers, text) {
+  const cte = (headers['content-transfer-encoding'] ?? '7bit').toLowerCase();
+  if (cte === 'base64') return Buffer.from(text.replace(/\s+/g, ''), 'base64').toString('utf8');
+  if (cte === 'quoted-printable') {
+    const joined = text.replace(/=\r?\n/g, '');
+    return Buffer.from(joined.replace(/=([0-9A-F]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16))), 'latin1').toString('utf8');
+  }
+  return text;
+}
+function splitHeaders(raw) {
+  const idx = raw.search(/\r?\n\r?\n/);
+  const head = raw.slice(0, idx);
+  const body = raw.slice(idx).replace(/^\r?\n\r?\n/, '');
+  const lines = [];
+  for (const line of head.split(/\r?\n/)) {
+    if (/^[ \t]/.test(line) && lines.length > 0) lines[lines.length - 1] += ` ${line.trim()}`;
+    else lines.push(line);
+  }
+  const map = {};
+  for (const line of lines) {
+    const i = line.indexOf(':');
+    map[line.slice(0, i).toLowerCase()] = line.slice(i + 1).trim();
+  }
+  return { lines, map, body };
+}
+function textPart(raw) {
+  const { map, body } = splitHeaders(raw);
+  const type = map['content-type'] ?? 'text/plain';
+  const boundary = /boundary="?([^";]+)"?/i.exec(type)?.[1];
+  if (!boundary) {
+    if (/^text\/plain/i.test(type)) return { text: decodeBody(map, body), attachments: [], parts: [type.split(';')[0]] };
+    return { text: '', attachments: [{ type, disposition: map['content-disposition'] ?? '', encoding: map['content-transfer-encoding'] ?? '' }], parts: [type.split(';')[0]] };
+  }
+  let text = '';
+  const attachments = [];
+  const parts = [type.split(';')[0]];
+  for (const part of body.split('--' + boundary).slice(1)) {
+    if (part.startsWith('--')) break;
+    const inner = textPart(part.replace(/^\r?\n/, ''));
+    if (inner.text !== '' && text === '') text = inner.text;
+    attachments.push(...inner.attachments);
+    parts.push(...inner.parts);
+  }
+  return { text, attachments, parts };
+}
+
+const folders = readdirSync(capture, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+const items = folders.map((id) => {
+  const raw = readFileSync(join(capture, id, 'message.eml'), 'utf8');
+  const meta = JSON.parse(readFileSync(join(capture, id, 'metadata.json'), 'utf8'));
+  const { lines, map } = splitHeaders(raw);
+  return { id, raw, meta, lines, map, date: new Date(map.date).getTime() };
+}).sort((a, b) => a.date - b.date || a.id.localeCompare(b.id));
+
+const { chromium } = requireRepo('playwright-core');
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const page = await browser.newPage({ viewport: { width: 920, height: 1240 } });
+const VIEW = 'http://pdf-view.invalid';
+const build = join(REPO, 'node_modules/pdfjs-dist/build');
+const index = [];
+let n = 0;
+try {
+  for (const item of items) {
+    n += 1;
+    const body = textPart(item.raw);
+    const hasPdf = readdirSync(join(capture, item.id)).includes('attachment.pdf');
+    const to = item.meta.envelope.to[0].split('@')[0].replace(/[^a-z0-9.-]/gi, '');
+    const rev = /-r(\d+)\.pdf/.exec(JSON.stringify(body.attachments))?.[1];
+    const kind = hasPdf ? `submission-${to}-rev${rev ?? 'x'}` : `notice-${to}-${n}`;
+    const label = `${String(n).padStart(2, '0')}-${kind}`;
+    const out = [];
+    out.push(`# Captured message ${label} (synthetic, capture mode; nothing was sent)`);
+    out.push(`# Capture folder: ${item.id}`);
+    out.push(`# Envelope from: ${item.meta.envelope.from}`);
+    out.push(`# Envelope to: ${item.meta.envelope.to.join(', ')}`);
+    out.push(`# eml sha256: ${item.meta.eml_sha256}`);
+    if (hasPdf) out.push(`# pdf sha256: ${item.meta.pdf_sha256} (${item.meta.pdf_bytes} bytes), attachments: ${JSON.stringify(body.attachments.filter((a) => /pdf/.test(a.type)))}, mime parts: ${body.parts.join(' > ')}`);
+    out.push('');
+    out.push(`Subject: ${item.map.subject}`);
+    out.push('');
+    out.push('--- headers (raw, as captured) ---');
+    out.push(...item.lines);
+    out.push('');
+    out.push('--- body (decoded) ---');
+    out.push(body.text.replace(/\r\n/g, '\n').trimEnd());
+    writeFileSync(join(OUT, `msg-${label}.txt`), `${out.join('\n')}\n`);
+    const entry = { label, subject: item.map.subject, to: item.meta.envelope.to, pdf: hasPdf };
+    if (hasPdf) {
+      const bytes = readFileSync(join(capture, item.id, 'attachment.pdf'));
+      entry.pdf_hash_ok = createHash('sha256').update(bytes).digest('hex') === item.meta.pdf_sha256;
+      const doc = await pdfjs.getDocument({ data: new Uint8Array(bytes), verbosity: 0 }).promise;
+      entry.pages = doc.numPages;
+      const pg = await doc.getPage(1);
+      const tc = await pg.getTextContent();
+      const lines = [];
+      for (const it of [...tc.items].sort((a, b) => b.transform[5] - a.transform[5] || a.transform[4] - b.transform[4])) {
+        const last = lines.at(-1);
+        if (last && Math.abs(last.y - it.transform[5]) < 1.5) last.parts.push(it.str);
+        else lines.push({ y: it.transform[5], parts: [it.str] });
+      }
+      writeFileSync(join(OUT, `pdf-text-${label}.txt`), `${lines.map((l) => l.parts.join(' ').replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n')}\n`);
+      for (let p = 1; p <= doc.numPages; p += 1) {
+        const assets = {
+          '/': { body: readFileSync(join(REPO, 'tests/e2e/assets/pdf-view.html')), type: 'text/html; charset=utf-8' },
+          '/pdf.mjs': { body: readFileSync(join(build, 'pdf.mjs')), type: 'text/javascript; charset=utf-8' },
+          '/pdf.worker.mjs': { body: readFileSync(join(build, 'pdf.worker.mjs')), type: 'text/javascript; charset=utf-8' },
+          '/doc.pdf': { body: bytes, type: 'application/pdf' },
+        };
+        await page.route(`${VIEW}/**`, (route) => {
+          const asset = assets[new URL(route.request().url()).pathname];
+          return asset === undefined ? route.fulfill({ status: 404, body: 'not found' }) : route.fulfill({ status: 200, contentType: asset.type, body: asset.body });
+        });
+        await page.goto(`${VIEW}/?page=${p}&scale=1.5`);
+        await page.waitForFunction('window.__pdfRender !== undefined', undefined, { timeout: 30000 });
+        const result = await page.evaluate('window.__pdfRender');
+        await page.locator('#page').screenshot({ path: join(OUT, `pilot-${label}-p${p}-synthetic.png`) });
+        await page.unroute(`${VIEW}/**`);
+        entry[`render_p${p}`] = JSON.stringify(result);
+      }
+    }
+    index.push(entry);
+  }
+} finally {
+  await browser.close();
+}
+writeFileSync(join(OUT, 'sample-index.txt'), `${index.map((e) => JSON.stringify(e)).join('\n')}\n`);
+console.log(index.map((e) => JSON.stringify(e)).join('\n'));
+console.log('EXTRACT DONE');

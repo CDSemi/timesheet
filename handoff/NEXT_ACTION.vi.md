@@ -187,11 +187,20 @@ Luồng hiện tại:
      nghiệm thu. Cả hai file đều được tính vào digest.
    - WP5-UX5-RELNOTES đã cập nhật hai file đó cùng bản dịch (digest 2072e3f2). Nó cũng phát
      hiện mã PDF và thư viện gửi mail đã thay đổi sau khi các mẫu pilot được tạo.
-   - Đang chạy: freeze bản cập nhật, WP5-UX5-RELNOTES-FREEZE.
+   - Bản cập nhật đã được freeze ở commit dc487c6 (digest 2072e3f2) và đã push.
+   - Gate lại có giới hạn WP5-UX5-REGATE15 đã đạt trên dc487c6.
+     - Bản build giống hệt 0b45781.
+     - Các mẫu pilot đã được tạo lại từ bản phát hành. Chúng khớp với mẫu cũ, trừ mã
+       submission ngẫu nhiên và một thời điểm gửi.
+   - Audit mới WP5-UX5-AUDIT-RN tìm thấy một lỗ hổng mức Low: `DEVELOPMENT.md` vẫn ghi WP4
+     chưa nghiệm thu, trái với các dòng README mới vốn trỏ tới nó. Mọi phần khác đều đạt.
+   - WP5-UX5-FIX20 đã sửa dòng đó ở cả EN và VI, đặt cho release notes một quy tắc duy nhất
+     về commit nào là bản phát hành, và sửa ba chỗ diễn đạt nhỏ (digest 690fd8fd).
+   - Đang chạy: freeze bản sửa, WP5-UX5-FIX20-FREEZE.
    - Sau đó:
-     - gate lại có giới hạn (WP5-UX5-REGATE15), đồng thời tạo lại các mẫu pilot từ bản phát
-       hành;
-     - một audit mới (WP5-UX5-AUDIT-RN);
+     - gate lại có giới hạn (WP5-UX5-REGATE16);
+     - một lượt kiểm tra lại mới, mà kết quả đạt sẽ thay AUDIT-INT3 làm kết quả nghiệm thu
+       hiện hành;
      - ACCEPT-DOCS, ghi định danh mới vào pilot packet và handoff WP5;
      - commit WP5-UX5-ACCEPT.
    - Để tiếp tục sau khi bị gián đoạn, dùng prompt khởi động ở trên. Điều phối viên làm tiếp

@@ -1,0 +1,19 @@
+# usage: bash export-build.sh <label> <sha>   -> $T/export-<label>, npm ci, npm run build; log to $T/logs
+. /d/.claude-tmp/timesheet/WP5-UX5-AUDIT-RN/env.sh
+L="$1"; S="$2"; X="$T/export-$L"
+mkdir -p "$T/logs"
+LOG="$T/logs/build-$L.txt"
+if [ -e "$X" ]; then echo "export dir exists: $X" > "$LOG"; exit 3; fi
+mkdir -p "$X"
+{
+  printf 'label %s sha %s time_utc %s\n' "$L" "$S" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  cd "$R" && git archive "$S" | tar -x -C "$X"
+  printf 'archive exit %s\n' "$?"
+  cd "$X" || exit 2
+  printf 'files in export (excluding handoff/): %s\n' "$(find . -type f -not -path './handoff/*' | wc -l)"
+  npm ci --no-audit
+  printf 'npm ci exit %s\n' "$?"
+  npm run build
+  printf 'npm run build exit %s\n' "$?"
+  printf 'end time_utc %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} > "$LOG" 2>&1

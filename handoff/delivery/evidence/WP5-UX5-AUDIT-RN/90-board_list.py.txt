@@ -1,0 +1,31 @@
+"""Read-only list of board tasks by kind. usage: python board_list.py <board.json> <out.txt> <id-regex> <kind-regex>"""
+import json
+import re
+import sys
+
+board_path, out_path, id_pattern, kind_pattern = sys.argv[1:5]
+with open(board_path, encoding="utf-8") as fh:
+    board = json.load(fh)
+id_rx = re.compile(id_pattern)
+kind_rx = re.compile(kind_pattern)
+rows = []
+
+
+def walk(node):
+    if isinstance(node, dict):
+        if isinstance(node.get("id"), str) and "kind" in node and id_rx.fullmatch(node["id"]) and kind_rx.fullmatch(str(node["kind"])):
+            commit = node.get("freeze_commit") or node.get("reviewed_commit") or node.get("commit_sha") or ""
+            rows.append(f"{node['id']}\t{node['kind']}\t{node.get('status')}\t{node.get('decision') if len(str(node.get('decision'))) < 40 else str(node.get('decision'))[:40] + '...'}\t{commit[:7]}\t{(node.get('source_digest') or '')[:8]}\t{node.get('actual_model')}")
+        for value in node.values():
+            walk(value)
+    elif isinstance(node, list):
+        for value in node:
+            walk(value)
+
+
+walk(board)
+with open(out_path, "w", encoding="utf-8", newline="\n") as out:
+    out.write("id\tkind\tstatus\tdecision\tcommit\tdigest\tmodel\n")
+    for row in rows:
+        out.write(row + "\n")
+    out.write(f"rows {len(rows)}\n")

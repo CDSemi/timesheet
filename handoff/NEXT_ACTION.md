@@ -183,11 +183,19 @@ Current route:
    - WP5-UX5-RELNOTES refreshed those two files and their translations (digest 2072e3f2).
      It also found that the PDF code and the mail library changed after the pilot samples
      were made.
-   - Running now: its freeze, WP5-UX5-RELNOTES-FREEZE.
+   - Its freeze is commit dc487c6 (digest 2072e3f2), pushed.
+   - The scoped regate WP5-UX5-REGATE15 passed on dc487c6.
+     - The build is identical to 0b45781.
+     - The pilot samples were made again from the release. They match the old ones except
+       for the random submission ID and one send time.
+   - The fresh audit WP5-UX5-AUDIT-RN found one Low gap: `DEVELOPMENT.md` still says WP4 is
+     not accepted, against the new README lines that point to it. Everything else held.
+   - WP5-UX5-FIX20 fixed that line in EN and VI, gave the release notes one rule for which
+     commit is the release, and fixed three small wording items (digest 690fd8fd).
+   - Running now: its freeze, WP5-UX5-FIX20-FREEZE.
    - Then:
-     - a scoped regate (WP5-UX5-REGATE15), which also makes the pilot samples again from
-       the release;
-     - a fresh audit (WP5-UX5-AUDIT-RN);
+     - a scoped regate (WP5-UX5-REGATE16);
+     - a fresh recheck, whose pass replaces AUDIT-INT3 as the current acceptance;
      - ACCEPT-DOCS, which puts the new identity in the pilot packet and the WP5 handoff;
      - the WP5-UX5-ACCEPT commit.
    - To resume after an interruption, use the entry prompt above. The coordinator continues

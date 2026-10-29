@@ -1,0 +1,85 @@
+// WP5-UX5-REGATE15 item 4: link resolution, EN/VI parity, digest statements. Read-only on the four files.
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+
+const ROOT = process.argv[2];
+const pairs = [['README.md', 'README.vi.md'], ['docs/12_RELEASE_NOTES.md', 'docs/12_RELEASE_NOTES.vi.md']];
+let fail = 0;
+const out = (s) => console.log(s);
+const read = (p) => readFileSync(join(ROOT, p), 'utf8').replace(/\r\n/g, '\n');
+
+function stripCode(text) {
+  // keep fenced code for link purposes? Links inside fences are not links; drop fences for link/heading counting.
+  return text.replace(/```[\s\S]*?```/g, (m) => m.replace(/[^\n]/g, ''));
+}
+function headings(text) {
+  return stripCode(text).split('\n').filter((l) => /^#{1,6} /.test(l)).map((l) => /^(#+)/.exec(l)[1].length);
+}
+function links(text) {
+  const t = stripCode(text);
+  const found = [];
+  for (const m of t.matchAll(/!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) found.push(m[1]);
+  for (const m of t.matchAll(/^\[[^\]]+\]:\s*(\S+)/gm)) found.push(m[1]);
+  return found;
+}
+function slug(h) {
+  return h.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, '').trim().replace(/\s+/g, '-');
+}
+const multiset = (a) => { const m = new Map(); for (const x of a) m.set(x, (m.get(x) ?? 0) + 1); return m; };
+function diffSets(name, a, b) {
+  const ma = multiset(a), mb = multiset(b); const bad = [];
+  for (const k of new Set([...ma.keys(), ...mb.keys()])) if ((ma.get(k) ?? 0) !== (mb.get(k) ?? 0)) bad.push(`${k} en=${ma.get(k) ?? 0} vi=${mb.get(k) ?? 0}`);
+  out(`  ${name}: en ${a.length}, vi ${b.length}, ${bad.length === 0 ? 'IDENTICAL' : 'DIFFERENT'}`);
+  for (const b1 of bad) out(`    ${b1}`);
+  if (bad.length > 0 && !name.includes('informational')) fail += 1;
+}
+
+for (const f of pairs.flat()) {
+  const text = read(f);
+  const ls = links(text);
+  let missing = 0, external = 0, anchorsBad = 0, checked = 0;
+  for (const l of ls) {
+    if (/^(https?:|mailto:)/i.test(l)) { external += 1; continue; }
+    const [pathPart, anchor] = l.split('#');
+    const target = pathPart === '' ? join(ROOT, f) : resolve(dirname(join(ROOT, f)), decodeURI(pathPart));
+    checked += 1;
+    if (!existsSync(target)) { missing += 1; out(`  MISSING in ${f}: ${l}`); fail += 1; continue; }
+    if (anchor && /\.md$/.test(target)) {
+      const heads = stripCode(readFileSync(target, 'utf8').replace(/\r\n/g, '\n')).split('\n').filter((x) => /^#{1,6} /.test(x)).map((x) => slug(x.replace(/^#+\s*/, '')));
+      if (!heads.includes(anchor.toLowerCase())) { anchorsBad += 1; out(`  ANCHOR not found (informational) in ${f}: ${l}`); }
+    }
+  }
+  out(`${f}: ${ls.length} links, ${checked} local checked, ${external} external, ${missing} missing, ${anchorsBad} anchors not matched (informational)`);
+}
+
+for (const [en, vi] of pairs) {
+  out(`PARITY ${en} <-> ${vi}`);
+  const te = read(en), tv = read(vi);
+  const he = headings(te), hv = headings(tv);
+  out(`  headings: en ${he.length} [${he.join('')}], vi ${hv.length} [${hv.join('')}], ${he.join() === hv.join() ? 'IDENTICAL level sequence' : 'DIFFERENT'}`);
+  if (he.join() !== hv.join()) fail += 1;
+  // A VI document links the VI sibling of each EN target; normalise ".vi.md" to ".md" before comparing.
+  const norm = (l) => l.replace(/\.vi\.md/g, '.md');
+  diffSets('links (VI sibling suffix normalised)', links(te).map(norm), links(tv).map(norm));
+  const sha = (t) => [...t.matchAll(/\b[0-9a-f]{7,64}\b/g)].map((m) => m[0]).filter((s) => /\d/.test(s) && /[a-f]/.test(s));
+  diffSets('hex SHAs/digests', sha(te), sha(tv));
+  const ids = (t) => [...t.matchAll(/\b(?:WP\d+(?:-[A-Z0-9]+)+|[A-Z]{1,6}-\d+[A-Za-z]?|ADR-\d+|UX\d+|T\d{2}[A-Z]?)\b/g)].map((m) => m[0]);
+  diffSets('IDs', ids(te), ids(tv));
+  const urls = (t) => [...t.matchAll(/https?:\/\/[^\s)>`]+/g)].map((m) => m[0]);
+  diffSets('URLs', urls(te), urls(tv));
+  const nums = (t0) => { const t = t0.replace(/\]\([^)]*\)/g, ']').replace(/(\d),(\d{3})/g, '$1$2').replace(/(\d)\.(\d{3})\b/g, '$1$2').replace(/(\d),(\d)/g, '$1.$2'); return [...t.matchAll(/\b\d[\d,.]*\d\b|\b\d\b/g)].map((m) => m[0]); };
+  diffSets('numbers (informational, wording may differ)', nums(te), nums(tv));
+}
+
+const DIGEST = '2072e3f206ff2003a9c7563b23267da463eeae6373f3f4eb98e660137fefb99b';
+const PREVDIGEST = '67aa715c4cf600624b835a27c568f9225e471e43d819894fbeb8b4da6a89c42b';
+for (const f of pairs.flat()) {
+  const lines = read(f).split('\n');
+  const hex64 = lines.map((l, i) => [i + 1, l]).filter(([, l]) => /\b[0-9a-f]{64}\b/.test(l));
+  const hit = hex64.filter(([, l]) => l.includes(DIGEST));
+  const dg = lines.map((l, i) => [i + 1, l]).filter(([, l]) => /digest|mã băm|tóm tắt nguồn/i.test(l));
+  out(`DIGEST ${f}: lines with a 64-hex string: ${hex64.length} [${hex64.map(([n]) => n).join(',')}]; lines with the target digest: ${hit.length}; lines mentioning digest: ${dg.length} [${dg.map(([n]) => n).join(',')}]`);
+  for (const [n, l] of hex64) out(`    line ${n} has a 64-hex value, equal to target digest: ${l.includes(DIGEST)}, equal to REGATE14 digest: ${l.includes(PREVDIGEST)}`);
+  if (hit.length > 0) fail += 1;
+}
+out(fail === 0 ? 'DOCCHECK RESULT: PASS' : `DOCCHECK RESULT: ${fail} FAILURE(S)`);

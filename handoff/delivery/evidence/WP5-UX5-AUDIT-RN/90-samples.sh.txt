@@ -1,0 +1,17 @@
+# Independent regeneration of the pilot samples from the target by the T06 recipe (clean export, npm ci, build:server,
+# make-samples, extract). Outputs stay in the task folder; logs in $T/logs/samples-*.txt.
+. /d/.claude-tmp/timesheet/WP5-UX5-AUDIT-RN/env.sh
+X="$T/export-samples"
+EX="$T/logs/samples-exits.txt"
+if [ -e "$X" ]; then echo "exists: $X" > "$EX"; exit 3; fi
+mkdir -p "$X" "$T/samples-run/run" "$T/samples-run/out"
+printf 'start %s target %s node %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$TARGET" "$(node --version)" > "$EX"
+( cd "$R" && git archive "$TARGET" ) | tar -x -C "$X"; printf 'archive exit %s\n' "$?" >> "$EX"
+cd "$X" || exit 2
+npm ci --no-audit > "$T/logs/samples-ci.txt" 2>&1; printf 'npm ci exit %s\n' "$?" >> "$EX"
+npm run build:server > "$T/logs/samples-build-server.txt" 2>&1; printf 'build:server exit %s\n' "$?" >> "$EX"
+printf 'PRODUCTION_SENDING_ENABLED set: %s; OUTBOUND_MODE set: %s\n' "${PRODUCTION_SENDING_ENABLED+yes}" "${OUTBOUND_MODE+yes}" >> "$EX"
+cd "$T/samples-run" || exit 2
+PILOT_REPO="$(cygpath -w "$X")" RUN_DIR="$(cygpath -w "$T/samples-run/run")" node make-samples.mjs > "$T/logs/samples-make.txt" 2>&1; printf 'make-samples exit %s\n' "$?" >> "$EX"
+PILOT_REPO="$(cygpath -w "$X")" RUN_DIR="$(cygpath -w "$T/samples-run/run")" OUT_DIR="$(cygpath -w "$T/samples-run/out")" node extract.mjs > "$T/logs/samples-extract.txt" 2>&1; printf 'extract exit %s\n' "$?" >> "$EX"
+printf 'end %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$EX"

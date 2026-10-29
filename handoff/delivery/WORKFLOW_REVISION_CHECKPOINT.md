@@ -3121,7 +3121,63 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - RELNOTES-FREEZE;
   - REGATE15 (scoped, with the samples; ports 51850-51889);
   - AUDIT-RN (fresh opus; review pair `WP5_UX5_REVIEW_RN`; ports 51890-51929).
-- **Running now:** WP5-UX5-RELNOTES-FREEZE, alone.
+- **WP5-UX5-RELNOTES-FREEZE done.**
+  - Commit dc487c6114dd488121b1de1444e11cdacf5c237b on main. It was pushed as a fast-forward
+    from 0b45781.
+  - D_PRE equals both HEAD digests: 2072e3f2.
+  - 387 paths were staged. Nothing was unstaged or masked. Every check exited 0.
+- **WP5-UX5-REGATE15 PASS** (verifier, self-reported claude-sonnet-5-5) on dc487c6 /
+  2072e3f2.
+  - Exactly the four documentation files differ from 0b45781 outside `handoff/`.
+  - `dist/` is identical: 250 files. So REGATE14's runtime items carry forward, and so do
+    REGATE11's drill and `npm audit`.
+  - `npm test`: 2,397. The validators pass. 173 links resolve, and EN/VI parity holds.
+  - **The pilot samples were regenerated from dc487c6** by the T06 recipe.
+    - The five notices are identical to T06.
+    - The six submissions differ by the per-run submission ID, so their PDF hashes differ.
+      Their PDF text is equal once the ID is normalised.
+    - One Date is 06:32 instead of 06:30, because a job was retried.
+    - A control run on the same code shows the same variation.
+- **WP5-UX5-AUDIT-RN FIX REQUIRED** (fresh opus auditor, self-reported claude-opus-5-5) on
+  dc487c6 / 2072e3f2 ([review](WP5_UX5_REVIEW_RN.md)).
+  - **F-UX5RN-1 (Low).** `DEVELOPMENT.md:3` and `.vi.md:3` still say WP4 awaits its gate and
+    is not accepted. The new README lines point to DEVELOPMENT, so the two documents now
+    contradict each other.
+  - Everything else holds:
+    - the scope;
+    - `dist/` is identical to 0b45781, so AUDIT-INT3's product verdict carries forward;
+    - every changed statement matches the board;
+    - EN/VI agree, and 173 links resolve;
+    - the auditor's own sample run reproduces REGATE15's;
+    - `npm test`: 2,397.
+  - Optional risks: R-UX5RN-1..6.
+  - Section 6 of the review lists the pilot packet statements that ACCEPT-DOCS must change.
+  - AUDIT-INT3 stays the current acceptance.
+- **Coordinator check before the fix.** A search of tracked markdown outside `handoff/`
+  found no other stale acceptance status.
+- **WP5-UX5-FIX20 done** (worker, self-reported claude-sonnet-5-5). It is uncommitted.
+  Digest 690fd8fd, 882 files.
+  - It reproduced the finding first.
+  - It changed:
+    - DEVELOPMENT line 3, EN and VI, which now carries the README status and the WP5
+      handoff;
+    - docs/12:7, EN and VI, which now has one release rule (R-UX5RN-1);
+    - the docs/12 drill line, which restores the slices' checks (R-UX5RN-2) and names the
+      Dockerfile and `vite.config.ts` (R-UX5RN-3; both unchanged since 1fe5ad3);
+    - the README step 3 commas (R-UX5RN-5).
+  - Exactly six files differ (8+/8-). Preflight passed (exit 0).
+  - The stale-status search found nothing.
+- **Registered with briefs:**
+  - FIX20-FREEZE;
+  - REGATE16 (scoped; ports 51930-51969);
+  - RECHECK-RN (fresh opus; review pair `WP5_UX5_RECHECK_RN`; ports 51970-52009).
+- **Running now:** WP5-UX5-FIX20-FREEZE, alone.
+- **Then:**
+  - REGATE16. `dist/` must stay identical, so REGATE15's samples still represent the
+    release;
+  - a fresh recheck, whose PASS supersedes AUDIT-INT3;
+  - ACCEPT-DOCS;
+  - WP5-UX5-ACCEPT.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

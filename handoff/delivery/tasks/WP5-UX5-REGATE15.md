@@ -23,7 +23,16 @@
     the `source_digest` of WP5-UX5-RELNOTES on the board. The coordinator confirms both in
     the line below before dispatch. HEAD must equal origin/main, or be a later commit that
     changes only `handoff/`.
-  - Target confirmation: (filled in at dispatch)
+  - Target confirmation:
+    - TARGET_SHA = dc487c6114dd488121b1de1444e11cdacf5c237b, the RELNOTES-FREEZE commit,
+      pushed as a fast-forward from 0b45781.
+    - TARGET_DIGEST = 2072e3f206ff2003a9c7563b23267da463eeae6373f3f4eb98e660137fefb99b
+      (882 files).
+    - The four paths: `README.md`, `README.vi.md`, `docs/12_RELEASE_NOTES.md` and
+      `docs/12_RELEASE_NOTES.vi.md`.
+    - The coordinator's record files (board, STATE, NEXT_ACTION, checkpoint) and the
+      RELNOTES-FREEZE Results and evidence may be uncommitted under `handoff/`. That is
+      expected.
 - **Profile and routing.** timesheet-verifier, requested sonnet/medium, no override.
   - Routing: size S, risk M (the release identity and the pilot samples), novelty no.
   - Write the records in English.
@@ -148,3 +157,27 @@
   - the digest.
 
 ## Results
+
+Self-reported model: claude-sonnet-5-5. **Decision: PASS** (NAS items stay NOT VERIFIED). Evidence: `handoff/delivery/evidence/WP5-UX5-REGATE15/` (index `00-README.txt`).
+
+1. **Identity and scope.**
+   - HEAD = origin/main = dc487c6114dd488121b1de1444e11cdacf5c237b before and after.
+   - Digest 2072e3f206ff2003a9c7563b23267da463eeae6373f3f4eb98e660137fefb99b (882 files) before and after, in the export form, the ls-tree form and `npm run digest`; `npm run digest` also in a clean clone of the target (all equal).
+   - `git diff --name-status 0b45781..dc487c6 -- . ':!handoff'` lists exactly `README.md`, `README.vi.md`, `docs/12_RELEASE_NOTES.md`, `docs/12_RELEASE_NOTES.vi.md`. No package or lockfile change. `git diff --check` exit 0.
+2. **Builds.** Clean `npm ci` and `npm run build` of 0b45781 and of the target, exit 0. `dist/` has 250 files in each and every SHA-256 is equal (listing hash c24f0aab773c...2613 in both): identical. REGATE14's runtime items (real-clock FULL e2e, six sweeps, stress, mutants, axe) carry forward; the drill and `npm audit` carry forward from REGATE11.
+3. **Core** (target export, one at a time): lint 0, typecheck 0, build 0 (no chunk advisory, no deprecation warning), `npm test` 0 with 101 files and 2,397 tests. `check_recovery.py` PASS (106), `validate_package.py --preflight` PASS (140 pairs, 2,410 links), `validate_orchestration.py` PASS; all exit 0.
+4. **Documents** (30-doccheck.txt).
+   - All 173 links resolve (35, 36, 51, 51); no anchor links failed.
+   - Headings: 4/4 and 11/11 with identical level sequences. SHAs, IDs and URLs identical in both pairs; release-notes links identical.
+   - README link sets differ only by the pre-existing VI header link to `README.md` (unchanged since 0b45781).
+   - No line of the four files states the target digest. `docs/12_RELEASE_NOTES` line 7 has one older digest (1e59ad31...), of commit 8e99d2c over 777 files.
+5. **Pilot samples from the release** (T06 recipe on a clean `git archive` export of dc487c6, own `npm ci`, `build:server`, make-samples, extract, ready check; exits 0).
+   - 11 messages, 6 PDFs, `pdf_hash_ok` true for 6, no job in intervention or failed. Ready check on port 51850: `/api/health` 200, `/api/ready` 200; the server stopped through its handle.
+   - Script copies differ from T06 only by the commit label (make-samples) and the port (ready-check); extract is identical (41-script-diffs.txt). All six renders were viewed.
+   - Comparison with T06 (`samples/samples-compare.txt`), paired by recipients, Subject and Date because file numbers differ:
+     - 5 of 11 messages (all notices) are identical: headers, body.
+     - 5 submissions (norows, manual rev 1, manual rev 2, signed, auto-on) differ only by the submission ID `TS-20261002-<10 hex>`; PDF SHA-256 differs for those; PDF text equal after the ID is normalised. Cause: the ID derives from the random per-run user id (`submissionIdFor`, unchanged in 69d6340..dc487c6), and it sits in the PDF bytes.
+     - The auto-off submission also differs by its Date: 06:32 instead of 06:30 (one job retried in the same pass; the pass line shows retried 1). Cause: same-instant job order and retry timing, not a commit.
+     - A control (45-control-run1-vs-run2.txt), a second run under the same target code, shows the same ID changes and the same 06:30 versus 06:32 shifts. Identity of people, dates and figures holds.
+   - 94accda changes the PDF only for a day with both a holiday and leave (none in the samples). With the nodemailer 10.1.4 pin, the headers and decoded bodies of all 11 messages equal T06's apart from the ID and the one Date. The change to `deliveries.ts` (1fe5ad3) concerns only the in-flight check and its error text. No unexplained difference in content, people, dates or figures.
+6. Slips: see 99-slips.txt (one stray `/dev/null` redirect, harmless). Nothing left running; scratch is in the task folder.

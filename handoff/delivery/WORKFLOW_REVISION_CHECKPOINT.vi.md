@@ -3208,7 +3208,64 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - RELNOTES-FREEZE;
   - REGATE15 (có giới hạn, kèm các mẫu; cổng 51850-51889);
   - AUDIT-RN (auditor opus mới; cặp review `WP5_UX5_REVIEW_RN`; cổng 51890-51929).
-- **Đang chạy:** WP5-UX5-RELNOTES-FREEZE, chạy một mình.
+- **WP5-UX5-RELNOTES-FREEZE đã xong.**
+  - Commit dc487c6114dd488121b1de1444e11cdacf5c237b trên main, push dạng fast-forward từ
+    0b45781.
+  - D_PRE bằng cả hai digest của HEAD: 2072e3f2.
+  - 387 đường dẫn được stage. Không có file nào bị bỏ ra hay che đi. Mọi kiểm tra đều trả
+    về 0.
+- **WP5-UX5-REGATE15 ĐẠT** (verifier, tự báo claude-sonnet-5-5) trên dc487c6 / 2072e3f2.
+  - Ngoài `handoff/`, chỉ đúng bốn file tài liệu khác so với 0b45781.
+  - `dist/` giống hệt: 250 file. Vì vậy các kết quả chạy của REGATE14 được kế thừa, và drill
+    cùng `npm audit` của REGATE11 cũng vậy.
+  - `npm test`: 2.397. Các validator đều đạt. 173 link đều mở được, và EN/VI khớp nhau.
+  - **Các mẫu pilot đã được tạo lại từ dc487c6** theo cách làm của T06.
+    - Năm thông báo giống hệt T06.
+    - Sáu submission khác nhau ở mã submission sinh mới mỗi lượt, nên hash PDF khác. Văn
+      bản PDF vẫn giống nhau khi bỏ qua mã đó.
+    - Một Date là 06:32 thay vì 06:30, do một job được chạy lại.
+    - Một lượt chạy đối chứng trên cùng mã nguồn cho thấy đúng các khác biệt này.
+- **WP5-UX5-AUDIT-RN: FIX REQUIRED** (auditor opus mới, tự báo claude-opus-5-5) trên dc487c6 /
+  2072e3f2 ([review](WP5_UX5_REVIEW_RN.vi.md)).
+  - **F-UX5RN-1 (Low).** `DEVELOPMENT.md:3` và `.vi.md:3` vẫn ghi WP4 đang chờ gate và chưa
+    được nghiệm thu. Các dòng README mới trỏ tới DEVELOPMENT, nên hai tài liệu giờ mâu thuẫn
+    nhau.
+  - Mọi phần khác đều đạt:
+    - phạm vi thay đổi;
+    - `dist/` giống hệt 0b45781, nên kết luận về sản phẩm của AUDIT-INT3 vẫn được kế thừa;
+    - mọi câu đã sửa đều khớp với board;
+    - EN/VI khớp nhau, và 173 link đều mở được;
+    - lượt tạo mẫu riêng của auditor cho đúng kết quả của REGATE15;
+    - `npm test`: 2.397.
+  - Rủi ro tùy chọn: R-UX5RN-1..6.
+  - Mục 6 của review liệt kê các câu trong gói pilot mà ACCEPT-DOCS phải sửa.
+  - AUDIT-INT3 vẫn là kết quả nghiệm thu hiện hành.
+- **Kiểm tra của điều phối viên trước khi sửa.** Tìm trong các file markdown được theo dõi
+  ngoài `handoff/` không thấy trạng thái nghiệm thu cũ nào khác.
+- **WP5-UX5-FIX20 đã xong** (worker, tự báo claude-sonnet-5-5). Chưa commit. Digest
+  690fd8fd, 882 file.
+  - Nó tái hiện lỗi trước khi sửa.
+  - Nó đã sửa:
+    - dòng 3 của DEVELOPMENT, EN và VI, giờ ghi đúng trạng thái như README và có link handoff
+      WP5;
+    - docs/12:7, EN và VI, giờ chỉ có một quy tắc về bản phát hành (R-UX5RN-1);
+    - dòng về drill trong docs/12, khôi phục mệnh đề về các kiểm tra mà các slice đã chạy
+      (R-UX5RN-2) và nêu tên Dockerfile cùng `vite.config.ts` (R-UX5RN-3; cả hai không đổi
+      từ 1fe5ad3);
+    - dấu phẩy ở bước 3 của README (R-UX5RN-5).
+  - Chỉ đúng sáu file khác (8+/8-). Preflight đạt (exit 0).
+  - Tìm trạng thái cũ không thấy gì.
+- **Đã đăng ký kèm brief:**
+  - FIX20-FREEZE;
+  - REGATE16 (có giới hạn; cổng 51930-51969);
+  - RECHECK-RN (auditor opus mới; cặp review `WP5_UX5_RECHECK_RN`; cổng 51970-52009).
+- **Đang chạy:** WP5-UX5-FIX20-FREEZE, chạy một mình.
+- **Sau đó:**
+  - REGATE16. `dist/` phải giữ nguyên, để các mẫu của REGATE15 vẫn đại diện cho bản phát
+    hành;
+  - một lượt kiểm tra lại mới, mà kết quả ĐẠT sẽ thay thế AUDIT-INT3;
+  - ACCEPT-DOCS;
+  - WP5-UX5-ACCEPT.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

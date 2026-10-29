@@ -1,0 +1,83 @@
+"""Copy task-folder logs and scripts into the evidence folder as masked LF text with exactly one final newline.
+
+usage: python collect.py <task-dir> <evidence-dir>
+Also normalises evidence files already written there, and prints a check of every evidence file.
+"""
+import os
+import re
+import sys
+
+task, ev = sys.argv[1], sys.argv[2]
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+U = "Us" + "ers"  # built from parts so that this file holds no literal profile-path pattern
+PROFILE = re.compile(r"(?i)([A-Z]:[\\/]+" + U + r"[\\/]+|/[a-z]/" + U + r"/)[^\\/\s\"']+")
+
+
+def clean(text, mask=True):
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = ANSI.sub("", text)
+    if mask:
+        text = PROFILE.sub(lambda m: m.group(1) + "<user>", text)
+    # No trailing whitespace (git diff --check at the freeze); blank diff context lines lose their single space.
+    text = "\n".join(line.rstrip() for line in text.split("\n"))
+    return text.rstrip("\n") + "\n"
+
+
+def concat(name, parts):
+    chunks = []
+    for label, rel in parts:
+        with open(os.path.join(task, rel), encoding="utf-8", errors="replace") as fh:
+            chunks.append(f"===== {label} ({rel})\n" + fh.read())
+    write(name, "\n".join(chunks))
+
+
+def write(name, text):
+    # The copy of this script holds the mask pattern itself, so it is not masked (it holds no profile path).
+    with open(os.path.join(ev, name), "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(clean(text, mask=name != "90-collect.py.txt"))
+
+
+concat("02-builds.txt", [("target dc487c6", "logs/build-target.txt"), ("previous 0b45781", "logs/build-prev.txt"), ("REGATE11 drill commit 1fe5ad3", "logs/build-r11.txt")])
+concat("03-core.txt", [("exits", "logs/core-exits.txt"), ("npm run typecheck", "logs/typecheck.txt"), ("npm run lint", "logs/lint.txt"), ("npm run build", "logs/build2.txt"), ("npm test", "logs/test.txt")])
+concat("10-board-rounds.txt", [("board extract (read-only) of the round gates and audits", "board-rounds.txt")])
+concat("11-board-gates.txt", [("board list (read-only) of gate and audit tasks, WP1 to WP5", "board-gates-nocommit.txt"), ("owner question Q0 and neighbours (board lines 355-440)", "board-q.txt")])
+concat("20-name-status.txt", [("git diff --name-status 0b45781..dc487c6 -- . ':!handoff'", "namestatus.txt")])
+concat("21-doc-diff.txt", [("git diff 0b45781..dc487c6 of the four documents", "docdiff.txt")])
+concat("31-stale-status.txt", [("stale status statements outside handoff/ at the target", "stale-grep.txt"), ("DEVELOPMENT.md history and VI line 3", "dev-history.txt"), ("docs/10 lines 183-188 and 219-222", "d10-lines.txt")])
+concat("32-consistency-grep.txt", [("docs 04, 05, 10, 11, 06, 09 and DEVELOPMENT: status-related lines", "consistency-grep.txt"), ("target digest and SHAs in the documents; SHAs resolved", "digest-in-docs.txt")])
+concat("41-samples-run.txt", [("exits", "logs/samples-exits.txt"), ("make-samples output", "logs/samples-make.txt"), ("extract output (sample index)", "logs/samples-extract.txt")])
+concat("43-privacy-scan.txt", [("addresses, profile paths, leave/holiday words, REGATE15 ready check", "privacy.txt"), ("T06 ready check and source of the log line", "t06-ready.txt")])
+concat("44-render-path-commits.txt", [("commits and diffs on render paths 69d6340..dc487c6", "render-commits.txt")])
+concat("45-notices-grep.txt", [("REGATE15 notices: headers, links; MIME parts; Bcc count", "notices-grep.txt")])
+concat("53-carry-forward-paths.txt", [("1fe5ad3..0b45781 and ..dc487c6: paths relevant to the drill", "carry-diff.txt")])
+concat("54-drill-client-check.txt", [("sourceMappingURL in the local client build", "srcmap.txt"), ("vite sourcemap switch and Docker build stage", "vitecfg.txt"), ("what the drill checks of the client", "drill-client.txt")])
+concat("55-regate11-drill-summary.txt", [("REGATE11 drill exits and stage summary (from its evidence)", "drill-r11.txt"), ("later evidence mentioning the drill", "drill-mentions.txt"), ("files", "drill-files.txt")])
+concat("60-leftover-check.txt", [("node, npm or msedge processes referencing the task folder (names and counts only)", "leftover2.txt")])
+for src, dst in [("env.sh", "90-env.sh.txt"), ("digest-repo.sh", "90-digest-repo.sh.txt"), ("digest-export.sh", "90-digest-export.sh.txt"),
+                 ("digest-clone.sh", "90-digest-clone.sh.txt"), ("export-build.sh", "90-export-build.sh.txt"), ("dist-compare.sh", "90-dist-compare.sh.txt"),
+                 ("core.sh", "90-core.sh.txt"), ("samples.sh", "90-samples.sh.txt"), ("board_extract.py", "90-board_extract.py.txt"),
+                 ("board_list.py", "90-board_list.py.txt"), ("doccheck.py", "90-doccheck.py.txt"), ("compare_samples.py", "90-compare_samples.py.txt"),
+                 ("collect.py", "90-collect.py.txt"), ("privacy_scan.py", "90-privacy_scan.py.txt"),
+                 ("privacy-scan-result.txt", "61-privacy-scan-result.txt"), ("preflight.txt", "62-preflight.txt")]:
+    with open(os.path.join(task, src), encoding="utf-8") as fh:
+        write(dst, fh.read())
+
+# Normalise and check every evidence file.
+report = []
+for name in sorted(os.listdir(ev)):
+    path = os.path.join(ev, name)
+    if not name.endswith(".txt"):
+        report.append(f"{name}: NOT .txt")
+        continue
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        text = fh.read()
+    fixed = clean(text, mask=name != "90-collect.py.txt")
+    if fixed != text:
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(fixed)
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    addresses = set(re.findall(rb"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]+", raw))
+    bad = sorted(a.decode() for a in addresses if not re.search(rb"@(example|timesheet)\.invalid$", a))
+    report.append(f"{name}: bytes {len(raw)}, CR {raw.count(b'\r')}, ends with one LF {raw.endswith(b'\n') and not raw.endswith(b'\n\n')}, non-synthetic addresses {bad}, profile hits {len(PROFILE.findall(raw.decode('utf-8', 'replace')))}")
+print("\n".join(report))

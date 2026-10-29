@@ -1,0 +1,11 @@
+# Core checks in the clean export of the target, one at a time. Logs in $T/logs, exits in $T/logs/core-exits.txt
+. /d/.claude-tmp/timesheet/WP5-UX5-AUDIT-RN/env.sh
+X="$T/export-target"
+cd "$X" || exit 2
+EX="$T/logs/core-exits.txt"
+printf 'core checks in export of %s, start %s, node %s\n' "$TARGET" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$(node --version)" > "$EX"
+npm run typecheck > "$T/logs/typecheck.txt" 2>&1; printf 'typecheck exit %s\n' "$?" >> "$EX"
+npm run lint > "$T/logs/lint.txt" 2>&1; printf 'lint exit %s\n' "$?" >> "$EX"
+npm run build > "$T/logs/build2.txt" 2>&1; printf 'build exit %s\n' "$?" >> "$EX"
+npm test > "$T/logs/test.txt" 2>&1; printf 'npm test exit %s\n' "$?" >> "$EX"
+printf 'end %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$EX"

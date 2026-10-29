@@ -1,6 +1,6 @@
 # Development guide
 
-Status: **WP1, WP2 and WP3 independently accepted; WP4 implemented (T01–T12 and the documentation task T13), awaiting the package-final gate WP4-GATE and independent audits; not accepted.** See the [WP4 handoff](handoff/delivery/WP4_HANDOFF.md), the [operations runbook](docs/11_OPERATIONS_RUNBOOK.md), the [WP3 handoff](handoff/delivery/WP3_HANDOFF.md), the [WP2 handoff](handoff/delivery/WP2_HANDOFF.md) and [next action](handoff/NEXT_ACTION.md). English is authoritative; [DEVELOPMENT.vi.md](DEVELOPMENT.vi.md) is the translation. Business rules live in [02 Time and OT](docs/02_TIME_AND_OT_RULES.md) and [03 Architecture](docs/03_ARCHITECTURE_AND_DATA.md); this guide only explains how to run the code.
+Status: **WP1 to WP4 independently accepted; WP5 software ready (independently accepted, and re-accepted after UI change rounds 1 to 5); pilot pending and NAS NOT VERIFIED.** See the [WP5 handoff](handoff/delivery/WP5_HANDOFF.md), the [WP4 handoff](handoff/delivery/WP4_HANDOFF.md), the [operations runbook](docs/11_OPERATIONS_RUNBOOK.md), the [WP3 handoff](handoff/delivery/WP3_HANDOFF.md), the [WP2 handoff](handoff/delivery/WP2_HANDOFF.md) and [next action](handoff/NEXT_ACTION.md). English is authoritative; [DEVELOPMENT.vi.md](DEVELOPMENT.vi.md) is the translation. Business rules live in [02 Time and OT](docs/02_TIME_AND_OT_RULES.md) and [03 Architecture](docs/03_ARCHITECTURE_AND_DATA.md); this guide only explains how to run the code.
 
 ## Prerequisites
 

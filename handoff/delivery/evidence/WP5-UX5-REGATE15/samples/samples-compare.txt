@@ -1,0 +1,98 @@
+Sample comparison: baseline (WP5-UX5-T06, 11 messages) versus new (WP5-UX5-REGATE15\samples, 11 messages)
+Excluded from the message comparison: capture label and folder lines, eml sha256 line, Message-ID header, MIME boundary strings, and the hash and byte size inside the "# pdf sha256" line (compared separately below).
+Pairing key: envelope recipients | Subject | Date header. The file numbers differ between runs (same-instant messages sort by random capture-folder id), so samples are paired by key, not by number.
+Submission ID TS-<date>-<10 hex> comes from the run-specific random user id (submissionIdFor, unchanged in 69d6340..dc487c6); it is replaced by TS-<id> in the "normalised" lines.
+
+SAMPLE 01-notice-sample.signed-1   (baseline 01-notice-sample.signed-1)
+  key: sample.signed@example.invalid | Timesheet signed, not sent yet: payroll 2026-10-02 | Tue, 29 Sep 2026 06:30:00 +0000
+  subject equal: true; headers equal: true; decoded body equal: true; body equal after the submission ID is normalised: true
+  RESULT: IDENTICAL (headers, body, PDF hash, PDF text)
+
+SAMPLE 02-notice-sample.auto.off-2   (baseline 03-notice-sample.auto.off-3)
+  key: sample.auto.off@example.invalid | Timesheet due in about 18 hours: payroll 2026-10-02 | Tue, 29 Sep 2026 06:30:00 +0000
+  subject equal: true; headers equal: true; decoded body equal: true; body equal after the submission ID is normalised: true
+  RESULT: IDENTICAL (headers, body, PDF hash, PDF text)
+
+SAMPLE 03-notice-sample.auto.on-3   (baseline 02-notice-sample.auto.on-2)
+  key: sample.auto.on@example.invalid | Timesheet due in about 18 hours: payroll 2026-10-02 | Tue, 29 Sep 2026 06:30:00 +0000
+  subject equal: true; headers equal: true; decoded body equal: true; body equal after the submission ID is normalised: true
+  RESULT: IDENTICAL (headers, body, PDF hash, PDF text)
+
+SAMPLE 04-submission-payroll-norows-rev1   (baseline 04-submission-payroll-norows-rev1)
+  key: payroll-norows@example.invalid, payroll-copy@example.invalid | Timesheet 2026-09-14 to 2026-09-27 - Sample No Time Rows Employee - Submitted | Tue, 29 Sep 2026 06:32:00 +0000
+  subject equal: true; headers equal: true; decoded body equal: false; body equal after the submission ID is normalised: true
+    body line 6: baseline "Submission TS-20261002-d7b8fc7eb2, revision 1." | new "Submission TS-20261002-08d32c7fc5, revision 1."
+  PDF SHA-256 baseline: c7ef784100d1371db3fbf69e2eba019f733a52c6b9bafba6c6afb882d09ad00f (42653 bytes)
+  PDF SHA-256 new:      04500ec24df5f9ca4df44ee1ab2a7484b84982bbc4437200ec2dc5b91c6baafa (42661 bytes)
+  PDF SHA-256 equal: false
+  PDF text identical: false; identical after the submission ID is normalised: true (pdf-text-04-submission-payroll-norows-rev1.txt vs pdf-text-04-submission-payroll-norows-rev1.txt)
+    pdf-text line 2: baseline "TS-20261002-d7b8fc7eb2" | new "TS-20261002-08d32c7fc5"
+  RESULT: DIFFERS ONLY BY THE RUN-SPECIFIC SUBMISSION ID (and the PDF bytes that carry it)
+
+SAMPLE 05-submission-payroll-manual-rev1   (baseline 05-submission-payroll-manual-rev1)
+  key: payroll-manual@example.invalid, payroll-copy@example.invalid | Timesheet 2026-09-14 to 2026-09-27 - Sample Manual Employee - Submitted | Tue, 29 Sep 2026 06:32:00 +0000
+  subject equal: true; headers equal: true; decoded body equal: false; body equal after the submission ID is normalised: true
+    body line 6: baseline "Submission TS-20261002-b6d1d794c6, revision 1." | new "Submission TS-20261002-65b2a63315, revision 1."
+  PDF SHA-256 baseline: 5b31334fcb28e566cefc1b532790b47e0ce05e1530b994b8435d51dcfc9879f9 (42671 bytes)
+  PDF SHA-256 new:      430344dc50deb888eff18fd431ac298f52c1f692a20efc79a2699158004faffa (42669 bytes)
+  PDF SHA-256 equal: false
+  PDF text identical: false; identical after the submission ID is normalised: true (pdf-text-05-submission-payroll-manual-rev1.txt vs pdf-text-05-submission-payroll-manual-rev1.txt)
+    pdf-text line 2: baseline "TS-20261002-b6d1d794c6" | new "TS-20261002-65b2a63315"
+  RESULT: DIFFERS ONLY BY THE RUN-SPECIFIC SUBMISSION ID (and the PDF bytes that carry it)
+
+SAMPLE 06-notice-sample.auto.off-6   (baseline 09-notice-sample.auto.off-9)
+  key: sample.auto.off@example.invalid | Timesheet submitted automatically: payroll 2026-10-02 | Wed, 30 Sep 2026 06:30:00 +0000
+  subject equal: true; headers equal: true; decoded body equal: true; body equal after the submission ID is normalised: true
+  RESULT: IDENTICAL (headers, body, PDF hash, PDF text)
+
+SAMPLE 07-submission-payroll-signed-rev1   (baseline 10-submission-payroll-signed-rev1)
+  key: payroll-signed@example.invalid, payroll-copy@example.invalid | Timesheet 2026-09-14 to 2026-09-27 - Sample Signed Not Sent Employee - Submitted | Wed, 30 Sep 2026 06:30:00 +0000
+  subject equal: true; headers equal: true; decoded body equal: false; body equal after the submission ID is normalised: true
+    body line 6: baseline "Submission TS-20261002-ed72be1146, revision 1." | new "Submission TS-20261002-b585f484c9, revision 1."
+  PDF SHA-256 baseline: 039228bd32a2ea44f059f115cb82c1e7264451de6a3eda2ea32ff56e60bca4ac (42814 bytes)
+  PDF SHA-256 new:      01fede20046b4a1168573e08aef0d6bbc925d44b4847e69a9014767a8539ad4b (42953 bytes)
+  PDF SHA-256 equal: false
+  PDF text identical: false; identical after the submission ID is normalised: true (pdf-text-10-submission-payroll-signed-rev1.txt vs pdf-text-07-submission-payroll-signed-rev1.txt)
+    pdf-text line 2: baseline "TS-20261002-ed72be1146" | new "TS-20261002-b585f484c9"
+  RESULT: DIFFERS ONLY BY THE RUN-SPECIFIC SUBMISSION ID (and the PDF bytes that carry it)
+
+SAMPLE 08-submission-payroll-auto-on-rev1   (baseline 07-submission-payroll-auto-on-rev1)
+  key: payroll-auto-on@example.invalid, payroll-copy@example.invalid | Timesheet 2026-09-14 to 2026-09-27 - Sample Auto Employee Note On - Automatic submission | Wed, 30 Sep 2026 06:30:00 +0000
+  subject equal: true; headers equal: true; decoded body equal: false; body equal after the submission ID is normalised: true
+    body line 6: baseline "Submission TS-20261002-0332596dcb, revision 1." | new "Submission TS-20261002-29fc15a6d6, revision 1."
+  PDF SHA-256 baseline: b8caaf084cedd49159411c710543ab21fc1ba53d5fcc4d98147e5288aa9f5acf (42880 bytes)
+  PDF SHA-256 new:      fe1778e012158f709bafac7f90993b8ea582555f0a60ad13f689c9ad34543cac (43013 bytes)
+  PDF SHA-256 equal: false
+  PDF text identical: false; identical after the submission ID is normalised: true (pdf-text-07-submission-payroll-auto-on-rev1.txt vs pdf-text-08-submission-payroll-auto-on-rev1.txt)
+    pdf-text line 2: baseline "TS-20261002-0332596dcb" | new "TS-20261002-29fc15a6d6"
+  RESULT: DIFFERS ONLY BY THE RUN-SPECIFIC SUBMISSION ID (and the PDF bytes that carry it)
+
+SAMPLE 09-notice-sample.auto.on-9   (baseline 06-notice-sample.auto.on-6)
+  key: sample.auto.on@example.invalid | Timesheet submitted automatically: payroll 2026-10-02 | Wed, 30 Sep 2026 06:30:00 +0000
+  subject equal: true; headers equal: true; decoded body equal: true; body equal after the submission ID is normalised: true
+  RESULT: IDENTICAL (headers, body, PDF hash, PDF text)
+
+SAMPLE 10-submission-payroll-auto-off-rev1   (baseline 08-submission-payroll-auto-off-rev1, paired by recipients and Subject only; the Date header differs)
+  key: payroll-auto-off@example.invalid, payroll-copy@example.invalid | Timesheet 2026-09-14 to 2026-09-27 - Sample Auto Employee Note Off - Submitted | Wed, 30 Sep 2026 06:32:00 +0000
+  subject equal: true; headers equal: false; decoded body equal: false; body equal after the submission ID is normalised: true
+    header line 12: baseline "Date: Wed, 30 Sep 2026 06:30:00 +0000" | new "Date: Wed, 30 Sep 2026 06:32:00 +0000"
+    body line 6: baseline "Submission TS-20261002-7e1c673405, revision 1." | new "Submission TS-20261002-5d4d45b1c7, revision 1."
+  PDF SHA-256 baseline: fa4a8e4f8cc0a023580a58c84f21dcf59071182656cf01ae5293088b0e3596ce (42991 bytes)
+  PDF SHA-256 new:      bdafd3e1bf4d5efe3715b22f9e1d12df6c48759392f9dda1ee9bd717c17ce53b (42984 bytes)
+  PDF SHA-256 equal: false
+  PDF text identical: false; identical after the submission ID is normalised: true (pdf-text-08-submission-payroll-auto-off-rev1.txt vs pdf-text-10-submission-payroll-auto-off-rev1.txt)
+    pdf-text line 2: baseline "TS-20261002-7e1c673405" | new "TS-20261002-5d4d45b1c7"
+  RESULT: DIFFERS BEYOND THE SUBMISSION ID
+
+SAMPLE 11-submission-payroll-manual-rev2   (baseline 11-submission-payroll-manual-rev2)
+  key: payroll-manual@example.invalid, payroll-copy@example.invalid | Timesheet 2026-09-14 to 2026-09-27 - Sample Manual Employee - Submitted | Wed, 30 Sep 2026 09:00:00 +0000
+  subject equal: true; headers equal: true; decoded body equal: false; body equal after the submission ID is normalised: true
+    body line 6: baseline "Submission TS-20261002-b6d1d794c6, revision 2." | new "Submission TS-20261002-65b2a63315, revision 2."
+  PDF SHA-256 baseline: 5893e0393165c34fa9c320bee6888aa721c78f668e5cad1fc2796dd39f15d1ab (42786 bytes)
+  PDF SHA-256 new:      19e8268ed09de67a66c5f4fabe130ceaffa8464a4ec04fa6dfd5425c9c002dc3 (42781 bytes)
+  PDF SHA-256 equal: false
+  PDF text identical: false; identical after the submission ID is normalised: true (pdf-text-11-submission-payroll-manual-rev2.txt vs pdf-text-11-submission-payroll-manual-rev2.txt)
+    pdf-text line 2: baseline "TS-20261002-b6d1d794c6" | new "TS-20261002-65b2a63315"
+  RESULT: DIFFERS ONLY BY THE RUN-SPECIFIC SUBMISSION ID (and the PDF bytes that carry it)
+
+SUMMARY: 11 new messages; fully identical 5; differing only by the submission ID 5; differing beyond it 1; unmatched 0

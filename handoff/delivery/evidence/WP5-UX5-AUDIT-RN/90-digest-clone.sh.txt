@@ -1,0 +1,16 @@
+# npm run digest in a clean clone of the target (scratch, task folder); git config only per process.
+. /d/.claude-tmp/timesheet/WP5-UX5-AUDIT-RN/env.sh
+C="$T/clone"
+OUT="$E/01-digest-npm-clean-clone.txt"
+if [ -e "$C" ]; then echo "exists: $C" > "$OUT"; exit 3; fi
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=safe.directory GIT_CONFIG_VALUE_0='*'
+{
+  printf 'time_utc %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  git clone -q --no-checkout "$R" "$C"; printf 'clone exit %s\n' "$?"
+  cd "$C" || exit 2
+  git checkout -q "$TARGET"; printf 'checkout exit %s\n' "$?"
+  printf 'clone HEAD %s\n' "$(git rev-parse HEAD)"
+  printf 'status lines: %s\n' "$(git status --porcelain | wc -l)"
+  npm run digest
+  printf 'npm run digest exit %s\n' "$?"
+} > "$OUT" 2>&1

@@ -1,0 +1,72 @@
+"""Read-only scan of the auditor's output files with the line rules of scripts/precommit-check.mjs (profile path, email,
+URL credentials, secret assignment) ported to Python, so the committer's staged check will not stop on them.
+
+usage: python privacy_scan.py <out.txt> <file-or-dir>...
+"""
+import os
+import re
+import sys
+
+out_path, targets = sys.argv[1], sys.argv[2:]
+# The directory names are built from parts so that this file itself holds no literal profile-path pattern.
+U, H = "Us" + "ers", "ho" + "me"
+TAIL = r"([^\\/\s\"'`,;)]+)"
+PROFILE_PATHS = [
+    re.compile(r"(?:^|[^\w.-])(?:[a-z]:[\\/]+|/(?:mnt/)?[a-z]/)" + U.lower() + r"[\\/]+" + TAIL, re.I),
+    re.compile(r"(?:^|[^\w.-])/" + U + "/" + TAIL),
+    re.compile(r"(?:^|[^\w.-])/" + H + "/" + TAIL),
+]
+PROFILE_PLACEHOLDER = re.compile(r"^(?:[<%$\[{~*]|(?:user|username|name|you|your[_-]?name|me|public|default|runner|node|app)$)", re.I)
+EMAIL = re.compile(r"[\w.%+-]+@((?:[a-z0-9-]+\.)+[a-z]{2,}|localhost)\b", re.I)
+ALLOWED_DOMAINS = re.compile(r"(?:^|\.)example\.(?:com|org|net)$|\.(?:test|invalid|example)$|^localhost$", re.I)
+ALLOWED_TRAILER = "noreply" + chr(64) + "anthropic.com"  # the commit trailer address, built so that no address is written here
+URL_CREDENTIALS = re.compile(r"\b[a-z][a-z0-9+.-]*://[^\s:/@]+:([^\s@/]{3,})@[^\s/]+", re.I)
+NAME = r"[\w.-]*(?:password|passwd|pwd|secret|token|api[_-]?key|smtp[_-]?(?:user(?:name)?|pass(?:word)?|credentials?))"
+SECRET_QUOTED = re.compile(r"(?:^|[^\w])" + NAME + r"[\"']?\s*[:=]\s*([\"'])([^\s\"']{6,})\1", re.I)
+SECRET_ENV = re.compile(r"^\s*(?:export\s+)?" + NAME + r"\s*=\s*([^\s\"']{6,})\s*$", re.I)
+SECRET_YAML = re.compile(r"^\s*(?:-\s+)?" + NAME + r"\s*[:=]\s*([\w@%+=/.!$^&*~-]{6,})\s*(?:#.*)?$", re.I)
+PLACEHOLDER = re.compile(r"^(?:<.*>|\$\{.*\}|\$\w+|%.*%|\{\{.*\}\}|[x*.#-]{3,}|process\.env.*)$|changeme|placeholder|example|dummy|fake|synthetic|redacted|your[_-]|^(?:null|none|undefined|string|test|secret|password|token)$", re.I)
+
+
+def looks_secret(value):
+    return re.search(r"[\d!@#$%^&*+=/~]", value) is not None or len(value) >= 12
+
+
+def secret_value(line):
+    m = SECRET_QUOTED.search(line)
+    if m:
+        return m.group(2)
+    m = SECRET_ENV.search(line)
+    if m:
+        return m.group(1)
+    m = SECRET_YAML.search(line)
+    if m and looks_secret(m.group(1)):
+        return m.group(1)
+    return None
+
+files = []
+for t in targets:
+    if os.path.isdir(t):
+        files += [os.path.join(t, n) for n in sorted(os.listdir(t)) if os.path.isfile(os.path.join(t, n))]
+    else:
+        files.append(t)
+findings = []
+for path in files:
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for no, line in enumerate(fh, 1):
+            for rx in PROFILE_PATHS:
+                m = rx.search(line)
+                if m and not PROFILE_PLACEHOLDER.match(m.group(1).rstrip(".:")):
+                    findings.append(f"{os.path.basename(path)}:{no}: profile-path")
+            for m in EMAIL.finditer(line):
+                if not ALLOWED_DOMAINS.search(m.group(1)) and m.group(0).lower() != ALLOWED_TRAILER:
+                    findings.append(f"{os.path.basename(path)}:{no}: email domain {m.group(1)}")
+            if URL_CREDENTIALS.search(line):
+                findings.append(f"{os.path.basename(path)}:{no}: url-credentials")
+            value = secret_value(line.rstrip("\n"))
+            if value is not None and not PLACEHOLDER.search(value):
+                findings.append(f"{os.path.basename(path)}:{no}: secret-assignment ({len(value)} chars)")
+with open(out_path, "w", encoding="utf-8", newline="\n") as out:
+    out.write(f"files scanned {len(files)}; findings {len(findings)}\n")
+    for f in findings:
+        out.write(f + "\n")

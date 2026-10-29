@@ -1,6 +1,6 @@
 # Hướng dẫn phát triển
 
-Trạng thái: **WP1, WP2 và WP3 đã được chấp nhận độc lập; WP4 đã triển khai (T01–T12 và tác vụ tài liệu T13), đang chờ gate cuối gói WP4-GATE và các audit độc lập; chưa được chấp nhận.** Xem [bàn giao WP4](handoff/delivery/WP4_HANDOFF.vi.md), [sổ tay vận hành](docs/11_OPERATIONS_RUNBOOK.vi.md), [bàn giao WP3](handoff/delivery/WP3_HANDOFF.vi.md), [bàn giao WP2](handoff/delivery/WP2_HANDOFF.vi.md) và [bước tiếp theo](handoff/NEXT_ACTION.vi.md). Tiếng Anh là nguồn chuẩn; đây là bản dịch của [DEVELOPMENT.md](DEVELOPMENT.md). Quy tắc nghiệp vụ nằm ở [02 Giờ và OT](docs/02_TIME_AND_OT_RULES.vi.md) và [03 Kiến trúc](docs/03_ARCHITECTURE_AND_DATA.vi.md); tài liệu này chỉ giải thích cách chạy mã.
+Trạng thái: **WP1 đến WP4 đã được chấp nhận độc lập; WP5 đã sẵn sàng về phần mềm (được chấp nhận độc lập, và chấp nhận lại sau các vòng thay đổi UI 1 đến 5); pilot đang chờ và NAS CHƯA ĐƯỢC KIỂM CHỨNG (NOT VERIFIED).** Xem [bàn giao WP5](handoff/delivery/WP5_HANDOFF.vi.md), [bàn giao WP4](handoff/delivery/WP4_HANDOFF.vi.md), [sổ tay vận hành](docs/11_OPERATIONS_RUNBOOK.vi.md), [bàn giao WP3](handoff/delivery/WP3_HANDOFF.vi.md), [bàn giao WP2](handoff/delivery/WP2_HANDOFF.vi.md) và [bước tiếp theo](handoff/NEXT_ACTION.vi.md). Tiếng Anh là nguồn chuẩn; đây là bản dịch của [DEVELOPMENT.md](DEVELOPMENT.md). Quy tắc nghiệp vụ nằm ở [02 Giờ và OT](docs/02_TIME_AND_OT_RULES.vi.md) và [03 Kiến trúc](docs/03_ARCHITECTURE_AND_DATA.vi.md); tài liệu này chỉ giải thích cách chạy mã.
 
 ## Điều kiện cần
 

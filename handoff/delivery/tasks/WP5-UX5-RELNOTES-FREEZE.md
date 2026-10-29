@@ -151,3 +151,9 @@ Append briefly:
 Return at most 80 words, beginning 'Self-reported model: ...', with the full commit SHA.
 
 ## Results
+
+- HEAD 0b457817 -> dc487c6114dd488121b1de1444e11cdacf5c237b; pushed (fast-forward), remote SHA equals HEAD.
+- D_PRE and HEAD digest both 2072e3f2...fb99b (882 files).
+- Staged 387: 4 docs, 6 records, 2 review, 6 tasks, 369 evidence. Unstaged or masked: none.
+- Exits: precommit 0, diff check 0, JSON 0, validate_orchestration 0, check_recovery 0, preflight 0, push 0.
+- Details: evidence/WP5-UX5-RELNOTES-FREEZE/checks.txt.

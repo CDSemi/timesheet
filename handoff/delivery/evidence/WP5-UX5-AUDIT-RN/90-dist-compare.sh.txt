@@ -1,0 +1,16 @@
+# usage: bash dist-compare.sh <labelA> <labelB> <out-file> [subdir...]
+# Hashes every file under dist/ (or the named dist subdirectories) of two exports and compares.
+. /d/.claude-tmp/timesheet/WP5-UX5-AUDIT-RN/env.sh
+A="$1"; B="$2"; OUT="$3"; shift 3
+SUBS="${*:-.}"
+for L in "$A" "$B"; do
+  ( cd "$T/export-$L/dist" && for s in $SUBS; do find "$s" -type f; done | sed 's#^\./##' | LC_ALL=C sort | while read -r f; do printf '%s  %s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$f"; done ) > "$T/dist-$L-$(echo "$SUBS" | tr ' /.' '__d').lst"
+done
+LA="$T/dist-$A-$(echo "$SUBS" | tr ' /.' '__d').lst"
+LB="$T/dist-$B-$(echo "$SUBS" | tr ' /.' '__d').lst"
+{
+  printf 'dist comparison %s vs %s, scope: %s\n' "$A" "$B" "$SUBS"
+  printf '%s files: %s, listing sha256 %s\n' "$A" "$(wc -l < "$LA")" "$(sha256sum "$LA" | cut -d' ' -f1)"
+  printf '%s files: %s, listing sha256 %s\n' "$B" "$(wc -l < "$LB")" "$(sha256sum "$LB" | cut -d' ' -f1)"
+  if cmp -s "$LA" "$LB"; then echo 'RESULT identical (every path and SHA-256 equal)'; else echo 'RESULT DIFFERENT'; diff "$LA" "$LB"; fi
+} > "$OUT"

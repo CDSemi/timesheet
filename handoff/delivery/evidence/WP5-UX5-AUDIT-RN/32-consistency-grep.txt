@@ -1,0 +1,75 @@
+===== docs 04, 05, 10, 11, 06, 09 and DEVELOPMENT: status-related lines (consistency-grep.txt)
+== docs/04_UX_AND_SETTINGS.md
+57:- Period bar (round 5, U5-09 to U5-13): one card with two arrangements, chosen by the width of the card itself (a container query: the card is wide from 40rem, 600px, of width, plus 9.2rem, 138px, while Current period shows; the thresholds are measured from the parts), never by the window, so a D
+70:- Header: on its own surface, with the title "Mon 10/12/2026" (the dialog name keeps the ISO accounting date), a Close icon button and chips: the period (current, old, future or in progress), "Times in {display zone}", "Day in {reporting zone}" only when the display zone differs from the reportin
+102:- Style (round 3, owner decision of 2026-10-15; it replaces the industrial direction, the 4px radius and the 300 ms transition of E-8): a modern, friendly business style. Surfaces step from the page (`--bg`) to cards (`--card`), then sheets, panels and menus. Every colour has a light value in `:
+== docs/05_SUBMISSION_AND_NOTIFICATIONS.md
+72:- The check runs inside the send transaction, so two concurrent sends cannot both skip it. A send still in progress, or a send job of any revision of the period that still waits, blocks another one (409), so an older revision's copy cannot arrive after the correction's. A send job that a restore
+== docs/10_DECISIONS_AND_SOURCES.md
+87:- Package-final snapshot (WF-A-10): defined in document 08 as the snapshot whose audit PASS would accept the package, including FIX REQUIRED rechecks that unlock the next package. It keeps a separate verifier gate; `gate_included` is for intermediate S-size fixes only. The coordinator re-plans th
+169:- I-3 safe default (WP4-AUDIT-B R3, WP4-FIXB): the owner's I-3 (a) says a period that has not ended cannot be imported. The coordinator also treats an ended period whose payroll due instant has not passed as skip-only (`not_due`, reason `period_not_due`); the due instant itself counts as due, as
+216:- WP5-UX-Q1 (a): fix both area-B findings of WP5-UX-AUDIT-B4 in one small round: a stronger shared focus-ring token with at least 3:1 against every adjacent surface in both themes plus an automated contrast check (document 04, "Visual standard"), and the display-zone due time written in the US d
+228:- G-5 (b): the period that contains today shows an "in progress" pill during the five days when another period is still the current one. This also answers the optional WP5-UX2-Q3 about the "future" badge on that period.
+261:Source: the same direct chat answers of 2026-10-20 (`owner_decisions`). These answers change no code and no canonical rule; they are recorded here, in the release notes, the runbook and the pilot packet. D-5 a, D-6 a, D-9 b, D-10 (as F-1 (i)) and D-15 b are in the entry above.
+269:- D-13 (a): the pilot host is the NAS; it stays NOT VERIFIED until the owner ticks the runbook section 2 checklist.
+== docs/11_OPERATIONS_RUNBOOK.md
+5:**Status: the NAS target is NOT VERIFIED.** Every command below was exercised only by the WP4 container drill on a developer workstation (Docker Desktop, linux/amd64, capture mode, synthetic data). Nothing has been run on the owner's NAS, and no real email has been sent. A step is labelled in one
+34:- Sections 13 to 16 add these placeholders: `<release-commit>`, `<source-digest>` and `<image-id>` (the release identity recorded in section 1 step 8 and in [12 Release notes](12_RELEASE_NOTES.md)); `<manifest-sha256>` (the SHA-256 of `<backup-dir>/<backup-name>/manifest.json`); `<activation-inst
+43:2. The image is pinned: the Dockerfile builds from `node:24.21.0-trixie-slim` by the digest of its multi-architecture index (`ARG NODE_IMAGE_DIGEST`), never `latest`. Without Ingat, build the image from a clean export of the release commit placed in `<project-dir>`; the CI-published tag `ghcr.io/
+65:   The service must become healthy (the health check calls `/api/ready`). Record the image ID that the last command prints at build time, with the release commit and the source digest: it identifies the release (a rebuild of the same source can give another ID). **[Drill stage 1]**
+69:Tick each item on the NAS and record the date; until then the NAS is NOT VERIFIED. Every item is an **[owner NAS step, unverified]**.
+81:- [ ] A protected copy of `<env-file>` (mode 600) is kept with the separate-device backup copy, together with the release commit, source digest and image ID (section 4 step 3).
+121:3. A backup on the same volume does not protect against losing the disk. Copy `<backup-dir>` to a separate device (Synology Hyper Backup or a USB disk) after each backup. This is an owner setup step, not application code (owner decision F-5). Backups hold personal data, PDFs and signatures: prot
+170:2. For each held send, check the real mailbox (or the capture folder) to see whether the source already delivered it. For each uncertain delivery attempt, record the decision in the application's delivery history first; the resume is refused while any attempt awaits a decision.
+171:3. Preview the resume, then clear the pause. With `--confirm` it succeeds only when no attempt awaits a decision (exit 1 otherwise). **[Drill stage 3]**
+289:   - The section 2 checklist is ticked and dated (owner decision D-13 (a)); until then the NAS is NOT VERIFIED and the result is "software ready, pilot pending".
+367:| Release commit | `<release-commit>` |
+== docs/06_TEST_AND_ACCEPTANCE.md
+36:Each handoff includes baseline/commit, commands, exit status, observed outcomes, evidence paths and untested cases. A fresh independent auditor (any supported vendor, separate from authors) returns PASS / FIX REQUIRED / NOT VERIFIED with specific reproduction and rule/AC IDs. Block progression fo
+38:WP5 prepares a concrete pilot packet: actual URL/sender/recipients, exact email/PDF preview, settings, backup/restore result and rollback point. Owner authorization is needed for real pilot delivery/activation. Software readiness, owner permission, provider acceptance and recipient receipt are se
+== docs/09_IMPLEMENTATION_ROADMAP.md
+53:## WP5 — Independent acceptance and pilot
+57:Start from the accepted WP1–WP4 release candidate and WP5 independent findings. Reproduce/fix accepted defects with bounded regression tests; preserve accepted scope and history. Prepare bilingual release/setup notes and the exact pilot packet (URL, sender/recipients, email/PDF, settings, resto
+69:Use [FIX_FINDINGS](../handoff/prompts/FIX_FINDINGS.md) for bounded fixes and [RESUME](../handoff/prompts/RESUME.md) for interruption. Missing NAS access means software ready/pilot pending, not production accepted. Completion requires required gates, authorized pilot, a restorable installation and
+== DEVELOPMENT.md
+3:Status: **WP1, WP2 and WP3 independently accepted; WP4 implemented (T01–T12 and the documentation task T13), awaiting the package-final gate WP4-GATE and independent audits; not accepted.** See the [WP4 handoff](handoff/delivery/WP4_HANDOFF.md), the [operations runbook](docs/11_OPERATIONS_RUNBOO
+73:- **Container drill.** `npm run drill:container -- --work <dir> [--project <name>] [--wp3 <dir>] [--keep]` builds the pinned image for linux/amd64, runs it through `compose.example.yaml` on a fresh host folder and checks stages 1 to 6: install and restart, backup under writes, isolated restore wi
+76:- **New test files in WP4.** Integration: `health`, `audit-access`, `bootstrap`, `backup`, `backup-prune`, `restore`, `jobs-sweep`, `job-retention`, `operations-status`, `workbook-reader`, `workbook-import`, `opening-balance` and `upgrade` (in `tests/integration/`). Client: `importModel` (in `tes
+113:| `GET /periods/current`, `GET /periods?from=&to=` | Current (due) period, period in progress, period list |
+
+===== target digest and SHAs in the documents; SHAs resolved (digest-in-docs.txt)
+target digest prefix 2072e3f2 occurrences outside handoff/:
+exit 1
+dc487c6 occurrences outside handoff/:
+exit 1
+64-hex digests in the four files:
+docs/12_RELEASE_NOTES.md:7:1e59ad31d9af2a3f4a3aa5711647ea8742e1534b3d4f8ba4f2210beee44a3d2c
+docs/12_RELEASE_NOTES.vi.md:7:1e59ad31d9af2a3f4a3aa5711647ea8742e1534b3d4f8ba4f2210beee44a3d2c
+short SHAs in the four files:
+docs/12_RELEASE_NOTES.md:7:`8e99d2c6375f71ac94faff9eb859b9b7bcf3e741`
+docs/12_RELEASE_NOTES.md:7:`0b45781`
+docs/12_RELEASE_NOTES.md:42:`0b45781`
+docs/12_RELEASE_NOTES.md:49:`0b45781`
+docs/12_RELEASE_NOTES.md:119:`1fe5ad3`
+docs/12_RELEASE_NOTES.md:119:`a5cbc91`
+docs/12_RELEASE_NOTES.md:119:`d96df5d`
+docs/12_RELEASE_NOTES.md:119:`0b45781`
+docs/12_RELEASE_NOTES.md:119:`1fe5ad3`
+docs/12_RELEASE_NOTES.md:119:`0b45781`
+docs/12_RELEASE_NOTES.md:119:`0b45781`
+docs/12_RELEASE_NOTES.vi.md:7:`8e99d2c6375f71ac94faff9eb859b9b7bcf3e741`
+docs/12_RELEASE_NOTES.vi.md:7:`0b45781`
+docs/12_RELEASE_NOTES.vi.md:42:`0b45781`
+docs/12_RELEASE_NOTES.vi.md:49:`0b45781`
+docs/12_RELEASE_NOTES.vi.md:119:`1fe5ad3`
+docs/12_RELEASE_NOTES.vi.md:119:`a5cbc91`
+docs/12_RELEASE_NOTES.vi.md:119:`d96df5d`
+docs/12_RELEASE_NOTES.vi.md:119:`0b45781`
+docs/12_RELEASE_NOTES.vi.md:119:`1fe5ad3`
+docs/12_RELEASE_NOTES.vi.md:119:`0b45781`
+docs/12_RELEASE_NOTES.vi.md:119:`0b45781`
+0b45781 -> 0b457817ed29806a36fdd78cc22ac84a0cc2db9d
+1fe5ad3 -> 1fe5ad3075fd4d1b94abe5b8be04ed05729b05c2
+a5cbc91 -> a5cbc91e6965633a0f9d1dd7e912577321cc71e3
+d96df5d -> d96df5daa25b44b156354bc96605e13e94e44396
+8e99d2c6375f71ac94faff9eb859b9b7bcf3e741 -> 8e99d2c6375f71ac94faff9eb859b9b7bcf3e741

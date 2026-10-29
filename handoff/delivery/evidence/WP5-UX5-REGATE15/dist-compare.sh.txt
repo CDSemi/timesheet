@@ -1,0 +1,12 @@
+. /d/Dropbox/Work.CDSemi/timesheet/handoff/delivery/evidence/WP5-UX5-REGATE15/env.sh.txt
+for v in export-prev export; do
+  (cd $T/$v/dist && find . -type f | LC_ALL=C sort | xargs sha256sum > $T/dist-$v.txt)
+done
+{
+  echo "prev (0b45781) dist files: $(wc -l < $T/dist-export-prev.txt)"
+  echo "target (dc487c6) dist files: $(wc -l < $T/dist-export.txt)"
+  if cmp -s $T/dist-export-prev.txt $T/dist-export.txt; then echo "RESULT: dist/ identical (same file list, same SHA-256 of every file)"; else echo "RESULT: dist/ DIFFERS"; diff $T/dist-export-prev.txt $T/dist-export.txt; fi
+  echo "sha256 of the sorted hash listing, prev: $(sha256sum < $T/dist-export-prev.txt | cut -d' ' -f1)"
+  echo "sha256 of the sorted hash listing, target: $(sha256sum < $T/dist-export.txt | cut -d' ' -f1)"
+} > $E/50-dist-compare.txt
+cat $E/50-dist-compare.txt
