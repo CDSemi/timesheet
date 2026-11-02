@@ -3223,7 +3223,71 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - Three drifts in the handoff were fixed.
   - The drill's 209 checks are 207 stage checks plus 2 cleanup checks. The packet now says
     so.
-- **Running now:** the WP5-UX5-ACCEPT commit, alone.
+- **WP5-UX5-ACCEPT done.**
+  - Commit 27567d122ab70c0997a4a31d77405662f428f585 on main. It was pushed as a fast-forward
+    from a54061f.
+  - 111 handoff paths were staged. The digest stays 690fd8fd. Every check exited 0.
+  - **WP5 is re-accepted after UI change rounds 4 and 5 on a54061f / 690fd8fd.**
+- **WP5-GOV-DOCS-PLAN done** (planner, self-reported claude-sonnet-5-5). The plan is in
+  `evidence/WP5-GOV-DOCS-PLAN/plan.txt`.
+  - **Documentation:** `*.md` and `.vi.md` files outside these folders: `src/`, `tests/`,
+    `scripts/`, `assets/` (a test reads one README there), `.claude/`, `.agents/` and
+    `handoff/`.
+  - **The process:** an author edits, and a fresh reviewer checks and fixes. No freeze,
+    gate or audit.
+  - **Option (a):** keep `npm run digest`, and add a board record
+    `documentation_since_acceptance` that lets the validator keep the acceptance. 17 new
+    probes.
+  - **The edits:** AGENTS rule 14, docs/08, ORCHESTRATE, RESUME, the templates, docs/12:7
+    and docs/10, each with its VI pair. No ADR is needed.
+- **The owner answered WP5-GOV-DOCS-Q on 2026-11-02: Q1 (a), Q2 (a).**
+  - Working rules in Markdown are documentation too.
+  - This change gets the validator probes and a review, with no gate or opus audit.
+- **A further owner decision the same day (verbatim on the board):** changes to validators,
+  agent profiles, skills and scripts need no gate or audit either.
+  - They follow the same review-and-fix, and a tool also runs its own checks.
+  - `.claude/settings.json` was not named, so it stays a governance path.
+  - The rule now covers two groups, so the code uses the name "non-product":
+    `is_non_product` and `non_product_since_acceptance`. The running worker got this as
+    Addendum 1, and the other briefs are updated.
+- **Coordinator's adjustments to the plan:**
+  - The governance cycle is dropped.
+  - The board record loses `rule_change` and every commit SHA.
+  - The coordinator writes the record before the commit, so that the commit carries a
+    correct board and no extra commit is needed.
+- **Registered with briefs:**
+  - WP5-GOV-DOCS-VALIDATOR (worker-high);
+  - WP5-GOV-DOCS-RULES (worker);
+  - WP5-GOV-DOCS-REVIEW (fresh worker);
+  - WP5-GOV-DOCS-COMMIT (committer).
+- **WP5-GOV-DOCS-VALIDATOR done** (worker-high, self-reported claude-sonnet-5-5), with
+  Addendum 1. It is uncommitted.
+  - `check_recovery`: 140 probes, exit 0. `validate_orchestration` and preflight: exit 0.
+  - Ranges: dc487c6..a54061f PASS (6 paths); 0b45781..dc487c6 PASS (4 paths);
+    d96df5d..0b45781 and 5b8b718..d96df5d FAIL, with the product paths listed.
+  - Three negative controls were caught.
+  - Slips: heredocs and one `rm -r`, in the task folder only.
+- **WP5-GOV-DOCS-RULES done** (worker, self-reported claude-sonnet-5-5). It is uncommitted.
+  - Rule 14 and the working documents are written, each with its VI pair.
+  - Preflight passed (exit 0). Outside `handoff/`, only the AGENTS, docs/08, docs/10 and
+    docs/12 pairs differ.
+  - Digest 4ac52e6b, 882 files.
+- **WP5-GOV-DOCS-REVIEW done** (fresh worker, self-reported claude-sonnet-5-5).
+  - No drift was found.
+  - The validator checks passed: 140 probes, the ranges, preflight.
+  - Final digest 4ac52e6b, 882 files.
+- **Board.** `current_source_digest` is 4ac52e6b. `non_product_since_acceptance` holds:
+  - base a54061f / 690fd8fd;
+  - the eight documentation paths;
+  - two reviews (RULES and VALIDATOR, both reviewed by REVIEW).
+- **First commit run stopped, nothing committed.** `check_recovery.py` failed because
+  `synthetic()` copied the live board and inherited the new record. The coordinator's order
+  hid this: the record was written after VALIDATOR and REVIEW had run.
+  - WP5-GOV-DOCS-VALIDATOR fixed it (Addendum 2). The count is now 141 probes.
+  - WP5-GOV-DOCS-REVIEW reread the fix and ran both validators on the real board: exit 0.
+  - The digest stays 4ac52e6b.
+- **Running now:** WP5-GOV-DOCS-COMMIT, alone, continuing. The board goes to `software_ready`
+  after it.
 - **The rule change** follows the WP5-UX5-ACCEPT commit, as WP5-GOV-DOCS.
   - A planner first defines:
     - which files count as documentation;

@@ -26,6 +26,6 @@ Bản dịch của [HANDOFF.md](HANDOFF.md); tiếng Anh là nguồn chuẩn.
 
 - Mission/task ID và bảng/checkpoint:
 - Định danh implementer/auditor độc lập; context riêng:
-- Digest đã kiểm/review hiện tại; report/verdict:
+- Digest đã kiểm/review hiện tại, và các commit tài liệu hoặc công cụ quy trình từ đó (`non_product_since_acceptance`); report/verdict:
 - Task/dependency còn; một bước coordinator tiếp:
 - Tách sẵn sàng phần mềm và phép pilot của chủ đang chờ:

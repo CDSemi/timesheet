@@ -24,6 +24,6 @@ No “all passed” without execution evidence. Provider acceptance is not recei
 
 - Mission/task IDs and board/checkpoint:
 - Implementer and independent auditor identities; separate contexts:
-- Current verified/reviewed digest; review report and decision:
+- Current verified/reviewed digest, and documentation or tooling commits since (`non_product_since_acceptance`); review report and decision:
 - Remaining tasks/dependencies; one next coordinator action:
 - Software readiness and pending owner pilot authorization separately:

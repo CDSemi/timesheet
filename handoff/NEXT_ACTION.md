@@ -200,9 +200,20 @@ Current route:
      section for rounds 4 and 5 (WP5-UX5-ACCEPT-HANDOFF).
    - WP5-UX5-ACCEPT-REVIEW reviewed both documents and fixed three small drifts, under the
      owner's 2026-10-29 rule for documentation.
-   - Running now: the WP5-UX5-ACCEPT commit. After it the board goes back to
-     `software_ready`.
-   - Then: WP5-GOV-DOCS, the rule change.
+   - The WP5-UX5-ACCEPT commit is 27567d1, pushed. **WP5 is re-accepted after rounds 4 and 5
+     on a54061f / 690fd8fd.**
+   - Running now: WP5-GOV-DOCS, the owner's 2026-10-29 rule. Documentation needs no test,
+     gate or audit, only a review and fixes.
+     - The plan is done (WP5-GOV-DOCS-PLAN).
+     - The owner answered Q1 (a), Q2 (a) on 2026-11-02. Working rules in Markdown are
+       documentation too. This change gets the validator probes and a review, with no gate
+       or opus audit.
+     - The same day the owner decided that validators, agent profiles, skills and scripts
+       need no gate or audit either. They get the same review, and run their own checks.
+     - WP5-GOV-DOCS-VALIDATOR (141 probes), -RULES and -REVIEW (no drift) are done.
+     - Running now: the WP5-GOV-DOCS-COMMIT commit.
+   - Then the board goes back to `software_ready`, and the owner reviews the pilot packet
+     and decides R-UX5I2-3.
    - To resume after an interruption, use the entry prompt above. The coordinator continues
      at the board's `next_task_id`.
    - Details: the [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.md), section

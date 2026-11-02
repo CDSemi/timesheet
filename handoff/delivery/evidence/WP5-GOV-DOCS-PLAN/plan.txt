@@ -1,0 +1,380 @@
+WP5-GOV-DOCS-PLAN - plan for the owner's documentation rule (2026-10-29)
+Planner: timesheet-planner (sonnet, high). Read-only: no repository file changed except this evidence folder and the brief's Results.
+
+OBSERVATIONS (commands run read-only with the workflow Python and git; exits are real)
+O1  validate_orchestration.py                    exit 0, PASS, 559 tasks      (baseline-validate-orchestration.txt)
+O2  check_recovery.py                            exit 0, PASS, count 106      (baseline-check-recovery.txt)
+O3  validate_package.py --preflight              exit 0, 142 pairs, 2506 links (baseline-preflight.txt)
+O4  git diff --name-only <range> -- . ':(exclude)handoff'  (history-outside-handoff-paths.txt)
+      0b45781..dc487c6  README(.vi), docs/12(.vi)                                -> markdown only
+      dc487c6..a54061f  DEVELOPMENT(.vi), README(.vi), docs/12(.vi)             -> markdown only
+      a54061f..27567d1  nothing outside handoff/
+      d96df5d..0b45781  docs/04(.vi), scripts/source-digest.mjs, src/, tests/  -> code, not documentation
+O5  The stale-PASS rule is validate_orchestration.py:316-318: a done PASS audit of the ACTIVE package without
+    superseded_by must have reviewed_digest == board.current_source_digest ("Stale PASS: <id>"). Nothing else
+    in the three validators ties documentation to a gate or audit. check_recovery.py:169 and :378 probe it.
+O6  scripts/source-digest.mjs hashes every git-listed file except `handoff/`. So README, DEVELOPMENT, AGENTS,
+    CLAUDE, docs/ and reference|assets READMEs are inside the digest; handoff/ (prompts, templates, validators,
+    board, STATE, tasks, evidence) is not. Governance files outside handoff/: AGENTS(.vi), CLAUDE(.vi),
+    docs/08(.vi), docs/agents/, .claude/, .agents/, scripts/precommit-check.mjs.
+O7  Markdown read by code: only `assets/pdf-fonts/README.md`
+    (tests/client/wordmarkAsset.test.ts:128 reads it, :158 asserts it is git-listed). Other hits of "docs/..." in
+    src/ and tests/ (about 100 files) are COMMENTS that cite section names ("docs/03 'Records'"). scripts/
+    container-drill.mjs:223-224 only checks that handoff/, docs/ ... are absent from the image.
+    .dockerignore is an allow-list: only package files, tsconfig*, vite.config.ts, src/ and assets/pdf-fonts/
+    enter the build context, so no documentation file except that README can change an image.
+O8  docs/06 and docs/09 contain no statement that gates or audits documentation (grep for
+    documentation|preflight|translation|link|gate). .claude/agents/*.md contain no "gate and audit every
+    change" text; timesheet-verifier.md:26 ("changed source invalidates acceptance") and the coordinator
+    profile ("do not advance without gates and independent audit of current source") stay true for code.
+O9  docs/10 already records workflow decisions as dated owner/coordinator sections ("Confirmed orchestration
+    change - 2026-10-02", "Owner decisions - 2026-10-02 (commits and routing)"); the three ADRs cover product and
+    infrastructure (font, Ingat manifest/GHCR, image cleanup). The earlier `superseded_by` and GOV-scope concepts
+    were added without an ADR.
+O10 Tooling already present for the review: `validate_package.py --preflight` checks every .md for broken local
+    links, EN/VI pairs (skips .agents, .claude, docs/agents, and handoff/delivery/tasks for pairs) and matching
+    R-/FR-/AC-/D-/WP IDs in EN and VI. KINDS already contains `documentation`.
+O11 .github/workflows/image.yml publishes an image per commit pushed to main; a documentation commit therefore
+    makes a new tag with identical application files (O7).
+
+======================================================================
+1. WHAT COUNTS AS DOCUMENTATION (exact path rule)
+======================================================================
+A path (as printed by git, relative to the repository root, outside handoff/) is DOCUMENTATION when ALL hold:
+  - it ends in `.md` (so every `.vi.md` too);
+  - it does not start with `src/`, `tests/`, `scripts/`, `assets/`, `.claude/`, `.agents/` or `handoff/`;
+  - it is not absolute and has no `..` part.
+Result: AGENTS.md, CLAUDE.md, DEVELOPMENT.md, README.md, docs/*.md, docs/adr/*.md, docs/agents/*.md,
+reference/**/README*.md and their .vi.md pairs. handoff/ is documentation or state by nature but never needs the
+rule (the digest excludes it). Everything else is NOT documentation: code, tests, scripts, package.json and
+lockfile, tsconfig/vite/vitest/playwright/eslint config, Dockerfile, .dockerignore, compose.example.yaml,
+.env.example, .github/**, ingat.toml, skills-lock.json, .gitattributes/.editorconfig, JSON fixtures, the workbook,
+the font and OFL.txt, agent profiles and skills.
+Correction to the coordinator's starting proposal: add `assets/` to the excluded roots, because
+assets/pdf-fonts/README.md is read and asserted by a test (O7) and sits in the Docker allow-list; its
+README.vi.md goes with it. Confirmed: every other proposed inclusion/exclusion matches the repository.
+Non-.md files stay non-documentation on purpose (conservative; no file of that kind is documentation today).
+Governance Markdown (AGENTS, CLAUDE, docs/08, docs/agents, and handoff/prompts|templates which are outside the
+digest) is documentation BY PATH (so its commit does not break a WP acceptance) but a RULE change in it is not
+documentation-only - see section 2.
+
+======================================================================
+2. THE REVIEW-AND-FIX PROCESS
+======================================================================
+Who: author = worker (medium, sonnet). Reviewer-fixer = a different, fresh worker instance (medium, sonnet; the
+profile is worker-high, sonnet, when the change restates acceptance or status facts across many files or edits
+documents 01-05 and 07). The reviewer may edit the same paths; it is not an auditor and no verifier gate or
+freeze commit exists. The reviewer's agent_id must differ from the author's agent_id and previous_agent_ids.
+Checks (all by reading, plus the existing aids):
+  a. currency: every factual statement the change touches or cites (status, counts, SHAs, task IDs, file and
+     command names, ports, versions) against the code, the board, STATE and the records it names;
+  b. cross-document consistency: other documents that state the same fact (README, DEVELOPMENT, docs/12,
+     WP5 handoff, pilot packet, runbook);
+  c. EN/VI parity: same meaning, same IDs; `python handoff/delivery/validate_package.py --preflight` as an aid;
+  d. links and cited names: preflight resolves links; the reviewer also greps src/ and tests/ comments before a
+     document heading, section name or ID is renamed or removed (O7: they cite "docs/03 'Records'" etc.);
+  e. no private data (AGENTS rule 4) - read the diff;
+  f. BUSINESS/WORKFLOW-RULE SAFEGUARD (below).
+Records: the reviewer appends to its task Results (English): facts checked, drifts fixed (file:line), preflight
+exit, "rule_change: none". No new template; one bullet is added to TASK.md.
+Commit: timesheet-committer, one documentation commit, no freeze. Its normal checks stay (precommit-check,
+`git diff --cached --check`, JSON parse, orchestration validator when the board is staged, diff read for personal
+data) and it adds `validate_orchestration.py --documentation-staged` (section 5) before committing and
+`--documentation-range <accepted>..HEAD` after. Message body: `Task: <id>` and `Gate: none (documentation)`.
+Safeguard (rule): a change is NOT documentation-only when it adds, removes or alters
+  (i)  a behaviour a correct implementation must satisfy (documents 01, 02, 03, 04, 05, 07; acceptance criteria
+       in 06; AGENTS rule 8), or
+  (ii) an obligation, permission, role, gate, limit, path list or validator assumption of this workflow
+       (AGENTS.md, CLAUDE.md, document 08, handoff/prompts, handoff/templates, docs/agents).
+Test: "would a correct implementation, or a correct run of the workflow, of the OLD text now be wrong?" If yes, or
+if the reviewer is unsure, it is not documentation-only: (i) is planned as a code task whose freeze, gate and
+audit stay (the text ships with that task); (ii) keeps the GOV freeze commit, gate and fresh audit. Wording,
+currency, link, translation and status fixes in those same files that change no rule ARE documentation.
+Mechanical backstop: validator-checked attestation `rule_change` on the board record (section 3); the range
+listing proves no non-Markdown file changed; the next code audit reads the documents against the code anyway.
+
+======================================================================
+3. ACCEPTANCE AND RELEASE IDENTITY AFTER A DOCUMENTATION-ONLY COMMIT
+======================================================================
+Options compared
+(a) Keep `npm run digest` unchanged. The board records the documentation-only successors of the current
+    acceptance; the validator accepts an audit PASS whose reviewed_digest is the recorded base while
+    current_source_digest is the recorded head; git proves the paths.
+      + No recorded digest changes meaning (559 tasks, hundreds of gate/audit records, D_PRE ls-tree forms in
+        briefs and evidence stay reproducible).
+      + ~45 lines of Python in handoff/ (a governance path, so one GOV cycle) and about 17 in-memory probes.
+      + Code files keep their identity rule exactly; any non-documentation path ends the record (stale PASS as today).
+      - The record is bookkeeping the coordinator must keep (the validator forces it: a mismatch is "Stale PASS").
+(b) Make the digest exclude documentation.
+      - Changes the meaning of every recorded digest: `npm run digest` at any old commit no longer reproduces the
+        recorded value, so history cannot be re-verified; the ls-tree one-liner in scripts/source-digest.mjs,
+        briefs, DEVELOPMENT.md and committer evidence must change too.
+      - The path rule would live in JS and Python, or a second digest would be needed (a new concept).
+      - scripts/ is code: it needs a full gate and audit of its own.
+      - A documentation commit would not change the digest, so the commit SHA alone would still be needed to name the release.
+(c) Validator runs `git diff` live to compare the audited commit with HEAD.
+      - Needs git history in every checkout (scratch clone, export) and breaks the "synthetic in-memory" probes.
+RECOMMENDATION: (a), with git used only in an explicit CLI mode (independent proof), not inside validate().
+Why: smallest change, no meaning change, probe-able, honest about what is proven by what.
+
+Board record (new optional top-level key; absent means none):
+  "documentation_since_acceptance": {
+    "base_commit": "<40 hex>",  "base_digest": "<64 hex>",   // the accepted identity (audited, PASS)
+    "head_commit": "<40 hex>",  "head_digest": "<64 hex>",   // the latest documentation-only commit
+    "paths": ["README.md", "docs/12_RELEASE_NOTES.md", ...], // net `git diff --name-only base..head`, outside handoff/
+    "reviews": [ {"commit": "<40 hex>", "author_task": "<id>", "review_task": "<id>",
+                  "rule_change": "none" | "audited"} ]       // one entry per documentation commit
+  }
+Validator rules (validate_orchestration.py):
+  V1  is_documentation(path) as in section 1; every path must satisfy it; paths nonempty, unique.
+  V2  base_commit/head_commit/reviews[].commit are 40-hex; base_digest/head_digest are 64-hex and differ.
+  V3  reviews nonempty. author_task: a done task of kind documentation, implement or fix. review_task: a done task
+      with an agent_id. rule_change "none" -> review_task kind documentation; rule_change "audited" -> review_task
+      is a done audit of package GOV with decision PASS (a governance rule change reviewed under document 08).
+      The review agents (agent_id and previous_agent_ids) are disjoint from the author's.
+  V4  the record must hang on a current acceptance: some done PASS audit of the active package without
+      superseded_by has reviewed_digest == base_digest.
+  V5  board.current_source_digest == head_digest.
+  V6  stale-PASS check (line 318) becomes: reviewed_digest == current_source_digest OR (record present AND
+      reviewed_digest == record.base_digest AND current_source_digest == record.head_digest). Message unchanged
+      ("Stale PASS: <id>"), so the existing probes still match.
+  The next code acceptance (a new gate and audit at a new digest) replaces the record: the coordinator deletes it;
+  V4 fails on a leftover record whose base no longer has a current PASS.
+Release naming
+  - Accepted source = accepted commit + its source digest (today a54061f / 690fd8fd), as now in the WP5 handoff and gate record.
+  - Release commit (what an image is built from; tag `timesheet:<release commit>`, docs/12:9) = the accepted
+    commit, or the latest documentation-only commit after it (board head_commit). Proof:
+      python handoff/delivery/validate_orchestration.py --documentation-range <accepted>..<release>
+    must print only documentation paths. Application files are identical by construction (O7).
+  - The WP5 handoff and the pilot packet name accepted commit/digest + head_commit; they are state (handoff/), so
+    they may hold SHAs.
+Draft docs/12:7 (English; the VI line gets the same meaning)
+  "- **Release commit and source digest.** The accepted source is the last WP5 freeze commit that was gated and
+  audited. Its SHA, its source digest (`npm run digest`, which excludes `handoff/`) and its file count are
+  recorded in the [WP5 handoff](../handoff/delivery/WP5_HANDOFF.md) and in the gate record. The release commit,
+  the one an image is built from, is that commit or a later commit that changes only documentation (Markdown
+  files outside `src/`, `tests/`, `scripts/`, `assets/`, `.claude/` and `.agents/`; [08 AI
+  workflow](08_AI_WORKFLOW_AND_BUDGET.md), "Documentation"). Such commits need a review and fixes, not a gate or
+  audit, and keep the acceptance; the board lists them, and
+  `python handoff/delivery/validate_orchestration.py --documentation-range <accepted>..<release>` shows that
+  nothing else changed. No SHA or digest is written here, because a document cannot contain the digest of the
+  tree that holds it. Before these notes were added the source was commit
+  `8e99d2c6375f71ac94faff9eb859b9b7bcf3e741` with digest
+  `1e59ad31d9af2a3f4a3aa5711647ea8742e1534b3d4f8ba4f2210beee44a3d2c` over 777 files. UI change rounds 4 and 5
+  shared one package-final gate (owner decision Q0 a): WP5-UX5-REGATE14 passed and the integration audit
+  WP5-UX5-AUDIT-INT3 passed on `0b45781`, which re-accepted WP5. These notes and the README status were then
+  refreshed in documentation-only commits, each gated and audited again (before the rule of 2026-10-29)."
+ADR: not needed (section 6/7 reasoning): the concept is a board record field, not a product concept or a
+dependency; the named consumer is the owner decision of 2026-10-29 (verbatim on the board owner_decisions, to be
+copied into docs/10); precedent O9 (superseded_by, GOV scope, commit rules) used docs/08 + docs/10 and no ADR.
+Fallback if the coordinator reads AGENTS "concept needs an ADR" strictly: docs/adr/0004-documentation-review-not-gate.md
+(+.vi.md, ~25 lines) written as a documentation task under the new rule. Recommendation: docs/10 entry only.
+
+======================================================================
+4. EXACT EDITS (each .vi.md gets the same meaning; Vietnamese lines are given where the rule is new)
+======================================================================
+E1  AGENTS.md - add after rule 13 (one short rule):
+  "14. Documentation needs no test, gate or audit (owner decision 2026-10-29); rules 2, 5 and 13 do not apply to
+  it. Documentation is a Markdown file, with its `.vi.md`, outside `src/`, `tests/`, `scripts/`, `assets/`,
+  `.claude/` and `.agents/`. It gets one review-and-fix by a fresh instance against the code, the board and the
+  other documents, with EN/VI aligned and no private data (document 08, "Documentation"). A change of a business
+  or workflow rule is not documentation-only: its code task or governance cycle keeps the gate and audit."
+  AGENTS.vi.md (same place):
+  "14. Tài liệu không cần test, gate hay audit (quyết định của chủ 2026-10-29); các quy tắc 2, 5 và 13 không áp
+  dụng cho tài liệu. Tài liệu là file Markdown cùng bản `.vi.md` nằm ngoài `src/`, `tests/`, `scripts/`,
+  `assets/`, `.claude/` và `.agents/`. Tài liệu chỉ cần một lần duyệt-và-sửa bởi một instance mới, đối chiếu với
+  code, bảng task và các tài liệu khác, giữ EN/VI khớp và không lộ dữ liệu riêng tư (tài liệu 08, "Tài liệu").
+  Đổi quy tắc nghiệp vụ hoặc quy trình không phải là chỉ-tài-liệu: task code hoặc chu trình quản trị của nó vẫn
+  giữ gate và audit."
+E2  docs/08 table row (line 21):
+  now: "| Routine slice or docs with a clear contract | worker (medium) | sonnet |"
+  new: "| Routine slice; documentation edit; documentation review-and-fix by a fresh instance | worker (medium) | sonnet |"
+  VI:  "| Slice thường; sửa tài liệu; duyệt-và-sửa tài liệu bởi instance mới | worker (medium) | sonnet |"
+E3  docs/08 line 56 (Durable state), last sentence:
+  now: "Changed source identity invalidates an old audit pass."
+  new: "Changed source identity invalidates an old audit pass, except a documentation-only change recorded under \"Documentation\"."
+  VI:  "... Định danh source đổi làm mất hiệu lực audit pass cũ, trừ thay đổi chỉ-tài-liệu được ghi theo mục \"Tài liệu\"."
+E4  docs/08 line 64 (governance), sentence "Any change to them requires a GOV freeze commit, gate and fresh audit.":
+  new: "Any change to them requires a GOV freeze commit, gate and fresh audit, except a documentation-only fix as
+  defined in \"Documentation\" (Markdown files only; validators, profiles, skills and scripts never qualify)."
+  VI:  "... trừ bản sửa chỉ-tài-liệu theo mục \"Tài liệu\" (chỉ file Markdown; validator, profile, skill và script
+  không bao giờ đủ điều kiện)."
+E5  docs/08 new section "## Documentation" between "Gates and independent audit" and "Commits and pushes"
+  (VI heading "## Tài liệu"):
+  "## Documentation
+
+  Owner decision, 2026-10-29: documentation needs no test, gate or audit, only a review and fixes so that it stays
+  current and consistent.
+
+  - **What counts.** A Markdown file (`*.md`, with its `.vi.md`) outside `src/`, `tests/`, `scripts/`, `assets/`,
+    `.claude/`, `.agents/` and `handoff/` (the rule is `is_documentation` in `validate_orchestration.py`). Code,
+    tests, scripts, package, Docker, Compose, workflow and `.env.example` files, agent profiles and skills, and
+    `assets/pdf-fonts/README.md` (a test reads it) are not documentation.
+  - **Review and fix.** A worker edits; a fresh worker instance, not the author, reviews and fixes the same paths:
+    currency against the code, the board and the records the text cites; consistency with other documents; EN/VI
+    parity and links (`python handoff/delivery/validate_package.py --preflight` is an aid); headings and IDs cited
+    from `src/` and `tests/` comments; no private data. It records the facts checked, the drifts fixed and
+    `rule_change` in its task Results. There is no freeze commit, verifier gate or auditor.
+  - **Rules are not documentation.** A change that adds, removes or alters a behaviour a correct implementation
+    must satisfy (documents 01 to 05 and 07, AGENTS rule 8) or an obligation, permission, role, gate, limit or
+    path list of this workflow is not documentation-only; if in doubt it is not. A behaviour change ships with its
+    code task, which keeps the gate and audit; a workflow rule change keeps the GOV freeze, gate and audit.
+    Wording, currency, link, translation and status fixes that change no rule are documentation.
+  - **Commit and acceptance.** The committer makes one documentation commit; `python
+    handoff/delivery/validate_orchestration.py --documentation-staged` before and `--documentation-range
+    <accepted>..HEAD` after must list only documentation paths. The commit keeps the current acceptance: the
+    coordinator records it as `documentation_since_acceptance` on the board (`base_commit`/`base_digest` of the
+    accepted audit, `head_commit`/`head_digest`, net `paths`, and per commit `author_task`, `review_task`,
+    `rule_change` none|audited). The validator then accepts the audit PASS whose reviewed digest is the base while
+    `current_source_digest` is the head. The next code acceptance replaces the record.
+  - **Release.** The accepted source is the accepted commit and its digest; the release commit (the image tag) is
+    that commit or the latest documentation-only commit after it."
+  VI: the same five bullets in Vietnamese under "## Tài liệu".
+E6  docs/08 "Commits and pushes", Commit points (line 73): insert after the accept commit item:
+  "a documentation commit after its review-and-fix (no freeze, gate or audit);"
+  VI: "commit tài liệu sau khi duyệt-và-sửa (không freeze, gate hay audit);"
+E7  handoff/prompts/ORCHESTRATE.md - append to item 4 (after "New review paths preserve historical evidence."):
+  " Documentation (document 08, \"Documentation\") needs no freeze, gate or audit: a worker edits, a fresh worker
+  reviews and fixes, the committer commits, and the coordinator records `documentation_since_acceptance`."
+  ORCHESTRATE.vi.md: "Tài liệu (tài liệu 08, \"Tài liệu\") không cần freeze, gate hay audit: một worker sửa, một
+  worker mới duyệt-và-sửa, committer commit và coordinator ghi `documentation_since_acceptance` vào bảng."
+E8  handoff/prompts/RESUME.md item 4, after "Stale PASS/checkpoints are not acceptance.":
+  " A documentation-only change recorded as `documentation_since_acceptance` (document 08) keeps the acceptance."
+  RESUME.vi.md: same meaning.
+E9  handoff/templates/TASK.md - new bullet after "Acceptance criteria, rule/AC coverage and executable gate:":
+  "- Documentation tasks: review result (facts checked against code/board/records, drifts fixed, EN/VI parity,
+  links, private data, rule_change none|audited):"   TASK.vi.md: same meaning.
+E10 handoff/templates/HANDOFF.md line 27:
+  now: "- Current verified/reviewed digest; review report and decision:"
+  new: "- Current verified/reviewed digest, and documentation-only commits since (`documentation_since_acceptance`); review report and decision:"
+  HANDOFF.vi.md: same meaning.
+E11 docs/12 line 7: the draft in section 3 (docs/12.vi.md pair). Lines 9 and 11 stay (release commit wording and
+  main-branch declaration are unchanged).
+E12 docs/10: one dated entry, "## Owner decision - 2026-10-29 (documentation needs a review and fixes, not a gate
+  or audit)": the verbatim Vietnamese sentence, the one-paragraph consequence (path rule, safeguard,
+  documentation_since_acceptance, release commit), pointer to docs/08 "Documentation". EN and VI.
+No change needed: docs/06, docs/09 (O8), CLAUDE.md, .claude/ profiles (no restart; the verifier/coordinator
+wording stays true for code), WP*_IMPLEMENT/REVIEW prompts, FIX_FINDINGS, REVIEW/CHECKPOINT templates, DEVELOPMENT.md.
+Which edits are rule text (GOV cycle, last time under the old process): E1-E10. Which are documentation (new rule): E11-E12.
+
+======================================================================
+5. VALIDATORS
+======================================================================
+5.1 validate_orchestration.py (option a)
+  - Constants/functions:
+      DOC_EXCLUDED = ("src/", "tests/", "scripts/", "assets/", ".claude/", ".agents/", "handoff/")
+      def is_documentation(path): str, endswith ".md", not startswith DOC_EXCLUDED, not absolute, no ".." part
+      def documentation_offenders(paths): [p for p in paths if p and not is_documentation(p)]   # pure
+      def validate_documentation(board, by_id, active)   # V1-V5, called after the task loop
+  - Line 316-318 stale check -> V6, using record = board.get("documentation_since_acceptance") read before the loop
+    with isinstance guards (a malformed record is reported by validate_documentation).
+  - CLI (git read-only, subprocess list args, no shell, run in the main checkout):
+      --documentation-range <A>..<B>  : git diff --name-only --no-renames -z <A>..<B> -- .
+      --documentation-staged          : git diff --cached --name-only --no-renames -z -- .
+    Drop paths under handoff/, print {"status": "PASS"|"FAIL", "changed": [...], "not_documentation": [...]} and
+    exit 1 on FAIL. Nothing is written. Without these flags the script behaves exactly as today.
+  How a validator decides a path is documentation: by path only (is_documentation), never by content; the
+  reviewer's `rule_change` attestation covers content.
+5.2 check_recovery.py - new synthetic probes (each one `accepts`/`rejects` call; helper doc_board() builds a
+    finished() board with current_source_digest "b"*64, S-AUDIT reviewed "a"*64, done documentation tasks
+    S-DOC (author) and S-DOC-REVIEW (reviewer) with different agent_ids, and the record base a / head b):
+   1  is_documentation accepts README.md, README.vi.md, AGENTS.md, DEVELOPMENT.md, docs/12_RELEASE_NOTES.md,
+      docs/adr/0001-x.vi.md, docs/agents/domain.md, reference/inputs/README.md
+   2  is_documentation rejects assets/pdf-fonts/README.md, src/x.md, tests/e2e/x.md, scripts/x.md,
+      .claude/agents/x.md, .claude/skills/x/SKILL.md, .agents/skills/x/SKILL.md, handoff/x.md, package.json,
+      Dockerfile, docs/x.txt, ingat.toml, /abs.md, ../x.md
+   3  documentation_offenders returns exactly the non-documentation paths of a mixed list (the CLI core)
+   4  stale PASS kept by a documentation record (rule_change none, documentation review) accepted
+   5  record reviewed by a done GOV audit PASS with rule_change audited accepted
+   6  record with two reviews accepted
+   7  record without any record still rejects the stale PASS (regression, "Stale PASS")
+   8  record naming a non-documentation path rejected ("not a documentation path")
+   9  record whose head_digest differs from current_source_digest rejected
+  10  record whose base_digest matches no current PASS audit rejected ("hang on a current")
+  11  record with no reviews rejected
+  12  review by the author's agent rejected ("reviewer")
+  13  review task unfinished or unknown rejected
+  14  rule_change none with a non-documentation review task (plan) rejected
+  15  rule_change audited with a documentation-kind review rejected; GOV audit with FIX REQUIRED rejected
+  16  rule_change with another value rejected
+  17  malformed sha/digest, empty or duplicate paths rejected (loop)
+  Expected count: 106 + 17 = 123 (the suite is also rerun with WP3 as base and must give the same results).
+5.3 Run: python handoff/delivery/validate_orchestration.py ; python handoff/delivery/check_recovery.py (expect
+    status PASS, count 123) ; python handoff/delivery/validate_package.py --preflight ;
+    python handoff/delivery/validate_orchestration.py --documentation-range dc487c6..a54061f (expect PASS, 6 paths),
+    0b45781..dc487c6 (PASS, 4), 5b8b718..d96df5d and d96df5d..0b45781 (FAIL, code paths listed).
+    No mutation of the real board in the probes.
+5.4 Validators need no change in validate_package.py (its preflight is the review aid). scripts/source-digest.mjs
+    unchanged.
+
+======================================================================
+6. TASK GRAPH, AND HOW THIS CHANGE IS REVIEWED AND COMMITTED
+======================================================================
+Fact: this change rewrites rule text and the validators, which are governance paths (document 08). The owner's
+decision relaxes documentation, not the enforcement code or the rules themselves, so the rule/validator part
+keeps one GOV cycle (the last under the old process); the documentation part uses the new process.
+A  WP5-GOV-DOCS-VALIDATOR  worker-high (sonnet), size M, risk M, novelty no. Depends: none.
+   Owns: handoff/delivery/validate_orchestration.py, handoff/delivery/check_recovery.py,
+   handoff/delivery/tasks/WP5-GOV-DOCS-VALIDATOR.md, handoff/delivery/evidence/WP5-GOV-DOCS-VALIDATOR/.
+   Covers E-none; sections 5.1-5.3 (V1-V6, CLI, 17 probes). Check: the commands in 5.3.
+B  WP5-GOV-DOCS-RULES  worker (sonnet), size S, risk L. Depends: A (one source writer at a time).
+   Owns: AGENTS.md, AGENTS.vi.md, docs/08 (+vi), handoff/prompts/ORCHESTRATE(+vi), RESUME(+vi),
+   handoff/templates/TASK(+vi), HANDOFF(+vi), its brief and evidence. Covers E1-E10. Check: validate_package.py --preflight.
+C  WP5-GOV-DOCS-FREEZE  committer. Depends: B. One GOV freeze commit F of A and B paths (explicit staging).
+D  WP5-GOV-DOCS-GATE  verifier (sonnet). Depends: C. Runs 5.3 on F, `node scripts/precommit-check.mjs`,
+   digest before/after, clean tree; freeze_commit = F.
+E  WP5-GOV-DOCS-AUDIT  auditor (opus, xhigh), fresh. Depends: D. reviewed_commit = F, GOV package. Scope: validator
+   diff with its own mutants (stale PASS without record, non-doc path, reviewer = author, leftover record), the
+   safeguard wording, EN/VI coherence of E1-E10, that no profile/validator contradicts rule 14. Review pair
+   handoff/delivery/GOV_DOCS_REVIEW(.vi).md. Not asked: re-audit of WP5 (path-wise F is Markdown only outside
+   handoff/, so the record keeps the WP5 acceptance).
+F  WP5-GOV-DOCS-ACCEPT  committer. Depends: E PASS. Accept commit (evidence, review, board). Board edit by the
+   coordinator: current_source_digest = digest(F); add documentation_since_acceptance { base a54061f/690fd8fd,
+   head F/digest(F), paths AGENTS.md, AGENTS.vi.md, docs/08 (+vi), reviews [{commit F, author_task B,
+   review_task E, rule_change audited}] }.
+G  WP5-GOV-DOCS-DOC  worker (sonnet), size S, risk L. Depends: F. Owns docs/12 (+vi) and docs/10 (+vi) edits
+   E11-E12 and its brief. (Merging G into B is a valid shortcut; the audit would then read them. Recommended split:
+   it is the first real use of the rule and the audit stays on the validator.)
+H  WP5-GOV-DOCS-REVIEW  fresh worker (sonnet), size S. Depends: G. Reviews and fixes G's paths and E1-E10 text
+   for drift (rule: documents it cites exist; EN/VI parity; preflight). Records rule_change: none. No gate, no audit.
+I  WP5-GOV-DOCS-COMMIT  committer. Depends: H. One documentation commit G1: `--documentation-staged` PASS before,
+   `--documentation-range a54061f..G1` PASS after; coordinator extends the record (head G1/digest, paths += docs/10,
+   docs/12 pairs, reviews += {G1, author G, review H, none}). Then the board goes to software_ready, next_task_id null.
+Gates needed: only D (verifier) and E (audit), both for the governance code and rule text; none for G-I. Why: the
+validator is the enforcement point of the whole process; an unaudited weakening would be invisible. This GOV
+audit is the last use of the old process on governance; afterwards, wording-only fixes in those Markdown files
+need only a review.
+Order inside the board: all tasks need briefs on disk before registration; task IDs upper case; the running GOV
+tasks are exempt from the active-package check; the new keys in the board need check_recovery A to be committed
+first (B depends on A for that reason, and the board edit F happens after A is in F's tree).
+
+======================================================================
+7. CONFLICTS AND RISKS (one line each)
+======================================================================
+C1  Owner wording "no test/gate/audit of any kind" vs governance Markdown (AGENTS, docs/08, prompts, templates):
+    treated as documentation by PATH but a RULE change there keeps the GOV cycle (otherwise an unaudited edit
+    could weaken the gates). Flag to the owner; if he wants rule edits free too, drop clause (ii) of the safeguard
+    and E4's exception text (no validator change).
+C2  AGENTS rules 2, 5, 13 ("do not skip gates", "follow the required gate") and docs/08:56 and :64, ORCHESTRATE 4, RESUME 4
+    state the old absolute; E1-E10 add the exception. Rule 14 wins by AGENTS precedence.
+C3  The coordinator session and any long-running agent hold an injected AGENTS/ORCHESTRATE copy that still says
+    "gate and audit every change" (this session was started before the change); profiles read AGENTS from disk, so
+    the coordinator must reread AGENTS.md and docs/08 after the commit; a restart refreshes the injected copy.
+C4  .claude/agents/timesheet-verifier.md:26 ("changed source invalidates acceptance") and the coordinator profile
+    stay literally true for code; left unchanged (profile edits need a GOV cycle and a client restart).
+C5  `rule_change` is an attestation, not detectable by path: mitigated by the fresh reviewer, the range listing
+    of non-Markdown files, the conservative "if in doubt it is not documentation", and the next code audit.
+C6  A documentation error can reach the pilot (docs/11 runbook commands, docs/12 status) with no gate: the review
+    must check commands and file names against the code; the owner accepts this residual risk.
+C7  Code comments cite document sections (O7); renaming a heading in a document leaves dangling citations in code:
+    the review greps src/ and tests/ first (E5 bullet).
+C8  assets/pdf-fonts/README.md is read by a test: excluded from documentation (correction to the proposal).
+C9  The record must be cleared at the next code acceptance; V4 fails on a leftover record (no silent staleness).
+C10 .github/workflows/image.yml builds an image for every commit pushed to main; documentation commits add tags
+    with identical application files (ADR 0003 cleanup applies).
+C11 validate_package.py without --preflight compares the historical r1.1 manifests and is not part of this flow
+    (pre-existing; unchanged).
+C12 This planner's brief Results and evidence folder are the only files written; no repository file, board or
+    state was changed, no commit, no agent spawned.
+
+Status: done

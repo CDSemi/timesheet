@@ -1,0 +1,21 @@
+WP5-GOV-DOCS-VALIDATOR addendum 2 (check_recovery.py leaked the live non_product_since_acceptance record)
+Workflow Python, Git Bash, TEMP/TMP = task folder. No git command run; the board was not edited.
+
+Change: handoff/delivery/check_recovery.py synthetic() now does value.pop("non_product_since_acceptance", None).
+Other helpers: only synthetic() copies real_board (grep real_board|live_state|BOARD_PATH); synthetic_state() copies
+live_state (STATE), which carries no record. Regression probe added: "a live non_product_since_acceptance record does
+not leak into the synthetic board" (sets a record on the base board, calls synthetic(), asserts it is gone, then
+accepts the board).
+
+1. check_recovery.py on the real board (record present): exit 1. Not caused by the fix or by synthetic():
+   ValueError "Unfinished dependency: WP5-GOV-DOCS-RULES" at the first probe (the live-board probe). On the board on
+   disk, WP5-GOV-DOCS-VALIDATOR (this task) is still "running" while WP5-GOV-DOCS-RULES is "done" and depends on it.
+   The coordinator must mark this task done; I may not edit the board.
+2. validate_orchestration.py on the real board: exit 1, the same "Unfinished dependency: WP5-GOV-DOCS-RULES".
+3. Rehearsal, scratch copy of the live board (record kept) with only WP5-GOV-DOCS-VALIDATOR set to done
+   (CHECK_RECOVERY_BOARD=board-rehearsal.json):
+   - check_recovery.py with the fix: exit 0, PASS, count 141.
+   - Negative control, scratch copy of check_recovery.py without the pop line, same rehearsal board: exit 1,
+     ValueError "Non-product record must hang on a current PASS audit of the active package".
+   - Negative control on the real board: exit 1 (the board blocker above stops it first).
+   validate_orchestration.py --board accepts only paths inside the project, so it was not rehearsed on the copy.

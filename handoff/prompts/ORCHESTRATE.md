@@ -26,7 +26,11 @@ No billing changes. Commits and pushes only through `timesheet-committer` under 
    gate (`gate_included`); package-final snapshots, including a FIX REQUIRED recheck
    that unlocks the next package, and GOV audits keep a separate verifier gate
    (document 08). Record digest before/after. Auditors cannot have authored the
-   audited change. New review paths preserve historical evidence.
+   audited change. New review paths preserve historical evidence. Documentation and
+   workflow tooling (document 08, "Documentation and workflow tooling") need no
+   freeze, gate or audit: a worker edits, a fresh worker reviews and fixes, a tool
+   also runs its own checks, the committer commits, and the coordinator records
+   `non_product_since_acceptance`.
 5. After every result, reconcile files/evidence, persist board/checkpoint and give
    concise Vietnamese progress. FIX REQUIRED creates bounded fix + gate + audit
    again; NOT VERIFIED resolves missing proof before advancement. Never force PASS.

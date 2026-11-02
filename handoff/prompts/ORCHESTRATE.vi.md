@@ -24,7 +24,10 @@ push chỉ qua `timesheet-committer` theo quyền thường trực của chủ (
    (`gate_included`); snapshot cuối giai đoạn, gồm cả recheck FIX REQUIRED mở khóa
    giai đoạn kế, và audit GOV giữ gate verifier riêng (tài liệu 08). Ghi digest
    trước/sau. Auditor không được là tác giả thay đổi. Review path mới giữ bằng chứng
-   lịch sử.
+   lịch sử. Tài liệu và công cụ quy trình (tài liệu 08, "Tài liệu và công cụ quy
+   trình") không cần freeze, gate hay audit: một worker sửa, một worker mới
+   duyệt-và-sửa, công cụ còn tự chạy kiểm tra của nó, committer commit và
+   coordinator ghi `non_product_since_acceptance` vào bảng.
 5. Sau mỗi kết quả, đối chiếu file/evidence, lưu bảng/checkpoint, báo tiến độ tiếng
    Việt ngắn. FIX REQUIRED tạo sửa + gate + audit lại; NOT VERIFIED bổ sung bằng
    chứng trước khi tiến. Không ép PASS.

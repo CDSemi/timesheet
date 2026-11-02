@@ -2,11 +2,15 @@
 """Read-only workflow/configuration validation; not application acceptance.
 
 Usage: python handoff/delivery/validate_orchestration.py [--board relative-path]
-Requires Python 3.9+. Does not run Claude, change state or inspect billing.
+       python handoff/delivery/validate_orchestration.py --non-product-range <A>..<B>
+       python handoff/delivery/validate_orchestration.py --non-product-staged
+Requires Python 3.9+. Does not run Claude, change state or inspect billing. The --non-product
+flags run read-only git and list the changed paths that are product (not documentation or workflow tooling).
 """
 import argparse
 import json
 import re
+import subprocess
 from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -24,6 +28,13 @@ OVERRIDE_REASONS = {"size_risk", "novelty", "escalation", "fallback_unavailable"
 ACTUAL_SOURCES = {"self_reported", "tool_result", "unobserved"}
 RANK = {"haiku": 1, "sonnet": 2, "opus": 3}
 HEX40 = r"[a-f0-9]{40}"
+HEX64 = r"[a-f0-9]{64}"
+# Non-product paths need no gate or audit (owner decisions 2026-10-29 and 2026-11-02): documentation, and
+# workflow tooling. Markdown under these roots is code-adjacent (tests read it) and is not documentation.
+DOC_EXCLUDED = ("src/", "tests/", "scripts/", "assets/", ".claude/", ".agents/")
+TOOLING_PREFIXES = ("scripts/", ".claude/agents/", ".claude/skills/", ".agents/")
+TOOLING_FILES = {"skills-lock.json"}
+DOC_AUTHOR_KINDS = {"documentation", "implement", "fix"}
 SHARED = {"handoff/delivery/STATE.json", "handoff/delivery/ORCHESTRATION.json",
           "handoff/delivery/ORCHESTRATION.previous.json", "handoff/NEXT_ACTION.md",
           "handoff/NEXT_ACTION.vi.md"}
@@ -61,6 +72,26 @@ def model_rank(task):
 
 def is_sha(value):
     return isinstance(value, str) and re.fullmatch(HEX40, value) is not None
+
+
+def is_digest(value):
+    return isinstance(value, str) and re.fullmatch(HEX64, value) is not None
+
+
+def is_non_product(path):
+    """A git-relative path outside handoff/ that is documentation (Markdown outside the code roots) or workflow
+    tooling (scripts, agent profiles, skills). Everything else is product. By path only, never by content."""
+    if not isinstance(path, str) or path.startswith("handoff/") or "\\" in path:
+        return False
+    pure = PurePosixPath(path)
+    if pure.is_absolute() or ".." in pure.parts:
+        return False
+    documentation = path.endswith(".md") and not path.startswith(DOC_EXCLUDED)
+    return documentation or path.startswith(TOOLING_PREFIXES) or path in TOOLING_FILES
+
+
+def non_product_offenders(paths):
+    return [path for path in paths if path and not is_non_product(path)]
 
 
 def parse_profile(text, filename):
@@ -230,6 +261,45 @@ def validate_commits(tasks, lookups, release_declared):
                   f"Direct commit to main after release: {task['id']}")
 
 
+def validate_non_product(board, by_id, active):
+    """Optional `non_product_since_acceptance`: non-product changes (documentation, workflow tooling) after the
+    current acceptance.
+    The record keeps the audit PASS valid while current_source_digest moves from base_digest to head_digest.
+    It holds no commit SHA of the non-product commit; `--non-product-range` proves the paths from git."""
+    record = board.get("non_product_since_acceptance")
+    if record is None:
+        return
+    check(isinstance(record, dict), "Non-product record must be an object")
+    check(is_sha(record.get("base_commit")), "Non-product record base_commit invalid")
+    base, head = record.get("base_digest"), record.get("head_digest")
+    check(is_digest(base) and is_digest(head) and base != head,
+          "Non-product record digests must be two different 64-hex values")
+    paths = record.get("paths")
+    check(isinstance(paths, list) and paths and all(isinstance(item, str) for item in paths)
+          and len(paths) == len(set(paths)), "Non-product record paths missing or duplicated")
+    for path in paths:
+        check(is_non_product(path), f"Non-product record path is not a non-product path: {path}")
+    check(any(task["kind"] == "audit" and task["status"] == "done" and task.get("decision") == "PASS"
+              and task["package"] == active and task.get("superseded_by") is None
+              and task.get("reviewed_digest") == base for task in by_id.values()),
+          "Non-product record must hang on a current PASS audit of the active package")
+    check(board.get("current_source_digest") == head,
+          "Non-product record head_digest differs from current_source_digest")
+    reviews = record.get("reviews")
+    check(isinstance(reviews, list) and reviews, "Non-product record needs at least one review")
+    for review in reviews:
+        check(isinstance(review, dict), "Non-product review must be an object")
+        author = by_id.get(review.get("author_task")) if isinstance(review.get("author_task"), str) else None
+        reviewer = by_id.get(review.get("review_task")) if isinstance(review.get("review_task"), str) else None
+        check(author is not None and author["status"] == "done" and author["kind"] in DOC_AUTHOR_KINDS,
+              "Non-product review author_task must be a done documentation, implement or fix task")
+        check(reviewer is not None and reviewer is not author and reviewer["status"] == "done"
+              and reviewer["kind"] == "documentation" and reviewer.get("agent_id"),
+              "Non-product review review_task must be a done documentation task with an agent_id")
+        check(not task_agent_ids(author) & task_agent_ids(reviewer),
+              f"Non-product reviewer is also the author: {reviewer['id']}")
+
+
 def validate(board, state, configured):
     check(board.get("schema_version") == 1, "Unsupported board schema")
     check(board.get("mission_id"), "Mission ID missing")
@@ -259,6 +329,7 @@ def validate(board, state, configured):
           "Invalid auxiliary lookups")
     tasks = board.get("tasks")
     check(isinstance(tasks, list) and tasks, "Task list missing")
+    record = board.get("non_product_since_acceptance")  # shape is checked by validate_non_product
     by_id = {}
     for task in tasks:
         name = task.get("id")
@@ -315,7 +386,10 @@ def validate(board, state, configured):
             if task["decision"] == "PASS":
                 check(task.get("reviewed_digest") == task["source_digest"], f"PASS digest mismatch: {name}")
                 if task["package"] == active and task.get("superseded_by") is None:
-                    check(task["reviewed_digest"] == board.get("current_source_digest"), f"Stale PASS: {name}")
+                    kept = (isinstance(record, dict) and task["reviewed_digest"] == record.get("base_digest")
+                            and board.get("current_source_digest") == record.get("head_digest"))
+                    check(task["reviewed_digest"] == board.get("current_source_digest") or kept,
+                          f"Stale PASS: {name}")
     visited, visiting = set(), set()
 
     def visit(name):
@@ -345,6 +419,7 @@ def validate(board, state, configured):
     validate_audits(tasks, by_id)
     validate_addresses(tasks, by_id)
     validate_superseded(tasks, by_id, board["status"] == "software_ready")
+    validate_non_product(board, by_id, active)
     running = [task for task in tasks if task["status"] == "running"]
     validate_commits(tasks, lookups, release_declared)
     active_lookups = sum(1 for item in lookups if item.get("status") == "running")
@@ -372,10 +447,41 @@ def validate(board, state, configured):
             "claude_runtime_verified": False}
 
 
+def git_changed_paths(arguments):
+    """Paths printed by a read-only `git diff --name-only`; list arguments, no shell."""
+    result = subprocess.run(["git", "-C", str(ROOT), "diff", "--name-only", "--no-renames", "-z", *arguments,
+                             "--", "."], capture_output=True, check=False)
+    check(result.returncode == 0, f"git diff failed: {result.stderr.decode('utf-8', 'replace').strip()}")
+    return [item for item in result.stdout.decode("utf-8").split("\0") if item]
+
+
+def non_product_report(paths):
+    """Drop paths under handoff/ (outside the source digest); list the product paths."""
+    changed = sorted(item for item in paths if not item.startswith("handoff/"))
+    offenders = non_product_offenders(changed)
+    return {"status": "FAIL" if offenders else "PASS", "changed": changed, "product": offenders}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--board", default="handoff/delivery/ORCHESTRATION.json")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--non-product-range", metavar="A..B",
+                       help="list the paths changed between two commits and fail on product paths")
+    modes.add_argument("--non-product-staged", action="store_true",
+                       help="list the staged paths and fail on product paths")
     args = parser.parse_args()
+    if args.non_product_range or args.non_product_staged:
+        if args.non_product_range:
+            ends = args.non_product_range.split("..")
+            check(len(ends) == 2 and all(re.fullmatch(r"[0-9A-Za-z_][0-9A-Za-z_./~^@-]*", item) for item in ends),
+                  "Range must be <A>..<B> with two revisions")
+            paths = git_changed_paths([args.non_product_range])
+        else:
+            paths = git_changed_paths(["--cached"])
+        report = non_product_report(paths)
+        print(json.dumps(report, indent=2))
+        raise SystemExit(1 if report["status"] == "FAIL" else 0)
     board = json.loads(local_path(args.board).read_text(encoding="utf-8"))
     state = json.loads((ROOT / "handoff/delivery/STATE.json").read_text(encoding="utf-8"))
     print(json.dumps(validate(board, state, profiles()), indent=2))

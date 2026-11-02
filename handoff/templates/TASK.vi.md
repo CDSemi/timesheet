@@ -10,6 +10,7 @@ Brief/kết quả task trong handoff/delivery/tasks/ chỉ bằng tiếng Anh (k
 - Profile (effort cố định); model yêu cầu; model_override_reason (size_risk|novelty|escalation|fallback_unavailable|owner|none); model/effort tự báo thật và nguồn; agent/session ID:
 - Path được ghi chính xác; scope chỉ đọc; report/evidence riêng:
 - Tiêu chí đạt, rule/AC và gate chạy được:
+- Task tài liệu hoặc công cụ: kết quả duyệt (sự kiện đã đối chiếu với code/bảng/hồ sơ, chỗ lệch đã sửa, EN/VI khớp, link, dữ liệu riêng tư; kiểm tra công cụ đã chạy):
 - Sửa/kiểm đã xong và trạng thái file:
 - Bằng chứng: lệnh | môi trường | exit | kết quả thật | path log:
 - Sửa dở; lệnh chưa rõ xong; process còn chạy:

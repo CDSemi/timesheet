@@ -15,7 +15,8 @@ Follow AGENTS.md, ORCHESTRATE.md and document 08. Keep existing subscription sig
    Otherwise keep task ID, increment attempt, record new agent/settings and
    delegate only saved remaining scope/evidence.
 4. Recheck required gates/audit if source changed. Stale PASS/checkpoints are not
-   acceptance. Continue at most two subagents and one source writer.
+   acceptance. A documentation or tooling change recorded as
+   `non_product_since_acceptance` (document 08) keeps the acceptance. Continue at most two subagents and one source writer.
 5. Persist board and checkpoints after each result (task records English-only, package
    checkpoints bilingual). Commit and push only through `timesheet-committer` under the
    standing authorization in document 08 (main before the first release, then branches

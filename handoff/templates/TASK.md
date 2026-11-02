@@ -10,6 +10,7 @@ coherent step. Task briefs/results under handoff/delivery/tasks/ are English-onl
 - Profile (fixed effort); requested model; model_override_reason (size_risk|novelty|escalation|fallback_unavailable|owner|none); self-reported actual model/effort and source; agent/session IDs:
 - Exact writable paths; read-only scope; separate report/evidence paths:
 - Acceptance criteria, rule/AC coverage and executable gate:
+- Documentation or tooling tasks: review result (facts checked against code/board/records, drifts fixed, EN/VI parity, links, private data; tool checks run):
 - Completed edits/checks and current file state:
 - Evidence: command | environment | exit | observed result | log path:
 - Unfinished edits; unknown command completion; live processes:

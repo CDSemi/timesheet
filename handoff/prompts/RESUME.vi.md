@@ -12,7 +12,8 @@ Theo AGENTS.md, ORCHESTRATE.md và tài liệu 08. Giữ đăng nhập subscript
 3. Tiếp subagent cũ trong phiên resume nếu ID còn dùng được. Nếu không, giữ task ID,
    tăng attempt, ghi agent/settings mới, giao đúng phần còn/evidence đã lưu.
 4. Kiểm lại gate/audit nếu source đổi. PASS/checkpoint cũ không là nghiệm thu.
-   Tiếp tối đa hai subagent, một writer source.
+   Thay đổi tài liệu hoặc công cụ quy trình được ghi là `non_product_since_acceptance`
+   (tài liệu 08) giữ nguyên nghiệm thu. Tiếp tối đa hai subagent, một writer source.
 5. Lưu bảng và checkpoint sau mỗi kết quả (hồ sơ task chỉ tiếng Anh, checkpoint giai
    đoạn song ngữ). Commit và push chỉ qua `timesheet-committer` theo quyền thường trực
    ở tài liệu 08 (main đến bản release đầu tiên, sau đó nhánh và PR). Reset usage

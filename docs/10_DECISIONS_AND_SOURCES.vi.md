@@ -324,3 +324,13 @@ Nguồn: câu trả lời trong chat của chủ sở hữu ngày 2026-10-22, "1
 - H-1 a là quy tắc "một kỳ được tính là đã nộp khi bất kỳ revision nào của nó có một lần gửi" (`periodHasSend`, `deliveries.ts:226`). B-A1 của kế hoạch đã nói "revision hiện tại của nó có một lần gửi"; WP5-UX5-T01B xây "bất kỳ revision nào" và nêu rõ chỗ lệch này, và chủ sở hữu xác nhận điều đã xây. Chỉ đảo ngược bằng một quyết định mới của chủ.
 - Hệ quả: bản sửa hay review muộn làm sau một lần gửi không có lần gửi lúc hạn và không có lời nhắc mới; chủ gửi nó từ thẻ Gửi. Các quy tắc F-2 a cho kỳ chưa từng gửi không đổi.
 - Các quy tắc đã viết theo nó: tài liệu 05 "Đến hạn và phục hồi" và "Nhắc và link review" (trích dẫn ở đó cùng F-2 a), và AC-07 trong tài liệu 06.
+
+## Quyết định của chủ sở hữu — 2026-10-29 và 2026-11-02 (tài liệu và công cụ quy trình cần duyệt và sửa, không cần gate hay audit)
+
+Nguồn: các câu trong chat của chủ sở hữu, ghi nguyên văn trong bảng nhiệm vụ (`ORCHESTRATION.json`, `owner_decisions`).
+
+- 2026-10-29, sau khi coordinator giải thích các chu trình gate và audit của hai commit chỉ chứa tài liệu: "Sửa luật giúp tôi, tài liệu không cần test/gate/audit gì cả. chỉ cần duyệt và sửa để make sure chúng up to date, ko bị lệch nội dung là đc." (Sửa luật: tài liệu không cần test, gate hay audit, chỉ cần duyệt và sửa để luôn cập nhật và nhất quán.)
+- 2026-11-02, trả lời hai câu hỏi của coordinator: "Q1 (a), Q2 (a)". Q1 (a): các quy tắc làm việc bằng Markdown (AGENTS, CLAUDE, tài liệu 08, prompt, mẫu) cũng là tài liệu. Q2 (a): thay đổi này của các validator có probe của chúng và một lần duyệt tài liệu, không cần gate hay audit.
+- 2026-11-02, sau khi coordinator nói các thay đổi sau này ở validator, profile, skill và script vẫn giữ gate và audit: "sửa validator, profile agent, skill hay script (cấu hình), cũng ko cần đi qua vòng gate và audit." (Sửa validator, profile agent, skill hay script, ở mức cấu hình, cũng không cần chu trình gate và audit.)
+
+Hệ quả, được viết trong [08 Quy trình AI](08_AI_WORKFLOW_AND_BUDGET.vi.md) mục "Tài liệu và công cụ quy trình" và quy tắc 14 của AGENTS: tài liệu và công cụ quy trình chỉ cần một lần duyệt-và-sửa bởi một instance mới, và công cụ còn tự chạy các kiểm tra của nó. Luật path là `is_non_product` trong `validate_orchestration.py`. Record `non_product_since_acceptance` trên bảng giữ audit PASS còn hiệu lực qua các commit đó, và `--non-product-range` cùng `--non-product-staged` chứng minh các path đã đổi. Thay đổi làm đổi hành vi sản phẩm đi cùng task code của nó, task đó vẫn giữ gate và audit. `.claude/settings.json` không được chủ nêu tên và vẫn là path quản trị với freeze commit GOV, gate và audit mới. Các quyết định này không đổi quy tắc nghiệp vụ.

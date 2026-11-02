@@ -204,8 +204,20 @@ Luồng hiện tại:
      trong bàn giao WP5 (WP5-UX5-ACCEPT-HANDOFF).
    - WP5-UX5-ACCEPT-REVIEW đã duyệt cả hai tài liệu và sửa ba chỗ lệch nhỏ, theo luật của chủ
      dự án ngày 2026-10-29 cho tài liệu.
-   - Đang chạy: commit WP5-UX5-ACCEPT. Sau đó board trở về `software_ready`.
-   - Sau đó nữa: WP5-GOV-DOCS, phần sửa luật.
+   - Commit WP5-UX5-ACCEPT là 27567d1, đã push. **WP5 đã được nghiệm thu lại sau vòng 4 và 5
+     trên a54061f / 690fd8fd.**
+   - Đang chạy: WP5-GOV-DOCS, luật mới của chủ dự án ngày 2026-10-29. Tài liệu không cần test,
+     gate hay audit, chỉ cần duyệt và sửa.
+     - Kế hoạch đã xong (WP5-GOV-DOCS-PLAN).
+     - Chủ dự án đã trả lời Q1 (a), Q2 (a) ngày 2026-11-02. Luật làm việc viết bằng Markdown
+       cũng là tài liệu. Lần sửa này chạy probe của validator và một lượt duyệt, không có gate
+       hay audit opus.
+     - Cùng ngày, chủ dự án quyết định validator, profile agent, skill và script cũng không
+       cần gate hay audit. Chúng được duyệt như tài liệu và tự chạy các kiểm tra của mình.
+     - WP5-GOV-DOCS-VALIDATOR (141 probe), -RULES và -REVIEW (không có chỗ lệch) đã xong.
+     - Đang chạy: commit WP5-GOV-DOCS-COMMIT.
+   - Sau đó board trở về `software_ready`, rồi chủ dự án duyệt gói pilot và quyết định
+     R-UX5I2-3.
    - Để tiếp tục sau khi bị gián đoạn, dùng prompt khởi động ở trên. Điều phối viên làm tiếp
      ở `next_task_id` của board.
    - Chi tiết: [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md), mục "REGATE3

@@ -86,6 +86,7 @@ def synthetic():
                  auxiliary_lookups=[], active_package=BASE, next_task_id="S-PLAN", current_source_digest="a" * 64,
                  git={"branch": "main", "release_declared": False, "last_commit": None, "unpushed": []})
     value["git"]["last_commit"] = SHA
+    value.pop("non_product_since_acceptance", None)  # a live record never leaks in; probes add their own
     return value
 
 
@@ -537,6 +538,157 @@ def suite():
     value["next_task_id"] = "S-NEXT"
     rejects("software_ready with next_task_id set rejected", value, "Ready mission still has active work",
             ready_state)
+
+    # Non-product (documentation and workflow tooling) changes after an acceptance: is_non_product, non_product_since_acceptance (V1-V6).
+    non_product_suite()
+
+
+def doc_board():
+    """A finished board whose source moved from "a" to "b" by non-product changes, with a valid record and review."""
+    value = finished()
+    value["current_source_digest"] = "b" * 64
+    for name, agent, depends in [("S-DOC", "synthetic-doc", []), ("S-DOC-REVIEW", "synthetic-doc-reviewer", ["S-DOC"])]:
+        item = make_task(name, "documentation", depends)
+        item.update(status="done", attempt=1, agent_id=agent)
+        value["tasks"].insert(-1, item)
+    value["non_product_since_acceptance"] = {
+        "base_commit": "c" * 40, "base_digest": "a" * 64, "head_digest": "b" * 64,
+        "paths": ["README.md", "docs/12_RELEASE_NOTES.md"],
+        "reviews": [{"author_task": "S-DOC", "review_task": "S-DOC-REVIEW"}]}
+    return value
+
+
+def non_product_suite():
+    global real_board
+    live = real_board
+    real_board = copy.deepcopy(live)
+    real_board["non_product_since_acceptance"] = {"base_commit": "c" * 40}  # a live record, however malformed
+    try:
+        leaked = synthetic()
+    finally:
+        real_board = live
+    assert "non_product_since_acceptance" not in leaked
+    accepts("a live non_product_since_acceptance record does not leak into the synthetic board", leaked)
+    is_doc = module.is_non_product
+    yes = ["README.md", "README.vi.md", "AGENTS.md", "DEVELOPMENT.md", "docs/12_RELEASE_NOTES.md",
+           "docs/adr/0001-x.vi.md", "docs/agents/domain.md", "reference/inputs/README.md",
+           "scripts/x.mjs", "scripts/ghcr-cleanup.ts", ".claude/agents/x.md", ".claude/skills/x/SKILL.md",
+           ".agents/skills/x/SKILL.md", "skills-lock.json"]
+    assert all(is_doc(path) for path in yes), [path for path in yes if not is_doc(path)]
+    passed.append("is_non_product accepts documentation and workflow tooling")
+    no = ["assets/pdf-fonts/README.md", "src/x.md", "src/x.ts", "tests/e2e/x.md", "handoff/x.md",
+          "handoff/delivery/validate_orchestration.py", "package.json", "package-lock.json", "tsconfig.json",
+          "vite.config.ts", "Dockerfile", "compose.example.yaml", ".env.example", ".github/workflows/image.yml",
+          ".claude/settings.json", "docs/x.txt", "ingat.toml", "/abs.md", "../x.md", "docs/../x.md",
+          "scripts/../src/x.ts", ".claude/agents/../settings.json", "docs\\x.md", "skills-lock.json.bak", "", None]
+    assert not any(is_doc(path) for path in no), [path for path in no if is_doc(path)]
+    passed.append("is_non_product rejects product, handoff, non-Markdown and unsafe paths")
+    assert module.non_product_offenders(["README.md", "src/a.ts", "", "docs/x.md", "package.json"]) == [
+        "src/a.ts", "package.json"]
+    passed.append("non_product_offenders returns exactly the product paths")
+    report = module.non_product_report(["README.md", "handoff/x.md", "src/a.ts"])
+    assert report == {"status": "FAIL", "changed": ["README.md", "src/a.ts"], "product": ["src/a.ts"]}
+    assert module.non_product_report(["handoff/x.md", "docs/a.md"])["status"] == "PASS"
+    passed.append("non-product report drops handoff paths and fails on product paths")
+
+    value = doc_board()
+    accepts("stale PASS kept by a documentation record accepted", value)
+    invalid = copy.deepcopy(value)
+    del invalid["non_product_since_acceptance"]
+    rejects("same board without a record still rejects the stale PASS", invalid, "Stale PASS")
+    invalid = copy.deepcopy(value)
+    task_of(invalid, "S-AUDIT")["reviewed_digest"] = "d" * 64
+    task_of(invalid, "S-AUDIT")["source_digest"] = "d" * 64
+    task_of(invalid, "S-GATE")["source_digest"] = "d" * 64
+    rejects("record does not keep a PASS of a third digest", invalid, "Stale PASS")
+    invalid = copy.deepcopy(value)
+    invalid["non_product_since_acceptance"]["head_digest"] = "c" * 64
+    rejects("record head_digest that is not the current digest leaves the PASS stale", invalid, "Stale PASS")
+    invalid = finished()  # current digest still "a": a leftover record whose head was never reached
+    invalid["non_product_since_acceptance"] = copy.deepcopy(value["non_product_since_acceptance"])
+    invalid["tasks"][-1:-1] = [copy.deepcopy(task_of(value, "S-DOC")), copy.deepcopy(task_of(value, "S-DOC-REVIEW"))]
+    rejects("record head_digest differing from current_source_digest rejected", invalid,
+            "head_digest differs from current_source_digest")
+
+    two = copy.deepcopy(value)
+    extra = make_task("S-DOC-2", "documentation", [])
+    extra_review = make_task("S-DOC-REVIEW-2", "documentation", [])
+    extra.update(status="done", attempt=1, agent_id="synthetic-doc-2")
+    extra_review.update(status="done", attempt=1, agent_id="synthetic-doc-reviewer-2")
+    two["tasks"][-1:-1] = [extra, extra_review]
+    two["non_product_since_acceptance"]["reviews"].append({"author_task": "S-DOC-2",
+                                                             "review_task": "S-DOC-REVIEW-2"})
+    accepts("record with two reviews accepted", two)
+    fixer = copy.deepcopy(value)
+    fixer["non_product_since_acceptance"]["reviews"][0]["author_task"] = "S-IMPL"
+    accepts("record whose author_task is an implement task accepted", fixer)
+
+    invalid = copy.deepcopy(value)
+    invalid["non_product_since_acceptance"]["paths"].append("src/client/notes.md")
+    rejects("record naming a product path rejected", invalid, "not a non-product path")
+    tooling = copy.deepcopy(value)
+    tooling["non_product_since_acceptance"]["paths"] += ["scripts/x.mjs", ".claude/agents/timesheet-worker.md"]
+    accepts("record naming workflow tooling paths accepted", tooling)
+    invalid = copy.deepcopy(value)
+    invalid["non_product_since_acceptance"]["paths"].append(".claude/settings.json")
+    rejects("record naming .claude/settings.json rejected", invalid, "not a non-product path")
+    invalid = copy.deepcopy(value)
+    invalid["non_product_since_acceptance"].update(base_digest="d" * 64)
+    invalid["current_source_digest"] = "a" * 64
+    invalid["non_product_since_acceptance"]["head_digest"] = "a" * 64
+    rejects("record whose base_digest matches no current PASS audit rejected", invalid, "hang on a current")
+    invalid = copy.deepcopy(value)
+    task_of(invalid, "S-AUDIT")["superseded_by"] = "S-AUDIT-LATER"
+    later = make_task("S-AUDIT-LATER", "audit", ["S-IMPL"])
+    later.update(status="done", attempt=1, agent_id="synthetic-later", evidence=[EVIDENCE], decision="PASS",
+                 source_digest="b" * 64, reviewed_digest="b" * 64, gate_included=True)
+    invalid["tasks"].insert(-1, later)
+    rejects("record hanging on a superseded PASS audit rejected", invalid, "hang on a current")
+    invalid = copy.deepcopy(value)
+    invalid["non_product_since_acceptance"]["reviews"] = []
+    rejects("record with no reviews rejected", invalid, "at least one review")
+
+    invalid = copy.deepcopy(value)
+    task_of(invalid, "S-DOC-REVIEW")["agent_id"] = "synthetic-doc"
+    rejects("review by the author's agent rejected", invalid, "reviewer is also the author")
+    invalid = copy.deepcopy(value)
+    task_of(invalid, "S-DOC-REVIEW")["previous_agent_ids"] = ["synthetic-doc"]
+    rejects("review by an agent that earlier authored rejected", invalid, "reviewer is also the author")
+    invalid = copy.deepcopy(value)
+    invalid["non_product_since_acceptance"]["reviews"][0]["review_task"] = "S-DOC"
+    rejects("review_task equal to author_task rejected", invalid, "review_task")
+
+    unfinished = copy.deepcopy(value)
+    task_of(unfinished, "S-DOC-REVIEW").update(status="pending", attempt=0, agent_id=None)
+    rejects("review task unfinished rejected", unfinished, "review_task must be a done documentation task")
+    unknown = copy.deepcopy(value)
+    unknown["non_product_since_acceptance"]["reviews"][0]["review_task"] = "S-MISSING"
+    rejects("review task unknown rejected", unknown, "review_task must be a done documentation task")
+    for kind, name in [("implement", "S-IMPL"), ("audit", "S-AUDIT"), ("plan", "S-PLAN")]:
+        invalid = copy.deepcopy(value)
+        invalid["non_product_since_acceptance"]["reviews"][0]["review_task"] = name
+        rejects(f"review_task of kind {kind} rejected", invalid, "review_task must be a done documentation task")
+    invalid = copy.deepcopy(value)
+    invalid["non_product_since_acceptance"]["reviews"][0]["author_task"] = "S-GATE"
+    rejects("author_task of kind gate rejected", invalid, "author_task must be a done documentation")
+
+    # The current digest equals the audited one here, so the shape checks are reached before the stale-PASS check.
+    for label, key, bad, expected in [
+            ("base_commit not 40 hex", "base_commit", "abc123", "base_commit invalid"),
+            ("base_digest not 64 hex", "base_digest", "a" * 63, "two different 64-hex"),
+            ("head_digest not 64 hex", "head_digest", "B" * 64, "two different 64-hex"),
+            ("head_digest equal to base_digest", "head_digest", "a" * 64, "two different 64-hex"),
+            ("empty paths", "paths", [], "paths missing or duplicated"),
+            ("duplicate paths", "paths", ["README.md", "README.md"], "paths missing or duplicated"),
+            ("paths not a list", "paths", "README.md", "paths missing or duplicated"),
+            ("record not an object", None, ["README.md"], "must be an object")]:
+        invalid = copy.deepcopy(value)
+        invalid["current_source_digest"] = "a" * 64
+        if key is None:
+            invalid["non_product_since_acceptance"] = bad
+        else:
+            invalid["non_product_since_acceptance"][key] = bad
+        rejects(f"malformed record rejected: {label}", invalid, expected)
 
 
 # One acceptance probe validates the live board and STATE exactly as they are.

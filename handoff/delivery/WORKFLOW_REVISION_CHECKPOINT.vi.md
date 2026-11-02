@@ -3311,7 +3311,71 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - Ba chỗ lệch trong bàn giao đã được sửa.
   - 209 lượt kiểm tra của drill gồm 207 lượt trong các stage và 2 lượt dọn dẹp. Gói pilot giờ
     ghi rõ điều này.
-- **Đang chạy:** commit WP5-UX5-ACCEPT, chạy một mình.
+- **WP5-UX5-ACCEPT đã xong.**
+  - Commit 27567d122ab70c0997a4a31d77405662f428f585 trên main, push dạng fast-forward từ
+    a54061f.
+  - 111 đường dẫn trong handoff được stage. Digest vẫn là 690fd8fd. Mọi kiểm tra đều trả về
+    0.
+  - **WP5 đã được nghiệm thu lại sau vòng thay đổi UI 4 và 5 trên a54061f / 690fd8fd.**
+- **WP5-GOV-DOCS-PLAN đã xong** (planner, tự báo claude-sonnet-5-5). Kế hoạch nằm ở
+  `evidence/WP5-GOV-DOCS-PLAN/plan.txt`.
+  - **Tài liệu:** các file `*.md` và `.vi.md` nằm ngoài các thư mục `src/`, `tests/`,
+    `scripts/`, `assets/` (có một test đọc README ở đây), `.claude/`, `.agents/` và
+    `handoff/`.
+  - **Quy trình:** một người sửa, một reviewer mới duyệt và sửa tiếp. Không freeze, không
+    gate, không audit.
+  - **Phương án (a):** giữ nguyên `npm run digest`, thêm vào board bản ghi
+    `documentation_since_acceptance` để validator giữ nguyên nghiệm thu. Thêm 17 probe mới.
+  - **Các chỗ sửa:** rule 14 trong AGENTS, docs/08, ORCHESTRATE, RESUME, các template,
+    docs/12:7 và docs/10, mỗi file kèm bản VI. Không cần ADR.
+- **Chủ dự án đã trả lời WP5-GOV-DOCS-Q ngày 2026-11-02: Q1 (a), Q2 (a).**
+  - Luật làm việc viết bằng Markdown cũng là tài liệu.
+  - Lần sửa này chạy probe của validator và một lượt duyệt, không có gate hay audit opus.
+- **Thêm một quyết định của chủ dự án cùng ngày (nguyên văn trên board):** sửa validator,
+  profile agent, skill và script cũng không cần gate hay audit.
+  - Chúng đi theo cùng quy trình duyệt và sửa, và công cụ tự chạy các kiểm tra của mình.
+  - `.claude/settings.json` không được nêu tên, nên vẫn là đường dẫn quản trị.
+  - Luật giờ bao gồm hai nhóm, nên mã nguồn dùng tên "non-product": `is_non_product` và
+    `non_product_since_acceptance`. Worker đang chạy đã nhận điều này qua Addendum 1, và các
+    brief còn lại đã được cập nhật.
+- **Điều phối viên điều chỉnh kế hoạch:**
+  - Bỏ chu trình quản trị.
+  - Bản ghi trên board bỏ `rule_change` và mọi SHA commit.
+  - Điều phối viên ghi bản ghi trước khi commit, để commit mang theo board đúng và không cần
+    thêm một commit phụ.
+- **Đã đăng ký kèm brief:**
+  - WP5-GOV-DOCS-VALIDATOR (worker-high);
+  - WP5-GOV-DOCS-RULES (worker);
+  - WP5-GOV-DOCS-REVIEW (worker mới);
+  - WP5-GOV-DOCS-COMMIT (committer).
+- **WP5-GOV-DOCS-VALIDATOR đã xong** (worker-high, tự báo claude-sonnet-5-5), gồm cả
+  Addendum 1. Chưa commit.
+  - `check_recovery`: 140 probe, exit 0. `validate_orchestration` và preflight: exit 0.
+  - Các khoảng commit: dc487c6..a54061f ĐẠT (6 đường dẫn); 0b45781..dc487c6 ĐẠT (4 đường
+    dẫn); d96df5d..0b45781 và 5b8b718..d96df5d KHÔNG ĐẠT, có liệt kê đường dẫn sản phẩm.
+  - Ba thử nghiệm đối chứng đều bị bắt.
+  - Sai sót: heredoc và một lệnh `rm -r`, chỉ trong thư mục tác vụ.
+- **WP5-GOV-DOCS-RULES đã xong** (worker, tự báo claude-sonnet-5-5). Chưa commit.
+  - Rule 14 và các tài liệu làm việc đã viết xong, mỗi file kèm bản VI.
+  - Preflight đạt (exit 0). Ngoài `handoff/`, chỉ các cặp AGENTS, docs/08, docs/10 và docs/12
+    khác.
+  - Digest 4ac52e6b, 882 file.
+- **WP5-GOV-DOCS-REVIEW đã xong** (worker mới, tự báo claude-sonnet-5-5).
+  - Không tìm thấy chỗ lệch.
+  - Các kiểm tra của validator đều đạt: 140 probe, các khoảng commit, preflight.
+  - Digest cuối 4ac52e6b, 882 file.
+- **Board.** `current_source_digest` là 4ac52e6b. `non_product_since_acceptance` ghi:
+  - gốc a54061f / 690fd8fd;
+  - tám đường dẫn tài liệu;
+  - hai lượt duyệt (RULES và VALIDATOR, đều do REVIEW duyệt).
+- **Lượt commit đầu đã dừng, chưa commit gì.** `check_recovery.py` lỗi vì `synthetic()` sao chép
+  board thật và nhận luôn bản ghi mới. Thứ tự do điều phối viên sắp xếp đã che mất lỗi này: bản
+  ghi được viết sau khi VALIDATOR và REVIEW chạy xong.
+  - WP5-GOV-DOCS-VALIDATOR đã sửa (Addendum 2). Số probe giờ là 141.
+  - WP5-GOV-DOCS-REVIEW đã đọc lại bản sửa và chạy cả hai validator trên board thật: exit 0.
+  - Digest vẫn là 4ac52e6b.
+- **Đang chạy:** WP5-GOV-DOCS-COMMIT, chạy một mình, làm tiếp. Sau bước này board chuyển sang
+  `software_ready`.
 - **Việc sửa luật** làm sau commit WP5-UX5-ACCEPT, dưới tên WP5-GOV-DOCS.
   - Trước tiên một planner xác định:
     - những file nào được tính là tài liệu;
