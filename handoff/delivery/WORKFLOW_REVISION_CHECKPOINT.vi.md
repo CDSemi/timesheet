@@ -3683,6 +3683,31 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - **Nếu bị gián đoạn:** kiểm tra `git log`, `git status` và origin/main trước. Nếu commit đã
   có, ghi nhận nó. Nếu chưa, giao cùng brief cho một committer mới (lần 2), trong thư mục task
   WP5-CALDEF-ACCEPT-a2.
+- **WP5-CALDEF-ACCEPT xong.** Commit 9aba1e70e6461fc5d1183ec71270aad9d4df1b25 trên main, đã
+  push theo kiểu fast-forward từ b810ba9.
+  - 366 file. D_PRE = digest của HEAD = 52ec1fc7 (885 file).
+  - Mọi bước kiểm tra đều exit 0, kể cả `--non-product-staged`, `--non-product-range
+    b810ba9..HEAD` và 141 probe.
+- **Mission trở lại `software_ready` (2026-11-03).**
+  - Mã nguồn đã nghiệm thu: b810ba9 / 59e2ec3f (WP5-CALDEF-AUDIT). Commit gần nhất chỉ đổi
+    tài liệu: 9aba1e7 / 52ec1fc7.
+  - `next_task_id` là null.
+  - Tiếp theo: chủ dự án duyệt pilot packet, làm các kiểm tra trên thiết bị và chạy các bước
+    NAS. Việc gửi thật, triển khai và kích hoạt vẫn do chủ dự án quyết định.
+- **Tra cứu WP5-CALDEF-POSTCHECK xong** (haiku, chỉ đọc) trên board `software_ready` cuối
+  cùng.
+  - HEAD = origin/main = 9aba1e7. Chỉ có thay đổi trong `handoff/`.
+  - Validator: `validate_orchestration.py` 0 (582 task, 0 đang chạy) và
+    `--non-product-range b810ba9..HEAD` 0; `check_recovery.py` 0 (141 probe);
+    `validate_package.py --preflight` 0.
+  - `npm run digest` = 52ec1fc7 (885 file).
+  - Các bản ghi sau 9aba1e7 vẫn chưa commit cho đến commit kế tiếp.
+- **WP5-CALDEF-CKPT** (committer, sonnet) đã được giao, chạy một mình. Đây là commit
+  checkpoint chỉ gồm handoff trước điểm dừng có kế hoạch (điểm commit theo docs/08). Board ghi
+  nó đang chạy và trở lại `software_ready` sau khi nó xong.
+- **Nếu bị gián đoạn:** kiểm tra `git log`, `git status` và origin/main trước. Nếu commit đã
+  có, ghi nhận nó. Nếu chưa, giao cùng brief cho một committer mới (lần 2), trong thư mục task
+  WP5-CALDEF-CKPT-a2.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

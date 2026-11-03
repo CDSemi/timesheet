@@ -248,7 +248,8 @@ Luồng hiện tại:
    - Các mẫu pilot được tạo lại từ b810ba9 (WP5-CALDEF-SAMPLES). Nội dung giống như trước.
    - Pilot packet và mục "Nghiệm thu lại sau vòng mặc định lịch (WP5-CALDEF, R-UX5I2-3)" trong
      [WP5 handoff](delivery/WP5_HANDOFF.vi.md) đã được cập nhật.
-   - Tất cả nằm trong commit nghiệm thu WP5-CALDEF-ACCEPT; SHA của nó ghi trên board.
+   - Tất cả nằm trong commit nghiệm thu WP5-CALDEF-ACCEPT, 9aba1e7 (digest 52ec1fc7), đã
+     push. Board đã trở lại `software_ready`.
    - Backlog không bắt buộc: R-CALDEF-1..4, ranh giới 2,05:1 của nút phụ, và lỗi tranh chấp
      cổng F2 trong harness e2e.
 5. **Tiếp theo, chủ dự án: duyệt pilot.** Đọc

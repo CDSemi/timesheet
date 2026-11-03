@@ -138,3 +138,11 @@ Append briefly:
 Return at most 80 words, beginning 'Self-reported model: ...', with the full commit SHA.
 
 ## Results
+
+- Committer: sonnet (claude-sonnet-5-5). HEAD before b810ba942c608e058bd8c146de6f076734c48bf2;
+  commit and HEAD after 9aba1e70e6461fc5d1183ec71270aad9d4df1b25; pushed to origin/main
+  (fast-forward), remote SHA equals HEAD.
+- Staged 366 files; all checks exit 0 (precommit, diff --check, JSON, validators, 141 probes,
+  preflight with scratch tzdata, non-product staged and range PASS).
+- D_PRE and HEAD digest both 52ec1fc7...6dc07 (885 files). No file masked or unstaged.
+- Details: `handoff/delivery/evidence/WP5-CALDEF-ACCEPT/checks.txt`.

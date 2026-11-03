@@ -3591,6 +3591,31 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - **If interrupted:** check `git log`, `git status` and origin/main first. If the commit
   exists, record it. Otherwise give the same brief to a fresh committer (attempt 2), in task
   folder WP5-CALDEF-ACCEPT-a2.
+- **WP5-CALDEF-ACCEPT done.** Commit 9aba1e70e6461fc5d1183ec71270aad9d4df1b25 on main, pushed
+  as a fast-forward from b810ba9.
+  - 366 files. D_PRE = the HEAD digest = 52ec1fc7 (885 files).
+  - Every check exited 0, including `--non-product-staged`, `--non-product-range
+    b810ba9..HEAD` and 141 probes.
+- **Mission back to `software_ready` (2026-11-03).**
+  - Accepted source: b810ba9 / 59e2ec3f (WP5-CALDEF-AUDIT). Latest documentation-only
+    commit: 9aba1e7 / 52ec1fc7.
+  - `next_task_id` is null.
+  - Next: the owner reviews the pilot packet, does the pilot device checks and runs the NAS
+    steps. Real sending, deployment and activation stay owner-controlled.
+- **Lookup WP5-CALDEF-POSTCHECK done** (haiku, read-only) on the final `software_ready`
+  board.
+  - HEAD = origin/main = 9aba1e7. Changes are only under `handoff/`.
+  - Validators: `validate_orchestration.py` 0 (582 tasks, 0 active) and
+    `--non-product-range b810ba9..HEAD` 0; `check_recovery.py` 0 (141 probes);
+    `validate_package.py --preflight` 0.
+  - `npm run digest` = 52ec1fc7 (885 files).
+  - The records after 9aba1e7 stay uncommitted until the next commit.
+- **WP5-CALDEF-CKPT** (committer, sonnet) is dispatched alone. It is the handoff-only
+  checkpoint commit before the planned stop (docs/08 commit point). The board shows it
+  running and returns to `software_ready` after it.
+- **If interrupted:** check `git log`, `git status` and origin/main first. If the commit
+  exists, record it. Otherwise give the same brief to a fresh committer (attempt 2), in task
+  folder WP5-CALDEF-CKPT-a2.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

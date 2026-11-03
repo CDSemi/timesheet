@@ -246,7 +246,8 @@ Current route:
      the same as before.
    - The pilot packet and the [WP5 handoff](delivery/WP5_HANDOFF.md) section "Re-acceptance
      after the calendar-default round (WP5-CALDEF, R-UX5I2-3)" are refreshed.
-   - All of this is in the accept commit WP5-CALDEF-ACCEPT; its SHA is on the board.
+   - All of this is in the accept commit WP5-CALDEF-ACCEPT, 9aba1e7 (digest 52ec1fc7),
+     pushed. The board is back to `software_ready`.
    - Optional backlog: R-CALDEF-1..4, the 2.05:1 secondary-button boundary, and the e2e
      harness port race F2.
 5. **Next, owner: review the pilot.** Read the
