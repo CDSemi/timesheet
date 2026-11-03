@@ -1,0 +1,11 @@
+# Second run of the two probes that failed on a probe mistake (E2: the dialog is renamed by its conflict step; E4 desktop: the second
+# width needs its own change of the default), desktop only, after the fix of the probe file.
+. <task>/env.sh
+O=$T/out
+cd $T/export-probe || exit 2
+cp $T/zz-audit-caldef.spec.ts tests/e2e/zz-audit-caldef.spec.ts
+export AXE_PATH="$TW\\axe-pkg\\package\\axe.min.js"
+export OBS_OUT="$TW\\out\\41-obs-run2.txt"
+SHIFT_EXPORT=$T/export-probe bash $T/run-shift.sh probe-e2e-r2 real tests/e2e/zz-audit-caldef.spec.ts --project=desktop --workers=2 -g "E2:|E4 axe" > $O/41-e2e-probe-run2.txt 2>&1
+echo "e2e probe run 2 $(grep -o '^exit=[0-9]*' $O/41-e2e-probe-run2.txt)" >> $O/40-probe-exits.txt
+rm tests/e2e/zz-audit-caldef.spec.ts

@@ -7,9 +7,11 @@
   attempt 3 and WP3-RECHECK-BC3 PASS at 49651c8, digest c31c300c.
 - WP4 accepted: WP4-REGATE4 PASS and final independent rechecks WP4-RECHECK-A
   attempt 4 and WP4-RECHECK-B4 PASS at 546cdda, digest 26fcc969.
-- WP5 accepted (software readiness), re-accepted after the owner-requested UI change
-  round 3: WP5-UX3-REGATE5 PASS and the final independent audit WP5-UX3-AUDIT-INT PASS at
-  8e55710, digest 507de97c. Earlier acceptances: a643794 / 229df806 after round 2,
+- WP5 accepted (software readiness), re-accepted after the calendar-default round
+  (R-UX5I2-3): WP5-CALDEF-REGATE PASS and the final independent audit WP5-CALDEF-AUDIT PASS
+  at b810ba9, digest 59e2ec3f; the accept commit WP5-CALDEF-ACCEPT changes only
+  documentation after it. Earlier acceptances: a54061f / 690fd8fd after UI change rounds 4
+  and 5, 8e55710 / 507de97c after round 3, a643794 / 229df806 after round 2,
   90b98ef / 57e2974c after round 1, and 014bd47 / 150420e7.
 - UI change round (owner request 2026-10-08, done): the Timesheet page now follows the
   sample Excel timesheet layout, with a friendlier shell, on desktop and phone (plan and
@@ -48,7 +50,7 @@
   - Final review: [WP5 UX3 integration review](delivery/WP5_UX3_REVIEW_INT.md).
   - Optional backlog: see the [WP5 handoff](delivery/WP5_HANDOFF.md).
 - Pilot: the concrete [pilot packet](delivery/WP5_PILOT_PACKET.md) is ready for owner
-  review (release identity 8e55710 / 507de97c). Owner permission has not been requested,
+  review (accepted source b810ba9 / 59e2ec3f). Owner permission has not been requested,
   there is no pilot result, and the NAS is NOT VERIFIED.
 
 **Workflow: revision v2 accepted (independent GOV audit PASS at 6578df8; see [workflow handoff](delivery/WORKFLOW_HANDOFF.md)). Governance tasks use board package GOV.**
@@ -217,9 +219,10 @@ Current route:
    - 90b98ef / 57e2974c (WP5-UX-AUDIT-AB9);
    - a643794 / 229df806 (WP5-UX2-AUDIT2);
    - 8e55710 / 507de97c (WP5-UX3-AUDIT-INT);
-   - **a54061f / 690fd8fd (WP5-UX5-RECHECK-RN), the current acceptance.** Commit 5b2f287
-     (digest 4ac52e6b) changes only documentation after it, so the application files are
-     identical.
+   - a54061f / 690fd8fd (WP5-UX5-RECHECK-RN), after rounds 4 and 5;
+   - **b810ba9 / 59e2ec3f (WP5-CALDEF-AUDIT), the current acceptance.** The accept commit
+     WP5-CALDEF-ACCEPT (digest 52ec1fc7) changes only documentation after it, so the
+     application files are identical.
 2. **Done: GOV-RECOVERY.** `check_recovery.py` no longer inherits the live mission
    status (fix frozen at 7f750e9, gate PASS,
    [GOV recovery review](delivery/GOV_RECOVERY_REVIEW.md) PASS). The board records the
@@ -228,15 +231,27 @@ Current route:
    - WP5-UX2: re-accepted on a643794 / 229df806.
    - WP5-UX3: re-accepted on 8e55710 / 507de97c (gate WP5-UX3-REGATE5, audit
      WP5-UX3-AUDIT-INT PASS). The pilot packet identity is refreshed.
-4. **Running: fix round WP5-CALDEF for R-UX5I2-3 (owner answer 2026-11-02).** When a day's
+4. **Done: fix round WP5-CALDEF for R-UX5I2-3 (owner answer 2026-11-02).** When a day's
    calendar default changed since the Day editor loaded it, a notice lets the person choose
-   to save (overwrite) or to update to the new default.
-   - WP5-CALDEF-PLAN (planner, read-only) first; then the fix, its freeze, a gate and a fresh
-     independent audit; then the pilot packet and the WP5 handoff are refreshed.
-   - The accepted source stays a54061f / 690fd8fd until that audit passes.
-   - Resume at the board's `next_task_id`.
+   to save (overwrite) or to use the new default. The label picker and "Change several days"
+   refuse a changed default and offer "Reload period".
+   - The fix is frozen in 300d61f. WP5-CALDEF-GATE failed on one older, date-dependent test:
+     its press point lay under the floating Day editor. The tests-only fix is frozen in
+     b810ba9.
+   - WP5-CALDEF-REGATE passed on b810ba9. The fresh audit WP5-CALDEF-AUDIT passed and closed
+     R-UX5I2-3. **WP5 is re-accepted on b810ba9 / 59e2ec3f** (885 files).
+   - The audit's two Low documentation findings and the release-document status lines were
+     fixed and reviewed under AGENTS rule 14.
+   - The pilot samples were made again from b810ba9 (WP5-CALDEF-SAMPLES). Their content is
+     the same as before.
+   - The pilot packet and the [WP5 handoff](delivery/WP5_HANDOFF.md) section "Re-acceptance
+     after the calendar-default round (WP5-CALDEF, R-UX5I2-3)" are refreshed.
+   - All of this is in the accept commit WP5-CALDEF-ACCEPT; its SHA is on the board.
+   - Optional backlog: R-CALDEF-1..4, the 2.05:1 secondary-button boundary, and the e2e
+     harness port race F2.
 5. **Next, owner: review the pilot.** Read the
-   [pilot packet](delivery/WP5_PILOT_PACKET.md). D-1..D-15 and R-UX5I2-3 are answered.
+   [pilot packet](delivery/WP5_PILOT_PACKET.md). D-1..D-15 and R-UX5I2-3 are answered;
+   R-UX5I2-3 is built and accepted.
    - Do the pilot device checks (packet section 10).
    - Run the owner NAS steps in docs/11 and the target restore form.
    - Real sending, deployment and activation happen only after the owner's explicit

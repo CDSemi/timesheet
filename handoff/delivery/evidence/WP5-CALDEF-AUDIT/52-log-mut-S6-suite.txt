@@ -1,0 +1,37 @@
+
+ RUN  v5.0.2 <task>/export-mut
+
+ ❯ tests/integration/calendar-default-change.test.ts (18 tests | 1 failed) 8678ms
+   ❯ ownership and calendars (2)
+     × I12: the shared edit route checks the owner calendar, not the grantee calendar; a read-only grantee is still 403 629ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > ownership and calendars > I12: the shared edit route checks the owner calendar, not the grantee calendar; a read-only grantee is still 403
+AssertionError: expected [ 'calendar_hint', …(3) ] to deeply equal [ 'current_default', …(2) ]
+
+- Expected
++ Received
+
+  [
++   "calendar_hint",
+    "current_default",
+    "expected_default",
+    "work_date",
+  ]
+
+ ❯ tests/integration/calendar-default-change.test.ts:429:60
+    427|       details: { work_date: DAY_A, expected_default: 'Worked', current…
+    428|     });
+    429|     expect(Object.keys(refused.body.error.details).sort()).toEqual(['c…
+       |                                                            ^
+    430|     expect(entryRows()).toEqual(rows);
+    431|     // The grantee's own calendar has no holiday: a check against the …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 102 passed (103)
+      Tests  1 failed | 2424 passed (2425)
+   Start at  05:29:07
+   Duration  40.46s (tests 95%, import 4%, transform 1%)

@@ -1,0 +1,61 @@
+WP5-CALDEF-ACCEPT-REVIEW evidence (HEAD b810ba942c608e058bd8c146de6f076734c48bf2)
+
+Fixes (file, line, before, after, source)
+
+1. docs/03_ARCHITECTURE_AND_DATA.md:24
+   before: "... no OT-leave day category), notes, confirmation, optimistic version, category source (...)"
+   after:  "... no OT-leave day category), notes, optimistic version, category source (...)"
+   source: src/server/db/migrations/0001_initial.ts:143-158 (day_entries columns: id, user_id, timesheet_id, work_date,
+           category, leave_minutes, wfh, notes, version, created_at, updated_at; no confirmation column; grep "onfirm" in
+           src/server/db finds only work_sessions.breaks_confirmed at 0001_initial.ts:168). "confirmation" came from the
+           initial commit's inherited design text. Removing it loses no true fact. Not a behaviour statement.
+2. docs/03_ARCHITECTURE_AND_DATA.vi.md:24
+   before: "... ghi chú, xác nhận, phiên bản chống sửa đè, nguồn loại ngày ..."
+   after:  "... ghi chú, phiên bản chống sửa đè, nguồn loại ngày ..."
+3. handoff/delivery/WP5_HANDOFF.md:414 and .vi.md:414 (F-CALDEF-1 bullet)
+   before: "... "notes, confirmation, optimistic version", in EN and VI. F-CALDEF-2 ..."
+   after:  adds "(the review found that `day_entries` has no confirmation column, so the row now reads "notes, optimistic version")"
+           (VI: the same sentence in Vietnamese)
+   source: fix 1.
+4. handoff/delivery/WP5_HANDOFF.md:428 and .vi.md:428 (Status)
+   before: "The next coordinator action is WP5-CALDEF-ACCEPT-PACKET, then the review ... then WP5-CALDEF-ACCEPT"
+   after:  "The pilot packet was refreshed by WP5-CALDEF-ACCEPT-PACKET; the next coordinator action is the review ... then
+           WP5-CALDEF-ACCEPT" (VI aligned)
+   source: board tasks WP5-CALDEF-ACCEPT-PACKET and WP5-CALDEF-SAMPLES done; stale forward reference.
+5. handoff/delivery/WP5_PILOT_PACKET.md:396 and .vi.md:396 (evidence index)
+   before: "`45-dist-compare-a54061f-target.txt` is the `dist/` comparison with `a54061f` that section 3 cites, with ..."
+   after:  "... comparison with `a54061f`, with ..." (VI: removed "mà mục 3 dẫn")
+   source: section 3 no longer cites that file (grep "45-dist-compare" finds only line 396). File exists in
+           evidence/WP5-CALDEF-AUDIT/.
+
+Checks that held (no edit)
+- Identity b810ba942c608e058bd8c146de6f076734c48bf2 / 59e2ec3f22d951366d4a54d0564ed2731d3b4f8c1fa90bc1cfbea10ebf0d770a,
+  885 files: handoff, packet, board, STATE.json (reviewed_commit/reviewed_digest), FIX2-FREEZE record.
+- 300d61f055a859857aa8eb3845ed21f4560e82fa / e24274b9... 885 files (FREEZE record).
+- GATE: 507/37/1 and 429/116/0, 103 files 2,425 tests, 209 PASS, 36 of 36 mutants (GATE.md lines 211-222).
+  REGATE: 508/37/0, 429/116/0, 250/250 dist files, six sweeps, axe 21 scans 0 violations, M1 M2 (REGATE.md).
+  FIX2: 11 insertions 3 deletions (FIX2.md:125).
+- Audit PASS, R-UX5I2-3 closed, F-CALDEF-1/2 Low, 12 mutants (7 server 5 client; 8 killed, S7 own probe, S1 C5 survive,
+  S3 equivalent), R-CALDEF-1..4, 2.05:1, F2 (WP5_CALDEF_REVIEW.md lines 29, 219, 242-259).
+- Samples: 11 messages, 6 PDFs; six PDF SHA-256 in packet section 3 equal the hashes in samples/msg-*.txt and
+  samples-compare.txt; 5 differing Date headers (3 at 06:30 vs 06:32, 2 at 06:36 vs 06:30); file names equal the
+  samples/ listing; server diffstat (5 files) equals 61-diffstat-server.txt; reference image ID and 110,197,841 bytes equal
+  GATE log-drill.txt line 4.
+- Stale search: README, DEVELOPMENT, docs/03, docs/12 EN and VI contain no a54061f, 690fd8fd, REGATE16, RECHECK-RN or
+  "gate and audit pass". Packet and handoff mentions of them are labelled history.
+- Parity (check.mjs in the task folder): handoff tokens EN 309 / VI 309, packet 96 / 96, docs/03 3 / 3, docs/12 33 / 33,
+  README 1 / 1, DEVELOPMENT 2 / 2, none only on one side; 7-hex SHAs equal; thousands numbers equal (VI uses "." grouping).
+  Links: all targets exist in the 12 files, 0 missing; docs/12.vi line 63 links WP5_HANDOFF.vi.md.
+  Packet EN and VI quote the heading exactly as the EN and VI handoff headings.
+- Privacy: no non-example.invalid email address and no profile path in the 12 files. docs/12 (EN and VI) holds one 64-hex
+  value: the historic digest 1e59ad31... of 8e99d2c (777 files), present at HEAD before this round and not the accepted
+  identity. Reported, not changed.
+- Nothing states the accept commit SHA or digest.
+
+Final checks
+- validate_package.py --preflight: exit 0 (workflow Python under <user>/.cache/codex-runtimes/...).
+- git status --short --untracked-files=all -- . ':!handoff': the eight files DEVELOPMENT.md/.vi.md, README.md/.vi.md,
+  docs/03_ARCHITECTURE_AND_DATA.md/.vi.md, docs/12_RELEASE_NOTES.md/.vi.md (all " M").
+- npm run digest (node scripts/source-digest.mjs, portable Node 24.19.0): 52ec1fc748fa1e8eabd63d628abee9c1c77666a24ebf250ef66c26d1dd96dc07 (885 files, handoff/ excluded), exit 0.
+
+Process note: one scratch file (diff.txt) was first written in the parent folder D:\.claude-tmp\timesheet before the task folder was created; the task-folder copy is the one used.

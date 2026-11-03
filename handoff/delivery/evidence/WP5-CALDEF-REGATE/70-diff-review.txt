@@ -1,0 +1,16 @@
+WP5-CALDEF-REGATE item 1: review of `git diff 300d61f..b810ba9 -- tests/e2e/classic-scrollbar.spec.ts` (22-spec-diff.txt)
+
+Compared by reading against handoff/delivery/evidence/WP5-CALDEF-DIAG1/proposed.patch.txt: the 14 changed lines (11 insertions, 3 deletions) are the same hunk,
+line for line (the committed hunk header @@ -153,18 +153,26 @@ only differs by git's context label and the index line).
+
+Added: a 3-line comment; `const pressNearLeft = (await editor.getAttribute('data-side')) === 'right';`; the in-page function takes `nearLeft` and returns
+`x: nearLeft ? box.left + 60 : box.right - 60` (unchanged for the left dock); the call passes `${pressNearLeft}`; one new assertion that
+`document.elementFromPoint(x, y)?.closest('.sheet-week') != null` ("the press lands on the week card, not under the drawer").
+
+Checks on the diff:
+  - loosened assertion: none (every original expect is unchanged: bar not null, scrolled() 0 before, scrolled() > 0 after, drawer toBeVisible, plain-page close)
+  - dropped step or case: none (no removed line other than the three rewritten ones)
+  - raised timeout (setTimeout(120_000) unchanged), added sleep or waitForTimeout: none
+  - skipped date, test.skip, test.fixme, clock shift in the spec: none
+  - deprecated API: none (page.evaluate with a string script, getAttribute, elementFromPoint, as in the neighbouring tests)
+Result: matches the proposed patch; nothing loosened.

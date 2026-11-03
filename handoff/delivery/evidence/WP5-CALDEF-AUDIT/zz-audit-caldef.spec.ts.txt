@@ -1,0 +1,325 @@
+// WP5-CALDEF-AUDIT probe (the auditor's own, never part of the repository). Synthetic data only, one private server and one person per
+// test. It drives paths of R-UX5I2-3 that the round's spec does not: the INT2 E2 shape (no entry, nothing typed, a tab return), the picker
+// on a day with recorded work (a default-sourced entry), the picker in a shared edit view, an import that is undone (no false notice), a
+// second change after "Use", the keyboard path through the notice, focus on the phone, and axe-core 4.14.0 scans with the notice open and
+// with the review dialog showing "calendar default changed". Observations go to OBS_OUT; axe comes from AXE_PATH (task folder).
+import { appendFileSync, readFileSync } from 'node:fs';
+import type { Locator, Page, Request } from '@playwright/test';
+import { type BuiltServer, expect, newPerson, SeedClient, test } from './fixtures.ts';
+
+const AXE_PATH = process.env.AXE_PATH ?? '';
+const OUT = process.env.OBS_OUT ?? '';
+const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+const TYPED = 'Synthetic audit note typed and not saved';
+let axeSource = '';
+
+function note(line: string): void {
+  if (OUT !== '') appendFileSync(OUT, `${line}\n`);
+}
+const frames = (page: Page) => page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+
+async function activeText(page: Page): Promise<string> {
+  return page.evaluate<string>(
+    "(() => { const a = document.activeElement; if (a === null || a === document.body) return 'BODY'; const name = a.getAttribute('aria-label') ?? (a.textContent ?? '').trim(); return a.tagName + ' \"' + name.slice(0, 50) + '\"'; })()",
+  );
+}
+
+async function scan(page: Page, label: string): Promise<number> {
+  if (axeSource === '') axeSource = readFileSync(AXE_PATH, 'utf8');
+  await frames(page);
+  if (!(await page.evaluate<boolean>(`typeof window.axe !== 'undefined'`))) await page.evaluate(axeSource);
+  const result = await page.evaluate<{ version: string; violations: Array<{ id: string; impact: string | null; nodes: string[] }>; incomplete: string[] }, string[]>(
+    async (tags) => {
+      const axe = (window as unknown as { axe: { run: (c: unknown, o: unknown) => Promise<Record<string, unknown>>; version: string } }).axe;
+      const r = (await axe.run(document, { runOnly: { type: 'tag', values: tags }, resultTypes: ['violations', 'incomplete'] })) as {
+        violations: Array<{ id: string; impact: string | null; nodes: Array<{ target: unknown }> }>;
+        incomplete: Array<{ id: string }>;
+      };
+      return {
+        version: axe.version,
+        violations: r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.map((n) => JSON.stringify(n.target)) })),
+        incomplete: [...new Set(r.incomplete.map((i) => i.id))],
+      };
+    },
+    TAGS,
+  );
+  note(
+    `AXE ${label}: axe ${result.version} violations=${result.violations.length} [${result.violations
+      .map((v) => `${v.id}(${v.impact}) ${v.nodes.join(' ')}`)
+      .join('; ')}] incomplete=[${result.incomplete.join(',')}]; focus ${await activeText(page)}`,
+  );
+  return result.violations.length;
+}
+
+async function importHoliday(admin: SeedClient, date: string, kind: 'holiday' | 'closure' = 'holiday', name = 'Synthetic Audit Holiday', remove: string[] = []): Promise<void> {
+  const calendar = await admin.call<{ id: string }>('GET', '/api/calendar');
+  const csv = ['date,name,kind', ...(remove.length > 0 ? [] : [`${date},${name},${kind}`])].join('\n');
+  const base = { calendar_id: calendar.id, year: Number(date.slice(0, 4)), csv, remove_dates: remove };
+  const first = await admin.call<{ earliest_effective_from: string }>('POST', '/api/admin/calendar/import/preview', { ...base, effective_from: '2099-01-01' });
+  const body = { ...base, effective_from: first.earliest_effective_from };
+  const preview = await admin.call<{ preview_hash: string | null; can_commit: boolean }>('POST', '/api/admin/calendar/import/preview', body);
+  expect(preview.can_commit, 'the import can be committed').toBe(true);
+  await admin.call('POST', '/api/admin/calendar/import/commit', { ...body, preview_hash: preview.preview_hash }, 201);
+}
+
+async function signInTo(page: Page, server: BuiltServer, who: { email: string; password: string }, hash = '#/timesheet'): Promise<void> {
+  await page.goto(`${server.origin}/${hash}`);
+  await page.getByLabel('Email').fill(who.email);
+  await page.getByLabel('Password').fill(who.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+}
+
+async function openEditor(page: Page, date: string): Promise<Locator> {
+  await page.getByLabel('Open a day').fill(date);
+  await page.getByRole('button', { name: 'Open day', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  await expect(editor).toBeVisible();
+  await expect(editor.getByRole('form', { name: 'Day fields' })).toBeVisible();
+  return editor;
+}
+
+const dayOf = (api: SeedClient, date: string) =>
+  api.call<{ category: string; category_source: string; default_category: string | null; entry: { version: number; notes: string } | null }>('GET', `/api/days/${date}`);
+const noticeOf = (editor: Locator) => editor.getByRole('alert').filter({ hasText: 'The calendar default for this day changed' });
+const saved = (editor: Locator) => editor.getByRole('status').filter({ hasText: 'Day fields saved.' });
+
+async function scene(page: Page, server: BuiltServer, name: string, shape: 'no-entry' | 'default-entry') {
+  const admin = await new SeedClient(server.origin).signIn(server.credentials.admin.email, server.credentials.admin.password);
+  const person = await newPerson(admin, server, { displayName: `Synthetic ${name}`, signature: 'none' });
+  const [date = ''] = await person.api.displayedPeriodFreeWorkdays();
+  if (shape === 'default-entry') await person.api.seedCompleteDay(date);
+  const puts: Array<{ body: Record<string, unknown> }> = [];
+  page.on('request', (request: Request) => {
+    if (request.method() === 'PUT' && new URL(request.url()).pathname === `/api/days/${date}`) puts.push({ body: request.postDataJSON() as Record<string, unknown> });
+  });
+  await signInTo(page, server, person.account);
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  return { admin, person, date, puts };
+}
+
+test.describe('WP5-CALDEF-AUDIT probes', () => {
+  test('E1: INT2 E2 shape (no entry, nothing typed, tab return): refused with the notice; "Use" then a typed note; the status line', async ({ page, privateServer }, info) => {
+    test.skip(info.project.name !== 'desktop', 'desktop drawer');
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 1440, height: 800 });
+    const { admin, person, date, puts } = await scene(page, privateServer, 'Audit E1', 'no-entry');
+    const editor = await openEditor(page, date);
+    await importHoliday(admin, date);
+    const read = page.waitForResponse((r) => r.request().method() === 'GET' && new URL(r.url()).pathname === `/api/days/${date}`);
+    await page.evaluate("document.dispatchEvent(new Event('visibilitychange'))");
+    await read;
+    await frames(page);
+    const category = editor.getByLabel('Category');
+    note(`E1 after tab return: category ${await category.inputValue()}`);
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    const notice = noticeOf(editor);
+    await expect(notice).toBeVisible();
+    await expect(notice).toBeFocused();
+    note(`E1 notice: ${(await notice.innerText()).replace(/\s+/g, ' ')}; PUT default_category ${JSON.stringify(puts.map((p) => p.body.default_category))}`);
+    expect(await dayOf(person.api, date)).toMatchObject({ category: 'Holiday', entry: null });
+    await notice.getByRole('button', { name: 'Use Holiday', exact: true }).click();
+    const status = editor.getByRole('status').filter({ hasText: 'Category set to Holiday' });
+    note(`E1 after Use: status "${await status.innerText()}"; focus ${await activeText(page)}`);
+    await editor.getByLabel('Notes').fill(TYPED);
+    note(`E1 after typing a note: status still shown "${(await status.count()) > 0 ? await status.innerText() : '(gone)'}"`);
+    await page.keyboard.press('Escape');
+    const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+    note(`E1 Escape with a typed note after Use: discard question ${(await discard.count()) > 0 ? 'asked' : 'NOT asked'}`);
+    await expect(discard).toBeVisible();
+  });
+
+  test('E2: the picker on a day with recorded work after an import: refused, Reload period, then the conflict review saves the pick', async ({ page, privateServer }, info) => {
+    test.skip(info.project.name !== 'desktop', 'desktop sheet');
+    test.setTimeout(120_000);
+    const { admin, person, date } = await scene(page, privateServer, 'Audit E2', 'default-entry');
+    const batch: Array<Record<string, unknown>> = [];
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname === '/api/days/batch') batch.push(request.postDataJSON() as Record<string, unknown>);
+    });
+    await importHoliday(admin, date);
+    const pick = async (option: string) => {
+      await page.getByRole('button', { name: new RegExp(`^Category for ${date}`) }).click();
+      await page.getByRole('listbox', { name: `Category for ${date}` }).getByRole('option', { name: option, exact: true }).click();
+    };
+    await pick('Vacation');
+    const review = page.getByRole('dialog', { name: `Review category change for ${date}` });
+    await expect(review).toBeVisible();
+    note(`E2 review: ${(await review.innerText()).replace(/\s+/g, ' ')}`);
+    note(`E2 first preview entry: ${JSON.stringify(batch[0]?.entries)}`);
+    await expect(review).toContainText('calendar default changed');
+    const buttons = await review.getByRole('button').allInnerTexts();
+    const enabled = await review.getByRole('button', { name: /Commit changes|Review conflicts/ }).isEnabled();
+    note(`E2 review buttons ${JSON.stringify(buttons)}; commit/review-conflicts enabled ${enabled}`);
+    expect(await dayOf(person.api, date)).toMatchObject({ category: 'Holiday', category_source: 'default' });
+    await review.getByRole('button', { name: 'Cancel' }).click();
+    const reload = page.getByRole('button', { name: 'Reload period', exact: true });
+    await expect(reload).toBeVisible();
+    await reload.click();
+    await expect(page.locator(`[data-day="${date}"]`)).toContainText('Holiday');
+    await pick('Vacation');
+    const second = page.getByRole('dialog', { name: `Review category change for ${date}` });
+    await expect(second).toBeVisible();
+    note(`E2 second review: ${(await second.innerText()).replace(/\s+/g, ' ')}`);
+    await second.getByRole('button', { name: 'Review conflicts' }).click();
+    // The step change renames the dialog (its heading is the step's title).
+    const conflicts = page.getByRole('dialog', { name: 'Recorded work conflicts with the new category' });
+    await expect(conflicts).toBeVisible();
+    note(`E2 conflict step: ${(await conflicts.innerText()).replace(/\s+/g, ' ')}`);
+    await conflicts.getByRole('checkbox', { name: 'I confirm the category change for these dates' }).check();
+    await conflicts.getByRole('button', { name: 'Confirm and commit' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Saved 1 day.' })).toBeVisible();
+    note(`E2 last commit entry: ${JSON.stringify(batch.at(-1))}`);
+    expect(await dayOf(person.api, date)).toMatchObject({ category: 'Vacation', category_source: 'explicit' });
+  });
+
+  test('E3: the picker in a shared edit view: refused, "Reload period" in the shared view, then the pick saves for the owner', async ({ page, privateServer }, info) => {
+    test.skip(info.project.name !== 'desktop', 'desktop sheet');
+    test.setTimeout(120_000);
+    const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+    const owner = await newPerson(admin, privateServer, { displayName: 'Synthetic Audit Owner', signature: 'none' });
+    const grantee = await newPerson(admin, privateServer, { displayName: 'Synthetic Audit Grantee', signature: 'none' });
+    await owner.api.call('POST', '/api/shares', { grantee_email: grantee.account.email, items: { timesheets: 'edit', ot_read: false, pdf_download: false } }, 201);
+    const [date = ''] = await owner.api.displayedPeriodFreeWorkdays();
+    await signInTo(page, privateServer, grantee.account, `#/shared/${owner.account.id}/timesheet`);
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await importHoliday(admin, date);
+    const pick = async (option: string) => {
+      await page.getByRole('button', { name: new RegExp(`^Category for ${date}`) }).click();
+      await page.getByRole('listbox', { name: `Category for ${date}` }).getByRole('option', { name: option, exact: true }).click();
+    };
+    await pick('Off');
+    const review = page.getByRole('dialog', { name: `Review category change for ${date}` });
+    await expect(review).toContainText('calendar default changed: The calendar default is now Holiday (was Worked)');
+    await review.getByRole('button', { name: 'Cancel' }).click();
+    const reload = page.getByRole('button', { name: 'Reload period', exact: true });
+    await expect(reload).toBeVisible();
+    note(`E3 shared view after Cancel: Reload period visible ${await reload.isVisible()}; focus ${await activeText(page)}`);
+    await reload.click();
+    await expect(page.locator(`[data-day="${date}"]`)).toContainText('Holiday');
+    await pick('Off');
+    await expect(page.getByRole('status').filter({ hasText: 'Saved 1 day.' })).toBeVisible();
+    expect(await dayOf(owner.api, date)).toMatchObject({ category: 'Off', category_source: 'explicit' });
+    note('E3 owner day after the grantee pick: Off explicit');
+  });
+
+  test('E5: an import that is undone before the save raises no notice (no false refusal)', async ({ page, privateServer }, info) => {
+    test.skip(info.project.name !== 'desktop', 'desktop drawer');
+    test.setTimeout(90_000);
+    const { admin, person, date } = await scene(page, privateServer, 'Audit E5', 'no-entry');
+    const editor = await openEditor(page, date);
+    await editor.getByLabel('Notes').fill(TYPED);
+    await importHoliday(admin, date);
+    await importHoliday(admin, date, 'holiday', 'unused', [date]);
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    await expect(saved(editor)).toBeVisible();
+    await expect(noticeOf(editor)).toHaveCount(0);
+    expect(await dayOf(person.api, date)).toMatchObject({ category: 'Worked', category_source: 'explicit', entry: { notes: TYPED } });
+    note('E5 import then removal: saved with no notice, Worked explicit');
+  });
+
+  test('E6: a second change after "Use": the next Save is refused again, naming the newest default', async ({ page, privateServer }, info) => {
+    test.skip(info.project.name !== 'desktop', 'desktop drawer');
+    test.setTimeout(90_000);
+    const { admin, person, date, puts } = await scene(page, privateServer, 'Audit E6', 'default-entry');
+    const editor = await openEditor(page, date);
+    await editor.getByLabel('Notes').fill(TYPED);
+    await importHoliday(admin, date);
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    await noticeOf(editor).getByRole('button', { name: 'Use Holiday', exact: true }).click();
+    await importHoliday(admin, date, 'closure');
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    await expect(noticeOf(editor)).toContainText('changed from Holiday to Shutdown since it was loaded');
+    note(`E6 PUT default_category ${JSON.stringify(puts.map((p) => p.body.default_category))}; categories ${JSON.stringify(puts.map((p) => p.body.category))}`);
+    expect(await dayOf(person.api, date)).toMatchObject({ category: 'Shutdown', category_source: 'default' });
+  });
+
+  test('E8: keyboard only: the focused notice, Tab to "Use", Tab to "Save anyway", Enter saves and focus is on Category', async ({ page, privateServer }, info) => {
+    test.skip(info.project.name !== 'desktop', 'desktop drawer');
+    test.setTimeout(90_000);
+    const { admin, person, date } = await scene(page, privateServer, 'Audit E8', 'default-entry');
+    const editor = await openEditor(page, date);
+    await editor.getByLabel('Notes').fill(TYPED);
+    await importHoliday(admin, date);
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    const notice = noticeOf(editor);
+    await expect(notice).toBeFocused();
+    await page.keyboard.press('Tab');
+    const first = await activeText(page);
+    await page.keyboard.press('Tab');
+    const second = await activeText(page);
+    note(`E8 Tab order from the notice: ${first} -> ${second}`);
+    await page.keyboard.press('Enter');
+    await expect(saved(editor)).toBeVisible();
+    note(`E8 after Enter on Save anyway: focus ${await activeText(page)}`);
+    await expect(editor.getByLabel('Category')).toBeFocused();
+    expect(await dayOf(person.api, date)).toMatchObject({ category: 'Worked', category_source: 'explicit', entry: { notes: TYPED } });
+  });
+
+  test('E7: the phone sheet: "Use" and "Save anyway" move focus to Category, and the status is in view', async ({ page, privateServer }, info) => {
+    test.skip(info.project.name !== 'mobile', 'phone sheet');
+    test.setTimeout(120_000);
+    const { admin, person, date } = await scene(page, privateServer, 'Audit E7', 'default-entry');
+    const editor = await openEditor(page, date);
+    await editor.getByLabel('Notes').fill(TYPED);
+    await importHoliday(admin, date);
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    const notice = noticeOf(editor);
+    await expect(notice).toBeFocused();
+    await notice.getByRole('button', { name: 'Use Holiday', exact: true }).click();
+    const status = editor.getByRole('status').filter({ hasText: 'Category set to Holiday' });
+    note(`E7 phone after Use: focus ${await activeText(page)}; status in viewport ${await status.isVisible()}`);
+    await expect(editor.getByLabel('Category')).toBeFocused();
+    await editor.getByLabel('Category').selectOption('Worked');
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    await expect(saved(editor)).toBeVisible();
+    expect(await dayOf(person.api, date)).toMatchObject({ category: 'Worked', category_source: 'explicit', entry: { notes: TYPED } });
+    note('E7 phone after Use then Worked chosen: saved Worked explicit, no second notice');
+  });
+
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`E4 axe (${scheme}): the notice open, and the review dialog with "calendar default changed"`, async ({ page, privateServer }, info) => {
+      test.setTimeout(150_000);
+      await page.emulateMedia({ colorScheme: scheme });
+      const mobile = info.project.name === 'mobile';
+      const widths = mobile ? [390] : [1440, 1280];
+      const { admin, date } = await scene(page, privateServer, `Audit E4 ${scheme}`, 'default-entry');
+      let violations = 0;
+      for (const width of widths) {
+        await page.setViewportSize({ width, height: mobile ? 844 : 800 });
+        const editor = await openEditor(page, date);
+        await editor.getByLabel('Notes').fill(`${TYPED} ${width}`);
+        // Each width needs its own change of the default after the editor opened: a holiday first, then a closure.
+        await importHoliday(admin, date, width === widths[0] ? 'holiday' : 'closure');
+        await editor.getByRole('button', { name: 'Save day fields' }).click();
+        await expect(noticeOf(editor)).toBeVisible();
+        violations += await scan(page, `${info.project.name} ${scheme} ${width} notice open (${await page.locator('.sheet-area').getAttribute('data-editor-layout')})`);
+        await noticeOf(editor).getByRole('button', { name: /^Use (Holiday|Shutdown)$/ }).click();
+        violations += await scan(page, `${info.project.name} ${scheme} ${width} after Use`);
+        await page.keyboard.press('Escape');
+        const discard = page.getByRole('alertdialog', { name: 'Discard your changes?' });
+        await discard.getByRole('button', { name: 'Discard' }).click();
+        await expect(page.getByRole('dialog', { name: /Day editor/ })).toHaveCount(0);
+      }
+      // The review dialog of a pick on a stale sheet: the sheet was refreshed by "Use", so another past weekday of the period is made
+      // stale instead (a holiday imported on it after the sheet was loaded).
+      const admin2 = admin;
+      const freeDates = await page.evaluate<string[]>(`[...document.querySelectorAll('[data-day]')].map((el) => el.getAttribute('data-day'))`);
+      const target = freeDates.find((d) => d !== null && d < date && new Date(`${d}T12:00:00Z`).getUTCDay() >= 1 && new Date(`${d}T12:00:00Z`).getUTCDay() <= 5) ?? '';
+      note(`E4 ${scheme} review target ${target}`);
+      if (target !== '') {
+        await importHoliday(admin2, target, 'holiday', 'Synthetic Audit Second');
+        if (mobile) await page.setViewportSize({ width: 390, height: 844 });
+        await page.getByRole('button', { name: new RegExp(`^Category for ${target}`) }).click();
+        await page.getByRole('listbox', { name: `Category for ${target}` }).getByRole('option', { name: 'Off', exact: true }).click();
+        const review = page.getByRole('dialog', { name: `Review category change for ${target}` });
+        await expect(review).toContainText('calendar default changed');
+        violations += await scan(page, `${info.project.name} ${scheme} review dialog with calendar default changed`);
+        await review.getByRole('button', { name: 'Cancel' }).click();
+        await expect(page.getByRole('button', { name: 'Reload period', exact: true })).toBeVisible();
+        violations += await scan(page, `${info.project.name} ${scheme} page notice with Reload period`);
+      }
+      note(`E4 ${info.project.name} ${scheme} total violations ${violations}`);
+      expect(violations).toBe(0);
+    });
+  }
+});

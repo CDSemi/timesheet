@@ -3455,6 +3455,142 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - **If interrupted:** check `git log`, `git status` and origin/main first. If the commit
   exists, record it. Otherwise give the same brief to a fresh committer (attempt 2), in task
   folder WP5-CALDEF-FIX2-FREEZE-a2.
+- **WP5-CALDEF-FIX2-FREEZE done.** Commit b810ba942c608e058bd8c146de6f076734c48bf2 on main,
+  pushed as a fast-forward from 300d61f.
+  - D_PRE = the HEAD digest = 59e2ec3f (885 files). 404 paths staged. Nothing was masked,
+    converted or unstaged.
+  - Every check exited 0.
+- **WP5-CALDEF-REGATE** (verifier, sonnet, scoped) is dispatched alone on b810ba9 / 59e2ec3f.
+  The audit's `reviewed_commit` is b810ba9.
+- **If interrupted:** a fresh verifier (attempt 2) on the same brief, in task folder
+  WP5-CALDEF-REGATE-a2, after checking that no gate process still runs.
+- **WP5-CALDEF-REGATE: PASS** on b810ba9 / 59e2ec3f (self-reported claude-sonnet-5-5,
+  11:48Z-12:52Z; NAS items NOT VERIFIED). No failure; nothing was repeated.
+  - Identity: HEAD = origin/main = b810ba9 before and after. The digest was 59e2ec3f
+    (885 files) before and after, in the export, `git ls-tree` and `npm run digest` forms.
+  - Scope: the only path outside `handoff/` is the spec, and it equals DIAG1's patch.
+  - `dist/`: the clean builds of 300d61f and b810ba9 are identical (250/250), also after all
+    runs. So the drill, the 36 mutants, INT3, the smoke proof, axe, the docs and the other
+    stress carry forward from WP5-CALDEF-GATE.
+  - npm audit found 0 vulnerabilities. lint, typecheck, build and verify exited 0. npm test
+    ran 2,425 tests, and the validators exited 0 (check_recovery 141).
+  - Real-clock FULL: desktop 508/37/0, mobile 429/116/0. days[0] was Monday 2026-11-02, so the
+    drawer docked right.
+  - The six sweeps had 0 failures. The `:143` stress passed 20/20 at both dock sides, and
+    mutants M1 and M2 were caught at both.
+  - Load stayed at or below 1.83 busy cores.
+  - Slips: one `ls` piped into `head -0`. The background run was cut by editing its script
+    while it ran.
+  - Evidence: `evidence/WP5-CALDEF-REGATE/` (134 files).
+- **WP5-CALDEF-AUDIT** (fresh timesheet-auditor, opus/xhigh) is dispatched alone on b810ba9 /
+  59e2ec3f, with review pair `WP5_CALDEF_REVIEW` (+ vi). No source writer runs meanwhile.
+- **If interrupted:** a fresh auditor (attempt 2) on the same brief, in task folder
+  WP5-CALDEF-AUDIT-a2, after checking that no audit process still runs.
+- **WP5-CALDEF-AUDIT: PASS** on b810ba9 / 59e2ec3f (self-reported claude-opus-5-5,
+  12:56Z-13:41Z). Review pair `WP5_CALDEF_REVIEW` (+ vi); evidence 126 files.
+  - **R-UX5I2-3 is closed.** The owner's rule held on every path the auditor drove. The
+    coordinator's scope decisions keep the owner's intent.
+  - **Mandatory checks:**
+    - npm test 2,425;
+    - FULL 508/37/0 and 429/116/0;
+    - AC-13 under Pacific/Chatham;
+    - the seven files at 2026-10-27T06:58:30Z, 0 failed;
+    - axe 24 scans, 0 violations.
+  - **Own mutants (12):** the suite kills 7; S2 and S7 are test gaps; S1 and C5 survive;
+    S3 is equivalent.
+  - **Findings, documentation only (AGENTS rule 14):**
+    - F-CALDEF-1: docs/03:24 EN/VI lost three facts of the `day_entries` row;
+    - F-CALDEF-2: docs/12.vi:63 links the English handoff.
+  - **Optional risks:** R-CALDEF-1..4, the 2.05:1 boundary and F2.
+- **WP5 accepted on b810ba9 / 59e2ec3f** (coordinator decision 2026-11-03).
+  - `current_source_digest` is 59e2ec3f.
+  - The old `non_product_since_acceptance` record is removed: 5b2f287 is inside the
+    audited snapshot.
+  - RECHECK-RN and the 12 audits that named it now name `superseded_by` WP5-CALDEF-AUDIT.
+  - STATE WP5 is updated: review, gate, identity, the round's record, carried risks and
+    pilot status.
+- **Accept steps, documentation under AGENTS rule 14 (no gate or audit):**
+  - In parallel:
+    - WP5-CALDEF-DOCFIX (worker, sonnet; docs/03, docs/12, README and DEVELOPMENT EN/VI;
+      the only source writer);
+    - WP5-CALDEF-ACCEPT-HANDOFF (worker, sonnet; the WP5 handoff section "Re-acceptance
+      after the calendar-default round (WP5-CALDEF, R-UX5I2-3)").
+  - Then:
+    1. WP5-CALDEF-ACCEPT-PACKET;
+    2. the fresh WP5-CALDEF-ACCEPT-REVIEW;
+    3. the new `non_product_since_acceptance` record (base b810ba9 / 59e2ec3f);
+    4. the WP5-CALDEF-ACCEPT commit;
+    5. `software_ready`.
+- **If interrupted:** a fresh worker (attempt 2) per task on the same brief, in task folder
+  `<task>-a2`, after a `git status` check of its files.
+- **WP5-CALDEF-DOCFIX done** (uncommitted; digest c0852196, 885 files; preflight 0).
+  - docs/03:24 EN/VI restored.
+  - docs/12:7 and :63 EN/VI now state the round's acceptance, and the VI link is fixed.
+  - README and DEVELOPMENT EN/VI name R-UX5I2-3.
+  - Reported, not changed: `day_entries` has no "confirmation" column. The review checks the
+    wording.
+- **WP5-CALDEF-ACCEPT-PACKET** (worker, sonnet, handoff only) is dispatched beside
+  ACCEPT-HANDOFF.
+- **WP5-CALDEF-ACCEPT-HANDOFF done** (uncommitted). The WP5 handoff EN/VI has the new section
+  "Re-acceptance after the calendar-default round (WP5-CALDEF, R-UX5I2-3)". Older text gained
+  six pointer clauses per language; history is kept.
+  - The SHAs and digests match the board. Parity and preflight are clean.
+  - Slips: one empty heredoc and one pipe into `head -0`, no effect.
+- **WP5-CALDEF-ACCEPT-PACKET done** (uncommitted). The packet EN/VI is refreshed to
+  b810ba9 / 59e2ec3f:
+  - R-UX5I2-3 is closed;
+  - the drill is now WP5-CALDEF-GATE's on 300d61f (209/0, image `sha256:742d2a26…`);
+  - R-CALDEF-3, R-CALDEF-4 and the 2.05:1 boundary are owner-informed items.
+
+  Its finding: the sample generator runs through `timesheetCommands` and `timesheets`, which
+  the round changed. So the dc487c6 samples are not proven to represent the release.
+- **Coordinator decision 2026-11-03: regenerate the samples.** WP5-CALDEF-SAMPLES (verifier,
+  sonnet, evidence only) runs alone.
+  - It runs the T06 recipe, as REGATE15 item 5 did, on a clean export of b810ba9, and
+    compares the result with REGATE15's samples.
+  - Then the packet author continues with Addendum 1 to cite the new samples. After that come
+    the fresh ACCEPT-REVIEW, the record and the accept commit.
+- **If interrupted:** a fresh verifier (attempt 2) on the same brief, in task folder
+  WP5-CALDEF-SAMPLES-a2, after checking that no sample server is still running.
+- **WP5-CALDEF-SAMPLES: PASS**, run on a clean export of b810ba9 (digest 59e2ec3f).
+  - **The run:** 11 messages and 6 PDFs; `pdf_hash_ok` was true for all six, with no retry
+    or intervention.
+  - **Content:** identical to REGATE15 once the per-run submission ID is normalised. The PDF
+    hashes differ by that ID and by run-to-run byte variance.
+  - **Date headers:** five differ by send time. Caveat: one auto-submit notice is one
+    reminder pass later. That is the same class, but no control run proves it.
+  - **Ready check:** 200/200, schema 15.
+- **WP5-CALDEF-ACCEPT-PACKET Addendum 1** (same agent): the packet cites these samples. Then
+  comes the fresh ACCEPT-REVIEW.
+- **Addendum 1 done.**
+  - The packet EN/VI cites the b810ba9 samples and the ready check, with the comparison and
+    the 06:36 caveat.
+  - The VI packet cites the VI handoff heading.
+  - Parity, search and preflight are clean.
+- **WP5-CALDEF-ACCEPT-REVIEW** (fresh worker, sonnet) is dispatched alone over the twelve
+  files.
+  - After it, the coordinator writes `non_product_since_acceptance`: base b810ba9 /
+    59e2ec3f, and head = the review's final digest.
+  - Then comes WP5-CALDEF-ACCEPT.
+- **If interrupted:** a fresh worker (attempt 2) on the same brief, in task folder
+  WP5-CALDEF-ACCEPT-REVIEW-a2, after a `git status` check of the twelve files.
+- **WP5-CALDEF-ACCEPT-REVIEW done** (fresh worker; about 60 facts checked).
+  - "confirmation" is removed from the `day_entries` row of docs/03 EN/VI. The table has no
+    such column; break confirmation stays in the `work_sessions` row.
+  - Three handoff and packet drifts are fixed.
+  - Final digest 52ec1fc7 (885 files). Coordinator decision 2026-11-03: accepted, no
+    behaviour change.
+- **Written by the coordinator:**
+  - `non_product_since_acceptance`: base b810ba9 / 59e2ec3f, head 52ec1fc7, the eight
+    documentation paths, review DOCFIX by ACCEPT-REVIEW;
+  - `current_source_digest` 52ec1fc7;
+  - STATE;
+  - NEXT_ACTION (+ vi): the round is done, and the stale status lines are fixed.
+- **WP5-CALDEF-ACCEPT** (committer, sonnet) is dispatched alone. The coordinator writes
+  nothing while it runs.
+- **If interrupted:** check `git log`, `git status` and origin/main first. If the commit
+  exists, record it. Otherwise give the same brief to a fresh committer (attempt 2), in task
+  folder WP5-CALDEF-ACCEPT-a2.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

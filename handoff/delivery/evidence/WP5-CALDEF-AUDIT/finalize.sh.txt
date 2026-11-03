@@ -1,0 +1,31 @@
+# Final identity, the mutant restore proof, summaries, and the masked copy of the evidence into the repository.
+. <task>/env.sh
+O=$T/out
+cd $REPO
+{ date -u +%Y-%m-%dT%H:%M:%SZ; git rev-parse HEAD; git rev-parse origin/main; git branch --show-current; git log -1 --format='%H %s'; git diff --name-only $TARGET..HEAD -- . ':!handoff' | wc -l | sed 's/^/paths outside handoff changed TARGET..HEAD: /'; } > $O/00-head-after.txt 2>&1
+git status --short -- . ':!handoff' > $O/00-nonhandoff-status-after.txt 2>&1; echo "status exit $? lines $(wc -l < $O/00-nonhandoff-status-after.txt)" >> $O/00-nonhandoff-status-after.txt
+bash $T/digest.sh after
+{ echo "export-mut against the clean export (src, tests, scripts):"; diff -rq $T/export/src $T/export-mut/src; echo "src diff exit $?"; diff -rq $T/export/tests $T/export-mut/tests; echo "tests diff exit $?"; diff -rq $T/export/scripts $T/export-mut/scripts; echo "scripts diff exit $?"; echo "rebuilt export-mut dist against the target build:"; node.exe $T/distcmp.mjs $T/export/dist $T/export-mut/dist; } > $O/53-mut-restored.txt 2>&1
+node.exe $T/mutsum.mjs $T/logs S1 S2 S3 S4 S5 S6 S7 C1 C2 C4 C5 C6 > $O/51-mut-summary.txt 2>&1
+node.exe $T/counts.mjs $O/41-e2e-probe.txt $O/41-e2e-probe-run2.txt $O/42-classic-scrollbar-left-1106.txt $O/42-classic-scrollbar-right-1104.txt $O/43-caldef-la-midnight.txt $O/43-caldef-dst-end.txt > $O/44-probe-counts.txt 2>&1
+bash $T/cens.sh final
+mkdir -p $E
+node.exe $T/mask.mjs $E $O/*.txt > $T/logs/mask-out.txt 2>&1
+node.exe $T/mask.mjs $E \
+  $T/logs/chain-main-progress.txt $T/logs/probe-progress.txt $T/logs/mut-progress.txt \
+  $T/logs/mut-S1-suite.txt=52-log-mut-S1-suite.txt $T/logs/mut-S1-probe.txt=52-log-mut-S1-probe.txt $T/logs/mut-S1-e2e-caldef.txt=52-log-mut-S1-e2e.txt \
+  $T/logs/mut-S2-suite.txt=52-log-mut-S2-suite.txt $T/logs/mut-S2-probe.txt=52-log-mut-S2-probe.txt $T/logs/mut-S2-e2e-caldef.txt=52-log-mut-S2-e2e.txt \
+  $T/logs/mut-S3-suite.txt=52-log-mut-S3-suite.txt $T/logs/mut-S3-probe.txt=52-log-mut-S3-probe.txt $T/logs/mut-S3-e2e-caldef.txt=52-log-mut-S3-e2e.txt \
+  $T/logs/mut-S4-suite.txt=52-log-mut-S4-suite.txt $T/logs/mut-S4-probe.txt=52-log-mut-S4-probe.txt \
+  $T/logs/mut-S5-suite.txt=52-log-mut-S5-suite.txt $T/logs/mut-S5-probe.txt=52-log-mut-S5-probe.txt \
+  $T/logs/mut-S6-suite.txt=52-log-mut-S6-suite.txt $T/logs/mut-S6-probe.txt=52-log-mut-S6-probe.txt \
+  $T/logs/mut-S7-suite.txt=52-log-mut-S7-suite.txt $T/logs/mut-S7-probe.txt=52-log-mut-S7-probe.txt $T/logs/mut-S7-e2e-caldef.txt=52-log-mut-S7-e2e.txt $T/logs/mut-S7-e2e-probe.txt=52-log-mut-S7-e2e-probe.txt $T/logs/mut-S7-obs.txt=52-log-mut-S7-obs.txt \
+  $T/logs/mut-C1-e2e-caldef.txt=52-log-mut-C1-e2e.txt $T/logs/mut-C2-e2e-caldef.txt=52-log-mut-C2-e2e.txt $T/logs/mut-C4-e2e-caldef.txt=52-log-mut-C4-e2e.txt \
+  $T/logs/mut-C5-e2e-caldef.txt=52-log-mut-C5-e2e.txt $T/logs/mut-C6-e2e-caldef.txt=52-log-mut-C6-e2e.txt \
+  $T/README-draft.txt=00-README.txt \
+  $T/env.sh=env.sh.txt $T/setup.sh=setup.sh.txt $T/digest.sh=digest.sh.txt $T/census.sh=census.sh.txt $T/census.mjs=census.mjs.txt $T/cens.sh=cens.sh.txt \
+  $T/probe-now.mjs=probe-now.mjs.txt $T/run-shift.sh=run-shift.sh.txt $T/counts.mjs=counts.mjs.txt $T/run-tz.mjs=run-tz.mjs.txt $T/tzprobe.mjs=tzprobe.mjs.txt \
+  $T/chain-main.sh=chain-main.sh.txt $T/probe.sh=probe.sh.txt $T/probe-r2.sh=probe-r2.sh.txt $T/mutrun.sh=mutrun.sh.txt $T/mutate.mjs=mutate.mjs.txt \
+  $T/mutsum.mjs=mutsum.mjs.txt $T/distcmp.mjs=distcmp.mjs.txt $T/smoke-proof.mjs=smoke-proof.mjs.txt $T/mask.mjs=mask.mjs.txt $T/shiftclock.mjs=shiftclock.mjs.txt \
+  $T/finalize.sh=finalize.sh.txt $T/zz-audit-caldef.test.ts=zz-audit-caldef.test.ts.txt $T/zz-audit-caldef.spec.ts=zz-audit-caldef.spec.ts.txt >> $T/logs/mask-out.txt 2>&1
+echo "finalize done $(date -u +%Y-%m-%dT%H:%M:%SZ)"

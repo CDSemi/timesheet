@@ -1,0 +1,37 @@
+
+ RUN  v5.0.2 <task>/export-mut
+
+stdout | tests/integration/zz-audit-caldef.test.ts > WP5-CALDEF-AUDIT API probes > A3: a shared batch checks the owner calendar; the error details carry nothing else; the grantee own calendar is unaffected
+OBS A3 shared preview {"status":200,"can_commit":true,"entry":{"work_date":"2026-09-21","status":"create","current_version":null,"period_relation":"current","reason_required":false,"conflict":false,"before":null,"after":{"category":"Worked","category_source":"explicit","leave_minutes":0,"leave_kind":null,"wfh":false,"notes":""},"error":null}}
+OBS A3 shared commit {"status":200}
+
+ ❯ tests/integration/zz-audit-caldef.test.ts (10 tests | 1 failed) 2817ms
+   ❯ WP5-CALDEF-AUDIT API probes (10)
+     × A3: a shared batch checks the owner calendar; the error details carry nothing else; the grantee own calendar is unaffected 319ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/zz-audit-caldef.test.ts > WP5-CALDEF-AUDIT API probes > A3: a shared batch checks the owner calendar; the error details carry nothing else; the grantee own calendar is unaffected
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/integration/zz-audit-caldef.test.ts:111:37
+    109|     obs('A3 shared commit', { status: commit.status, error: commit.bod…
+    110|     expect(preview.status).toBe(200);
+    111|     expect(preview.body.can_commit).toBe(false);
+       |                                     ^
+    112|     expect(preview.body.entries[0].status).toBe('default_changed');
+    113|     expect(Object.keys(preview.body.entries[0].error.details).sort()).…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 passed (10)
+   Start at  05:24:48
+   Duration  3.58s (tests 80%, transform 12%, import 7%)

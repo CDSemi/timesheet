@@ -1,0 +1,32 @@
+// Compares two dist/ trees by relative path and SHA-256. Usage: node distcmp.mjs <distA> <distB> [<subdir>...]
+import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
+
+const [a, b, ...subs] = process.argv.slice(2);
+function walk(root, dir = root, out = new Map()) {
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) walk(root, full, out);
+    else out.set(relative(root, full).replaceAll('\\', '/'), createHash('sha256').update(readFileSync(full)).digest('hex'));
+  }
+  return out;
+}
+for (const sub of subs.length > 0 ? subs : ['.']) {
+  const left = walk(join(a, sub));
+  const right = walk(join(b, sub));
+  const same = [];
+  const differ = [];
+  const onlyLeft = [];
+  const onlyRight = [];
+  for (const [path, hash] of left) {
+    if (!right.has(path)) onlyLeft.push(path);
+    else if (right.get(path) === hash) same.push(path);
+    else differ.push(path);
+  }
+  for (const path of right.keys()) if (!left.has(path)) onlyRight.push(path);
+  console.log(`== ${sub}: left ${left.size} files, right ${right.size} files; identical ${same.length}; differ ${differ.length}; only left ${onlyLeft.length}; only right ${onlyRight.length}`);
+  for (const path of differ.sort()) console.log(`DIFFER ${path}`);
+  for (const path of onlyLeft.sort()) console.log(`ONLY-LEFT ${path}`);
+  for (const path of onlyRight.sort()) console.log(`ONLY-RIGHT ${path}`);
+}

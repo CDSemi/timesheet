@@ -1,0 +1,129 @@
+// WP5-CALDEF-AUDIT mutants (the auditor's own). Usage: node mutate.mjs apply <id> | restore <id> | list
+// Each replacement must match exactly once in the pristine file; restore copies the pristine file of the clean target export back and
+// compares the bytes. The mutated tree is export-mut; the pristine tree is export (a clean git archive of the target).
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const T = '<task>';
+const MUT = join(T, 'export-mut');
+const PRISTINE = join(T, 'export');
+
+const MUTANTS = {
+  S1: {
+    what: 'server: a batch entry is checked for a changed default before its version (default_changed outranks stale in the preview and the commit)',
+    file: 'src/server/services/dayEntries.ts',
+    edits: [
+      [
+        "    const stale = existing === undefined ? input.expected_version !== null : input.expected_version !== existing.version;\n    if (stale) return { ...planned, status: 'stale' };",
+        "    const early = defaultChangeOf(scope, workDate, existing, input);\n    if (early !== null) {\n      return {\n        ...planned,\n        status: 'default_changed',\n        defaultChange: early,\n        error: { code: 'default_changed', message: `The calendar default is now ${early.current_default} (was ${early.expected_default ?? 'none'})`, details: { expected_default: early.expected_default, current_default: early.current_default } },\n      };\n    }\n    const stale = existing === undefined ? input.expected_version !== null : input.expected_version !== existing.version;\n    if (stale) return { ...planned, status: 'stale' };",
+      ],
+    ],
+  },
+  S2: {
+    what: 'server: the batch (preview and commit) reads the scope of the actor, so a shared batch checks the grantee calendar',
+    file: 'src/server/services/dayEntries.ts',
+    edits: [
+      ['export function previewDayBatch(ctx: CommandContext, body: DayBatchBody) {\n  const scope = loadScope(ctx.db, ctx.user);', 'export function previewDayBatch(ctx: CommandContext, body: DayBatchBody) {\n  const scope = loadScope(ctx.db, ctx.actor ?? ctx.user);'],
+      ['  const outcome = writeTransaction(ctx.db, () => {\n    const scope = loadScope(ctx.db, ctx.user);', '  const outcome = writeTransaction(ctx.db, () => {\n    const scope = loadScope(ctx.db, ctx.actor ?? ctx.user);'],
+    ],
+  },
+  S3: {
+    what: 'server: PUT /days/:date reads the calendar scope before the IMMEDIATE write transaction (the default check no longer inside it)',
+    file: 'src/server/services/timesheetCommands.ts',
+    edits: [
+      [
+        '  writeTransaction(ctx.db, () => {\n    const scope = loadScope(ctx.db, ctx.user);\n    applyDayEntryChange(',
+        '  const scope = loadScope(ctx.db, ctx.user);\n  writeTransaction(ctx.db, () => {\n    applyDayEntryChange(',
+      ],
+    ],
+  },
+  S4: {
+    what: 'server: the batch preview can_commit ignores default_changed entries',
+    file: 'src/server/services/dayEntries.ts',
+    edits: [["item.status === 'stale' || item.status === 'invalid' || item.status === 'default_changed'", "item.status === 'stale' || item.status === 'invalid'"]],
+  },
+  S5: {
+    what: 'server: the current default of a default-sourced entry is its stored snapshot, not the calendar now',
+    file: 'src/server/services/timesheetCommands.ts',
+    edits: [['  const current = calendarDefaultOn(scope, workDate);', '  const current = existing?.category ?? calendarDefaultOn(scope, workDate);']],
+  },
+  S6: {
+    what: 'server: the PUT 409 details carry one more key (a leak of another value)',
+    file: 'src/server/http/errors.ts',
+    edits: [
+      [
+        '{ work_date: change.work_date, expected_default: change.expected_default, current_default: change.current_default },',
+        "{ work_date: change.work_date, expected_default: change.expected_default, current_default: change.current_default, calendar_hint: 'synthetic-leak' },",
+      ],
+    ],
+  },
+  S7: {
+    what: 'server: a batch entry with an existing (default-sourced) entry drops default_category, so only dates without an entry are checked',
+    file: 'src/server/services/dayEntries.ts',
+    edits: [
+      [
+        '    ...(entry.default_category === undefined ? {} : { default_category: entry.default_category }),',
+        '    ...(entry.default_category === undefined || existing !== undefined ? {} : { default_category: entry.default_category }),',
+      ],
+    ],
+  },
+  C1: {
+    what: 'client: "Use" rebases the baseline to the whole draft, so typed fields stop counting as unsaved (U4-05)',
+    file: 'src/client/components/DayFieldsForm.tsx',
+    edits: [['    const rebased = draftKey({ ...dayFieldsDraft(day), category: change.current });', '    const rebased = draftKey(next);']],
+  },
+  C2: {
+    what: 'client: after "Use" the editor never takes the fresh day (the read is ignored; figures and chips keep the old default)',
+    file: 'src/client/DayEditor.tsx',
+    edits: [
+      [
+        '        setDay((held) => (held !== null && fresh.category === category && sameDayFields({ ...held, category }, fresh) ? fresh : held));',
+        '        void fresh;\n        void category;',
+      ],
+    ],
+  },
+  C4: {
+    what: 'client: the "Save {category} anyway" label names the old default instead of the category in the form',
+    file: 'src/client/components/DayFieldsForm.tsx',
+    edits: [['                Save {draft.category} anyway', '                Save {defaultNotice.expected ?? draft.category} anyway']],
+  },
+  C5: {
+    what: 'client: "Use {new}" stays enabled while a save is in flight',
+    file: 'src/client/components/DayFieldsForm.tsx',
+    edits: [['<button type="button" className="secondary" disabled={busy} onClick={() => useDefault(defaultNotice)}>', '<button type="button" className="secondary" disabled={false} onClick={() => useDefault(defaultNotice)}>']],
+  },
+  C6: {
+    what: 'client: closing a review offers "Reload period" only for a label pick, not for "Change several days"',
+    file: 'src/client/TimesheetScreen.tsx',
+    edits: [['    if (moved.length > 0) setStaleNotice(staleReloadMessage(moved));', "    if (moved.length > 0 && previewSource.kind === 'label') setStaleNotice(staleReloadMessage(moved));"]],
+  },
+};
+
+const [command, id] = process.argv.slice(2);
+if (command === 'list') {
+  for (const [key, value] of Object.entries(MUTANTS)) console.log(`${key}\t${value.file}\t${value.what}`);
+  process.exit(0);
+}
+const mutant = MUTANTS[id];
+if (mutant === undefined) throw new Error(`unknown mutant ${id}`);
+const target = join(MUT, mutant.file);
+const pristine = readFileSync(join(PRISTINE, mutant.file));
+if (command === 'apply') {
+  const current = readFileSync(target);
+  if (!current.equals(pristine)) throw new Error(`${mutant.file} in export-mut is not pristine before ${id}`);
+  let text = pristine.toString('utf8');
+  for (const [find, replace] of mutant.edits) {
+    const count = text.split(find).length - 1;
+    if (count !== 1) throw new Error(`${id}: expected exactly one occurrence in ${mutant.file}, found ${count}`);
+    text = text.replace(find, () => replace);
+  }
+  writeFileSync(target, text);
+  console.log(`applied ${id} to ${mutant.file} (${mutant.edits.length} edit(s)): ${mutant.what}`);
+} else if (command === 'restore') {
+  writeFileSync(target, pristine);
+  const back = readFileSync(target);
+  console.log(`restored ${id} ${mutant.file}: byte-equal to the pristine export ${back.equals(pristine)}`);
+  if (!back.equals(pristine)) process.exitCode = 1;
+} else {
+  throw new Error('usage: apply|restore|list <id>');
+}

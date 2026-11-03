@@ -1,0 +1,225 @@
+import { randomBytes } from 'node:crypto';
+import { appendFileSync } from 'node:fs';
+import { afterEach, describe, expect, it } from 'vitest';
+import { createCalendar, createCalendarVersion, getCalendar } from '../../src/server/services/calendars.ts';
+import { createUser } from '../../src/server/services/users.ts';
+import { createTestContext, type TestContext } from '../support/testApp.ts';
+
+/*
+ * WP5-CALDEF-AUDIT probes (auditor's own, synthetic data only). API-level checks of the R-UX5I2-3 contract that the
+ * fix's own tests do not make: an import effective from a later date, a shared batch with the grantee on another
+ * calendar (no leak, the owner's calendar decides), a view-only batch, an import that is undone (no false refusal),
+ * instants on the DST-end day, and the residual risk of the optional field. Each probe prints one OBS line.
+ */
+
+let t: TestContext | undefined;
+afterEach(() => {
+  t?.close();
+  t = undefined;
+});
+
+const obs = (label: string, value: unknown) => {
+  const line = `OBS ${label} ${JSON.stringify(value)}`;
+  if (process.env.OBS_VITEST !== undefined) appendFileSync(process.env.OBS_VITEST, `${line}\n`);
+  console.log(line);
+};
+
+async function context(now = '2026-09-29T20:00:00Z') {
+  t = await createTestContext(now);
+  const ctx = t;
+  const cookie = await ctx.login('employee');
+  const admin = await ctx.login('admin');
+  const put = (date: string, body: Record<string, unknown>, who = cookie, prefix = '/api') =>
+    ctx.request('PUT', `${prefix}/days/${date}`, { cookie: who, body: { leave_minutes: 0, wfh: false, notes: '', ...body } });
+  const batch = (body: Record<string, unknown>, who = cookie, prefix = '/api') => ctx.request('POST', `${prefix}/days/batch`, { cookie: who, body });
+  const day = async (date: string, who = cookie) => (await ctx.request('GET', `/api/days/${date}`, { cookie: who })).body;
+  async function importRows(rows: string[], options: { effectiveFrom?: string; remove?: string[]; calendarId?: string } = {}) {
+    const calendarId = options.calendarId ?? ctx.calendarId;
+    const csv = ['date,name,kind', ...rows].join('\n');
+    const year = Number((rows[0] ?? options.remove?.[0] ?? '2026').slice(0, 4));
+    const base = { calendar_id: calendarId, year, csv, remove_dates: options.remove ?? [] };
+    const first = await ctx.request('POST', '/api/admin/calendar/import/preview', { cookie: admin, body: { ...base, effective_from: '2099-01-01' } });
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
+    const effective = options.effectiveFrom ?? (first.body.earliest_effective_from as string);
+    const body = { ...base, effective_from: effective };
+    const preview = await ctx.request('POST', '/api/admin/calendar/import/preview', { cookie: admin, body });
+    expect(preview.status, JSON.stringify(preview.body)).toBe(200);
+    expect(preview.body.can_commit, JSON.stringify(preview.body)).toBe(true);
+    const commit = await ctx.request('POST', '/api/admin/calendar/import/commit', { cookie: admin, body: { ...body, preview_hash: preview.body.preview_hash } });
+    expect(commit.status, JSON.stringify(commit.body)).toBe(201);
+    return { earliest: first.body.earliest_effective_from as string, effective };
+  }
+  async function secondCalendarUser(email: string, name: string) {
+    const schedule = getCalendar(ctx.db, ctx.calendarId).schedule;
+    const calendarId = createCalendar(ctx.db, ctx.clock, { name: `Synthetic audit calendar ${name}`, schedule }, null);
+    createCalendarVersion(ctx.db, ctx.clock, { calendarId, effectiveFrom: '2026-01-01', weekdays: [1, 2, 3, 4, 5], dates: [], note: 'Synthetic' }, null);
+    const secret = randomBytes(18).toString('base64url');
+    const id = await createUser(ctx.db, ctx.clock, { email, displayName: name, role: 'employee', password: secret, calendarId }, null);
+    const login = await ctx.request('POST', '/api/auth/login', { body: { email, password: secret } });
+    expect(login.status, JSON.stringify(login.body)).toBe(200);
+    return { id, calendarId, cookie: login.headers.get('set-cookie')?.split(';')[0] ?? '' };
+  }
+  return { ctx, cookie, admin, put, batch, day, importRows, secondCalendarUser };
+}
+
+describe('WP5-CALDEF-AUDIT API probes', () => {
+  it('A1: an import effective from a later date changes only the dates on and after it', async () => {
+    const { put, day, importRows } = await context();
+    // Two holidays, effective from 2026-09-22: 2026-09-21 keeps Worked, 2026-09-22 becomes Holiday.
+    await importRows(['2026-09-21,Synthetic Before,holiday', '2026-09-22,Synthetic From,holiday'], { effectiveFrom: '2026-09-22' });
+    const before = await day('2026-09-21');
+    const from = await day('2026-09-22');
+    obs('A1 defaults', { '2026-09-21': before.default_category, '2026-09-22': from.default_category });
+    const keep = await put('2026-09-21', { category: 'Off', default_category: 'Worked' });
+    const refused = await put('2026-09-22', { category: 'Off', default_category: 'Worked' });
+    obs('A1 statuses', { before: keep.status, from: refused.status, code: refused.body?.error?.code, details: refused.body?.error?.details });
+    expect(before.default_category).toBe('Worked');
+    expect(from.default_category).toBe('Holiday');
+    expect(keep.status, JSON.stringify(keep.body)).toBe(200);
+    expect(refused.status).toBe(409);
+    expect(refused.body.error.details).toEqual({ work_date: '2026-09-22', expected_default: 'Worked', current_default: 'Holiday' });
+  });
+
+  it('A2: an import that is undone by a later import raises no notice (no false refusal)', async () => {
+    const { put, day, importRows } = await context();
+    await importRows(['2026-09-21,Synthetic Undone,holiday']);
+    expect((await day('2026-09-21')).default_category).toBe('Holiday');
+    await importRows([], { remove: ['2026-09-21'] });
+    const back = await day('2026-09-21');
+    const saved = await put('2026-09-21', { category: 'Off', default_category: 'Worked' });
+    obs('A2', { default_after_undo: back.default_category, status: saved.status, body: saved.status === 200 ? saved.body.category : saved.body });
+    expect(back.default_category).toBe('Worked');
+    expect(saved.status).toBe(200);
+  });
+
+  it('A3: a shared batch checks the owner calendar; the error details carry nothing else; the grantee own calendar is unaffected', async () => {
+    const { ctx, cookie, batch, put, importRows, secondCalendarUser } = await context();
+    const grantee = await secondCalendarUser('audit-grantee@example.invalid', 'Synthetic Audit Grantee');
+    const share = await ctx.request('POST', '/api/shares', {
+      cookie,
+      body: { grantee_email: 'audit-grantee@example.invalid', items: { timesheets: 'edit', ot_read: false, pdf_download: false } },
+    });
+    expect(share.status, JSON.stringify(share.body)).toBe(201);
+    await importRows(['2026-09-21,Synthetic Owner Holiday,holiday']);
+    const prefix = `/api/shared/${ctx.userIds.employee}`;
+    const entries = [{ work_date: '2026-09-21', category: 'Worked', default_category: 'Worked' }];
+    const preview = await batch({ mode: 'preview', entries }, grantee.cookie, prefix);
+    const commit = await batch({ mode: 'commit', entries }, grantee.cookie, prefix);
+    obs('A3 shared preview', { status: preview.status, can_commit: preview.body.can_commit, entry: preview.body.entries?.[0] });
+    obs('A3 shared commit', { status: commit.status, error: commit.body.error });
+    expect(preview.status).toBe(200);
+    expect(preview.body.can_commit).toBe(false);
+    expect(preview.body.entries[0].status).toBe('default_changed');
+    expect(Object.keys(preview.body.entries[0].error.details).sort()).toEqual(['current_default', 'expected_default']);
+    expect(commit.status).toBe(409);
+    expect(commit.body.error.code).toBe('default_changed');
+    expect(Object.keys(commit.body.error.details).sort()).toEqual(['changes', 'work_dates']);
+    expect(commit.body.error.details.changes).toEqual([{ work_date: '2026-09-21', expected_default: 'Worked', current_default: 'Holiday' }]);
+    const rows = ctx.db.prepare('SELECT count(*) FROM day_entries WHERE work_date = ?').pluck().get('2026-09-21');
+    expect(rows).toBe(0);
+    // The grantee's own day on its own calendar: no holiday there, so its own batch and PUT are not refused.
+    const own = await batch({ mode: 'commit', entries }, grantee.cookie);
+    const ownPut = await put('2026-09-22', { category: 'Off', default_category: 'Worked' }, grantee.cookie);
+    obs('A3 grantee own', { batch: own.status, put: ownPut.status });
+    expect(own.status, JSON.stringify(own.body)).toBe(200);
+    expect(ownPut.status, JSON.stringify(ownPut.body)).toBe(200);
+    // The acknowledgement through the share is recorded for the owner, attributed to the grantee.
+    const ack = await batch({ mode: 'commit', entries: [{ ...entries[0], default_category: 'Holiday' }] }, grantee.cookie, prefix);
+    expect(ack.status, JSON.stringify(ack.body)).toBe(200);
+    const audit = ctx.db
+      .prepare("SELECT actor_user_id, owner_user_id, operation, before_json FROM audit_events WHERE entity_type = 'day_entry' ORDER BY rowid DESC LIMIT 1")
+      .get() as { actor_user_id: string; owner_user_id: string; operation: string; before_json: string | null };
+    obs('A3 ack audit', { actor_is_grantee: audit.actor_user_id === grantee.id, owner_is_owner: audit.owner_user_id === ctx.userIds.employee, operation: audit.operation, before: audit.before_json });
+    expect(audit.actor_user_id).toBe(grantee.id);
+    expect(audit.owner_user_id).toBe(ctx.userIds.employee);
+    expect(audit.operation).toBe('day_entry.create');
+    expect(audit.before_json).toBeNull();
+  });
+
+  it('A4: a view-only grantee cannot preview or commit a batch through the share', async () => {
+    const { ctx, cookie, batch, importRows, secondCalendarUser } = await context();
+    const grantee = await secondCalendarUser('audit-viewer@example.invalid', 'Synthetic Audit Viewer');
+    const share = await ctx.request('POST', '/api/shares', {
+      cookie,
+      body: { grantee_email: 'audit-viewer@example.invalid', items: { timesheets: 'view', ot_read: false, pdf_download: false } },
+    });
+    expect(share.status, JSON.stringify(share.body)).toBe(201);
+    await importRows(['2026-09-21,Synthetic Owner Holiday,holiday']);
+    const prefix = `/api/shared/${ctx.userIds.employee}`;
+    const entries = [{ work_date: '2026-09-21', category: 'Worked', default_category: 'Worked' }];
+    const preview = await batch({ mode: 'preview', entries }, grantee.cookie, prefix);
+    const commit = await batch({ mode: 'commit', entries }, grantee.cookie, prefix);
+    obs('A4', { preview: preview.status, previewCode: preview.body?.error?.code, commit: commit.status });
+    expect(preview.status).toBe(403);
+    expect(commit.status).toBe(403);
+    expect(JSON.stringify(preview.body)).not.toContain('Holiday');
+  });
+
+  it('A5: the residual risk of the optional field: a caller that omits it overwrites a changed default (PUT and batch), audited', async () => {
+    const { ctx, put, batch, importRows } = await context();
+    await importRows(['2026-09-21,Synthetic A,holiday', '2026-09-22,Synthetic B,holiday']);
+    const viaPut = await put('2026-09-21', { category: 'Worked' });
+    const viaBatch = await batch({ mode: 'commit', entries: [{ work_date: '2026-09-22', category: 'Worked' }] });
+    const audits = ctx.db
+      .prepare("SELECT operation, before_json FROM audit_events WHERE entity_type = 'day_entry' ORDER BY rowid")
+      .all() as Array<{ operation: string; before_json: string | null }>;
+    obs('A5', { put: viaPut.status, batch: viaBatch.status, audits: audits.map((row) => [row.operation, row.before_json]) });
+    expect(viaPut.status).toBe(200);
+    expect(viaBatch.status).toBe(200);
+  });
+
+  for (const now of ['2026-11-01T08:30:00Z', '2026-11-01T09:30:00Z', '2026-11-03T07:59:59Z', '2026-11-03T08:00:01Z']) {
+    it(`A6: at ${now} (DST-end day and LA midnight) the refusal depends on the work date only`, async () => {
+      const { ctx, put, day, importRows } = await context(now);
+      const current = (await ctx.request('GET', '/api/periods/current', { cookie: await ctx.login('employee') })).body;
+      const preview = await ctx.request('POST', '/api/admin/calendar/import/preview', {
+        cookie: await ctx.login('admin'),
+        body: { calendar_id: ctx.calendarId, year: 2026, effective_from: '2099-01-01', csv: 'date,name,kind', remove_dates: [] },
+      });
+      const earliest = preview.body.earliest_effective_from as string;
+      // The first weekday on or after the earliest effective date whose default is Worked and that has no entry.
+      let date = earliest;
+      for (let step = 0; step < 14; step += 1) {
+        const candidate = new Date(`${earliest}T12:00:00Z`);
+        candidate.setUTCDate(candidate.getUTCDate() + step);
+        const iso = candidate.toISOString().slice(0, 10);
+        const facts = await day(iso);
+        if (facts.default_category === 'Worked' && facts.entry === null) {
+          date = iso;
+          break;
+        }
+      }
+      await importRows([`${date},Synthetic DST Holiday,holiday`]);
+      const refused = await put(date, { category: 'Worked', default_category: 'Worked', reason: 'Synthetic audit reason' });
+      const ack = await put(date, { category: 'Worked', default_category: 'Holiday', reason: 'Synthetic audit reason' });
+      obs(`A6 ${now}`, { today: current.today_local, earliest, date, refused: [refused.status, refused.body?.error?.code], ack: ack.status, tz: Intl.DateTimeFormat().resolvedOptions().timeZone });
+      expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+      expect(refused.body.error.code).toBe('default_changed');
+      expect(ack.status, JSON.stringify(ack.body)).toBe(200);
+    });
+  }
+
+  it('A7: a holiday import and a save sent together: either the save is refused, or it was written before the import (never after it)', async () => {
+    const { ctx, put, importRows } = await context();
+    const dates = ['2026-09-21', '2026-09-22', '2026-09-23'];
+    const outcomes: Array<{ date: string; status: number; entryRow: number | null; versionRow: number | null }> = [];
+    for (const [index, date] of dates.entries()) {
+      // Alternate which request is sent first; the server runs each write in one synchronous IMMEDIATE transaction.
+      const save = () => put(date, { category: 'Worked', default_category: 'Worked' });
+      const imp = () => importRows([`${date},Synthetic Race ${date},holiday`]);
+      const saved = index % 2 === 0 ? (await Promise.all([save(), imp()]))[0] : (await Promise.all([imp(), save()]))[1];
+      const entryRow = ctx.db
+        .prepare("SELECT max(rowid) FROM audit_events WHERE entity_type = 'day_entry' AND after_json LIKE ?")
+        .pluck()
+        .get(`%"work_date":"${date}"%`) as number | null;
+      const versionRow = ctx.db.prepare("SELECT max(rowid) FROM audit_events WHERE operation = 'calendar_version.create'").pluck().get() as number | null;
+      outcomes.push({ date, status: saved.status, entryRow, versionRow });
+    }
+    obs('A7', outcomes);
+    for (const outcome of outcomes) {
+      expect([200, 409]).toContain(outcome.status);
+      if (outcome.status === 200) expect(outcome.entryRow ?? Infinity).toBeLessThan(outcome.versionRow ?? -Infinity);
+      else expect(outcome.entryRow).toBeNull();
+    }
+  });
+});

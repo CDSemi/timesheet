@@ -7,10 +7,12 @@
   WP3-RECHECK-A lần 3 và WP3-RECHECK-BC3, đều PASS tại 49651c8, digest c31c300c.
 - WP4 đã nghiệm thu: WP4-REGATE4 PASS và hai lần kiểm tra lại độc lập cuối cùng,
   WP4-RECHECK-A lần 4 và WP4-RECHECK-B4, đều PASS tại 546cdda, digest 26fcc969.
-- WP5 đã nghiệm thu (độ sẵn sàng phần mềm), nghiệm thu lại sau vòng thay đổi UI lần 3
-  theo yêu cầu chủ dự án: WP5-UX3-REGATE5 PASS và audit độc lập cuối WP5-UX3-AUDIT-INT PASS
-  tại 8e55710, digest 507de97c. Các lần nghiệm thu trước: a643794 / 229df806 sau vòng 2,
-  90b98ef / 57e2974c sau vòng 1, và 014bd47 / 150420e7.
+- WP5 đã nghiệm thu (độ sẵn sàng phần mềm), nghiệm thu lại sau vòng mặc định lịch
+  (R-UX5I2-3): WP5-CALDEF-REGATE PASS và audit độc lập cuối WP5-CALDEF-AUDIT PASS tại
+  b810ba9, digest 59e2ec3f; commit nghiệm thu WP5-CALDEF-ACCEPT sau đó chỉ đổi tài liệu.
+  Các lần nghiệm thu trước: a54061f / 690fd8fd sau vòng thay đổi UI 4 và 5, 8e55710 /
+  507de97c sau vòng 3, a643794 / 229df806 sau vòng 2, 90b98ef / 57e2974c sau vòng 1, và
+  014bd47 / 150420e7.
 - Vòng thay đổi UI (chủ dự án yêu cầu 2026-10-08, đã xong): trang Timesheet theo bố cục
   bảng timesheet trong file Excel mẫu, khung app thân thiện hơn, trên máy tính và điện
   thoại (kế hoạch và mockup: task WP5-UX-PLAN, `handoff/delivery/design/WP5-UX/mockup.html`).
@@ -49,7 +51,7 @@
   - Review cuối: [review tích hợp WP5 UX3](delivery/WP5_UX3_REVIEW_INT.vi.md).
   - Backlog không bắt buộc: xem [WP5 handoff](delivery/WP5_HANDOFF.vi.md).
 - Pilot: [pilot packet](delivery/WP5_PILOT_PACKET.vi.md) cụ thể đã sẵn để chủ dự án duyệt
-  (định danh bản phát hành 8e55710 / 507de97c). Chưa xin phép chủ dự án, chưa có kết quả
+  (mã nguồn đã nghiệm thu b810ba9 / 59e2ec3f). Chưa xin phép chủ dự án, chưa có kết quả
   pilot, NAS chưa được kiểm.
 
 **Quy trình: bản sửa v2 đã nghiệm thu (audit GOV độc lập PASS tại 6578df8; xem [bàn giao quy trình](delivery/WORKFLOW_HANDOFF.vi.md)). Task quản trị dùng package GOV trên board.**
@@ -220,8 +222,10 @@ Luồng hiện tại:
    - 90b98ef / 57e2974c (WP5-UX-AUDIT-AB9);
    - a643794 / 229df806 (WP5-UX2-AUDIT2);
    - 8e55710 / 507de97c (WP5-UX3-AUDIT-INT);
-   - **a54061f / 690fd8fd (WP5-UX5-RECHECK-RN), kết quả nghiệm thu hiện hành.** Commit
-     5b2f287 (digest 4ac52e6b) sau đó chỉ sửa tài liệu, nên các file ứng dụng giống hệt.
+   - a54061f / 690fd8fd (WP5-UX5-RECHECK-RN), sau vòng 4 và 5;
+   - **b810ba9 / 59e2ec3f (WP5-CALDEF-AUDIT), kết quả nghiệm thu hiện hành.** Commit nghiệm
+     thu WP5-CALDEF-ACCEPT (digest 52ec1fc7) sau đó chỉ sửa tài liệu, nên các file ứng dụng
+     giống hệt.
 2. **Đã xong: GOV-RECOVERY.** `check_recovery.py` không còn lấy trạng thái thật của
    mission (bản sửa đóng băng ở 7f750e9, gate PASS,
    [GOV recovery review](delivery/GOV_RECOVERY_REVIEW.vi.md) PASS). Board ghi mission là
@@ -230,15 +234,26 @@ Luồng hiện tại:
    - WP5-UX2: nghiệm thu lại trên a643794 / 229df806.
    - WP5-UX3: nghiệm thu lại trên 8e55710 / 507de97c (gate WP5-UX3-REGATE5, audit
      WP5-UX3-AUDIT-INT PASS). Định danh trong pilot packet đã cập nhật.
-4. **Đang chạy: vòng sửa WP5-CALDEF cho R-UX5I2-3 (chủ dự án trả lời 2026-11-02).** Nếu loại
+4. **Đã xong: vòng sửa WP5-CALDEF cho R-UX5I2-3 (chủ dự án trả lời 2026-11-02).** Nếu loại
    ngày mặc định theo lịch đã đổi kể từ lúc Day editor tải ngày đó, một thông báo cho người
-   dùng chọn lưu (ghi đè) hay cập nhật theo giá trị mặc định mới.
-   - Trước tiên là WP5-CALDEF-PLAN (planner, chỉ đọc); sau đó là sửa, đóng băng, gate và một
-     audit độc lập mới; rồi cập nhật pilot packet và bàn giao WP5.
-   - Mã nguồn đã nghiệm thu vẫn là a54061f / 690fd8fd cho đến khi audit đó đạt.
-   - Tiếp tục từ `next_task_id` trên board.
+   dùng chọn lưu (ghi đè) hay dùng giá trị mặc định mới. Label picker và "Change several days"
+   từ chối khi mặc định đã đổi và đề nghị "Reload period".
+   - Bản sửa được đóng băng ở 300d61f. WP5-CALDEF-GATE không đạt ở một test cũ phụ thuộc ngày:
+     điểm bấm của nó nằm dưới Day editor dạng nổi. Bản sửa chỉ ở test được đóng băng ở
+     b810ba9.
+   - WP5-CALDEF-REGATE đạt trên b810ba9. Audit mới WP5-CALDEF-AUDIT đạt và khép R-UX5I2-3.
+     **WP5 được nghiệm thu lại trên b810ba9 / 59e2ec3f** (885 file).
+   - Hai phát hiện mức Low về tài liệu của audit và các dòng trạng thái trong tài liệu phát
+     hành đã được sửa và review theo luật AGENTS 14.
+   - Các mẫu pilot được tạo lại từ b810ba9 (WP5-CALDEF-SAMPLES). Nội dung giống như trước.
+   - Pilot packet và mục "Nghiệm thu lại sau vòng mặc định lịch (WP5-CALDEF, R-UX5I2-3)" trong
+     [WP5 handoff](delivery/WP5_HANDOFF.vi.md) đã được cập nhật.
+   - Tất cả nằm trong commit nghiệm thu WP5-CALDEF-ACCEPT; SHA của nó ghi trên board.
+   - Backlog không bắt buộc: R-CALDEF-1..4, ranh giới 2,05:1 của nút phụ, và lỗi tranh chấp
+     cổng F2 trong harness e2e.
 5. **Tiếp theo, chủ dự án: duyệt pilot.** Đọc
-   [pilot packet](delivery/WP5_PILOT_PACKET.vi.md). D-1..D-15 và R-UX5I2-3 đã được trả lời.
+   [pilot packet](delivery/WP5_PILOT_PACKET.vi.md). D-1..D-15 và R-UX5I2-3 đã được trả lời;
+   R-UX5I2-3 đã được làm xong và nghiệm thu.
    - Làm các kiểm tra trên thiết bị thật (mục 10 của gói).
    - Làm các bước NAS của chủ dự án trong docs/11 và mẫu khôi phục trên máy đích.
    - Chỉ gửi thật, triển khai và kích hoạt sau khi chủ dự án cho phép rõ ràng. Khi đó

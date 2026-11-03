@@ -1,0 +1,11 @@
+# Usage: bash one.sh <label> <instant|real> [playwright args...]
+# One Playwright run through the clock wrapper, then its per-project counts and a census (foreground slice).
+. <task>/env.sh
+cd $T
+label=$1; shift
+bash run-shift.sh "$label" "$@" > "logs/run-$label.txt" 2>&1
+echo "$label finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/progress.txt
+node counts.mjs "logs/run-$label.txt" >> out/17-run-counts.txt 2>&1
+bash cens.sh "c-$label" > "logs/cens-$label.log" 2>&1
+tail -n 1 out/17-run-counts.txt
+cat out/10-census-c-$label.txt

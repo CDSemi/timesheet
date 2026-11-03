@@ -1,0 +1,12 @@
+. <task>/env.sh
+cd $REPO
+{ git rev-parse HEAD; git rev-parse origin/main; git branch --show-current; git log -1 --format='%H %s'; } > $T/out/00-head.txt 2>&1
+git status --short -- . ':!handoff' > $T/out/00-nonhandoff-status-before.txt 2>&1
+git diff --name-status $PREV..$TARGET -- . ':!handoff' > $T/out/20-namestatus-prev-target.txt 2>&1
+git diff --stat $PREV..$TARGET -- . ':!handoff' > $T/out/20-diffstat-nonhandoff.txt 2>&1
+git diff --check $PREV..$TARGET -- . ':!handoff' > $T/out/21-diff-check.txt 2>&1; echo "diff --check exit $?" >> $T/out/21-diff-check.txt
+git diff $PREV..$TARGET -- tests/e2e/classic-scrollbar.spec.ts > $T/out/22-spec-diff.txt 2>&1
+git diff --name-only $PREV..$TARGET -- . ':!handoff' | grep -E 'migrations|package|lock' > $T/out/25-migration-grep.txt 2>&1; echo "migration/package/lock path grep exit $? (1 = none)" >> $T/out/25-migration-grep.txt
+git archive $TARGET | tar -x -C $T/export
+git archive $PREV | tar -x -C $T/export-prev
+ls $T/export

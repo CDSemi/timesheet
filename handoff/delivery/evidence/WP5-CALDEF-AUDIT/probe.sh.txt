@@ -1,0 +1,37 @@
+# The auditor's probes on a clean copy of the target (export-probe), one after another.
+. <task>/env.sh
+O=$T/out
+P=$T/logs/probe-progress.txt
+step() { echo "$1 $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $P; }
+step "start"
+mkdir -p $T/export-probe
+cd $REPO && git archive $TARGET | tar -x -C $T/export-probe
+cd $T/export-probe || exit 2
+npm ci > $T/logs/probe-ci.txt 2>&1; echo "probe npm ci exit $?" >> $O/40-probe-exits.txt
+npm run build > $T/logs/probe-build.txt 2>&1; echo "probe build exit $?" >> $O/40-probe-exits.txt
+step "setup done"
+cp $T/zz-audit-caldef.test.ts tests/integration/zz-audit-caldef.test.ts
+node.exe node_modules/vitest/vitest.mjs run tests/integration/zz-audit-caldef.test.ts > $O/40-vitest-probe.txt 2>&1; echo "vitest probe exit $?" >> $O/40-probe-exits.txt
+node.exe $T/run-tz.mjs Pacific/Kiritimati $T/export-probe node.exe node_modules/vitest/vitest.mjs run tests/integration/zz-audit-caldef.test.ts > $O/40-vitest-probe-kiritimati.txt 2>&1; echo "vitest probe Pacific/Kiritimati exit $?" >> $O/40-probe-exits.txt
+rm tests/integration/zz-audit-caldef.test.ts
+step "vitest probes done"
+cp $T/zz-audit-caldef.spec.ts tests/e2e/zz-audit-caldef.spec.ts
+export AXE_PATH="$TW\\axe-pkg\\package\\axe.min.js"
+export OBS_OUT="$TW\\out\\41-obs.txt"
+bash $T/cens.sh pre-probe-e2e
+SHIFT_EXPORT=$T/export-probe bash $T/run-shift.sh probe-e2e real tests/e2e/zz-audit-caldef.spec.ts --project=desktop --project=mobile --workers=4 > $O/41-e2e-probe.txt 2>&1
+echo "e2e probe exit $(grep -o '^exit=[0-9]*' $O/41-e2e-probe.txt)" >> $O/40-probe-exits.txt
+rm tests/e2e/zz-audit-caldef.spec.ts
+step "e2e probes done"
+unset AXE_PATH OBS_OUT
+bash $T/cens.sh pre-classic-left
+bash $T/run-shift.sh classic-left 2026-11-06T18:00:00Z tests/e2e/classic-scrollbar.spec.ts --project=desktop --workers=2 > $O/42-classic-scrollbar-left-1106.txt 2>&1
+bash $T/run-shift.sh classic-right 2026-11-04T18:00:00Z tests/e2e/classic-scrollbar.spec.ts --project=desktop --workers=2 > $O/42-classic-scrollbar-right-1104.txt 2>&1
+step "classic-scrollbar done"
+bash $T/cens.sh pre-caldef-midnight
+bash $T/run-shift.sh caldef-midnight 2026-11-03T07:58:30Z tests/e2e/calendar-default.spec.ts --project=desktop --project=mobile --workers=6 > $O/43-caldef-la-midnight.txt 2>&1
+bash $T/cens.sh post-caldef-midnight
+bash $T/run-shift.sh caldef-dst 2026-11-01T08:50:00Z tests/e2e/calendar-default.spec.ts --project=desktop --project=mobile --workers=6 > $O/43-caldef-dst-end.txt 2>&1
+bash $T/cens.sh post-caldef-dst
+node.exe $T/counts.mjs $O/41-e2e-probe.txt $O/42-classic-scrollbar-left-1106.txt $O/42-classic-scrollbar-right-1104.txt $O/43-caldef-la-midnight.txt $O/43-caldef-dst-end.txt > $O/44-probe-counts.txt 2>&1
+step "probe done"

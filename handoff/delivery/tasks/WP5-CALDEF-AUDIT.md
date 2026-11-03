@@ -156,3 +156,52 @@
 - Return at most 250 words, beginning with your self-reported model.
 
 ## Results
+
+Interim checkpoint (2026-11-03T13:15Z, auditor claude-opus-5-5, agent a4507aa2a7bba058d): identity confirmed (HEAD = origin/main = b810ba9,
+digest 59e2ec3f in the export, ls-tree and `npm run digest` forms, 885 files); mandatory checks run in a clean export and passed (typecheck,
+lint, `npm test` 103 files / 2,425, build without advisory, real-clock FULL desktop 508/37/0 and mobile 429/116/0, AC-13 under
+Pacific/Chatham 1/1, seven files at 2026-10-27T06:58:30Z desktop 234/16/0 and mobile 166/84/0). Probes and mutants are running; the
+decision is not yet made.
+
+Interim checkpoint 2 (2026-11-03T13:30Z): API probes 10/10 under two process zones; browser probes pass (two probe mistakes fixed and
+rerun); classic-scrollbar 3/3 at both dock sides; calendar-default spec 45/5/0 across LA midnight and on the DST-end day; smoke proof 0
+mismatches over 70,080 instants; dist vs a54061f as the gate said. Two Low documentation findings so far (docs/03:24 EN/VI, docs/12.vi:63).
+Server mutants S1-S6 done (S1, S3 survive; S2 killed for another reason; S4-S6 killed); S7 and the client mutants running.
+
+Final (2026-11-03T13:41Z). Auditor: self-reported model claude-opus-5-5 (timesheet-auditor, fresh context, board agent
+a4507aa2a7bba058d), 12:56Z to 13:41Z. Review: `handoff/delivery/WP5_CALDEF_REVIEW.md` (+ `.vi.md`). Evidence:
+`handoff/delivery/evidence/WP5-CALDEF-AUDIT/` (index `00-README.txt`, 126 files). Nothing staged or committed; the repository changed
+only in the review pair, this Results section and that evidence folder. Node v24.21.0, Edge, 32 logical processors; task folder
+outside the repository; nothing left running.
+
+**Decision: PASS.** R-UX5I2-3 is closed. This PASS re-accepts WP5 on b810ba9 / 59e2ec3f and supersedes WP5-UX5-RECHECK-RN (a54061f /
+690fd8fd) as the current acceptance; the two Low findings are documentation only (AGENTS rule 14: one review-and-fix, no gate or audit).
+
+- Identity: HEAD = origin/main = b810ba9 before and after; digest 59e2ec3f…0770a (885 files) before and after in the export, `git
+  ls-tree` and `npm run digest` forms; nothing outside `handoff/` changed between the target and HEAD; `git status` outside `handoff/`
+  empty before and after.
+- Mandatory checks (clean export): typecheck, lint, build 0 (no advisory, no deprecation line); `npm test` 103 files / 2,425; real-clock
+  FULL both projects (2026-11-03, `days[0]` Monday, drawer right) desktop 508/37/0, mobile 429/116/0; AC-13 under Pacific/Chatham 1/1;
+  seven files at 2026-10-27T06:58:30Z through the FIX10 wrapper desktop 234/16/0, mobile 166/84/0. No rerun was needed.
+- Owner's rule: every path in scope drove as specified (no entry, default-sourced, explicit, drawer, phone sheet, shared edit view, picker
+  incl. a day with recorded work, "Change several days", a second change, MF1, an undone import); the coordinator's scope decisions keep
+  the owner's intent.
+- Server: check orders, the in-transaction check, the share route on a second calendar (A3), no leak (exact keys; view-only 403), and the
+  omitted field's residual risk (A5) confirmed. Client: the mount-time default against FIX18, FIX19, Reload day, refresh and period step;
+  Use, Save anyway, U4-05, stale precedence, focus, 44px and both themes confirmed. Time: DST-end and LA-midnight instants, a process zone
+  of UTC+14, a later effective date, and the round's spec across LA midnight and on the DST-end day (45/5/0 each). Smoke fix: 70,080
+  instants, 0 mismatches. FIX2: agreed test assumption; the spec passes on both dock sides. axe 4.14.0: 24 scans, 0 violations. dist vs
+  a54061f: only the five server modules and the client bundle changed.
+- Findings: F-CALDEF-1 (Low, docs/03:24 EN and VI lost "notes, confirmation, optimistic version" and reads ", ,"), F-CALDEF-2 (Low,
+  docs/12.vi:63 links the English handoff with English text). Both are documentation, fixed by one review-and-fix (AGENTS rule 14).
+- Mutants (12 of my own, restored byte-equal; `export-mut` equal to the clean export afterwards, rebuilt `dist/` 250/250 identical):
+  killed by the round's suite for the right reason S4 (I9), S5 (I2, I5), S6 (I12), C1 (W7b, W2), C2 (W2 figures), C4 (W12, by timeout),
+  C6 (W9b); S2 killed only through a side effect in older sharing tests (right reason only by my A3); S7 survives the suite (no picker or
+  batch test on a default-sourced entry), killed by my E2; S1 (per-entry order) and C5 ("Use" enabled while busy) survive, low impact; S3
+  (scope read outside the transaction) is equivalent in one process.
+- Optional risks and backlog carried in the review (R-CALDEF-1 to -4, the 2.05:1 secondary-button boundary, F2 port race, INT3 and RN
+  items). `validate_package.py --preflight` PASS with the review pair (143 pairs).
+- Slips: `99-slips.txt` (two count/version calls on the system Node; two probe mistakes fixed and rerun; one probe rerun to capture its
+  observations).
+
+Status: done

@@ -1,0 +1,15 @@
+. <task>/env.sh
+export GIT_CONFIG_VALUE_0=$T/export-mut
+cd $REPO
+git show $TARGET:src/client/styles.css > $T/tmp/styles.orig.css
+git show $TARGET:src/client/TimesheetScreen.tsx > $T/tmp/TimesheetScreen.orig.tsx
+cmp $T/tmp/styles.orig.css $T/export-mut/src/client/styles.css; echo "M2 restore cmp styles.css exit $?" > $T/out/61-restore.txt
+cmp $T/tmp/TimesheetScreen.orig.tsx $T/export-mut/src/client/TimesheetScreen.tsx; echo "M1 restore cmp TimesheetScreen.tsx exit $?" >> $T/out/61-restore.txt
+# whole-tree check: every tracked source, test and script path of the scratch copy equals the target export
+for d in src tests scripts; do
+  diff -rq $T/export/$d $T/export-mut/$d >> $T/out/61-restore.txt 2>&1; echo "diff -rq $d exit $? (0 = identical)" >> $T/out/61-restore.txt
+done
+cd $T/export-mut && npm run build > $T/out/62-build-restored.txt 2>&1; echo "rebuild after restore exit $?" >> $T/out/61-restore.txt
+cd $T
+node.exe distcmp.mjs "$TW\\export" "$TW\\export-mut" "$TW\\out\\62-dist-compare-restored.txt" target restored-scratch > out/62-dist-summary.txt 2>&1
+cat out/61-restore.txt out/62-dist-summary.txt

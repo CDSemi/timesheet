@@ -1,0 +1,16 @@
+. <task>/env.sh
+cd $T
+SEVEN="tests/e2e/day-editor.spec.ts tests/e2e/today.spec.ts tests/e2e/timesheet.spec.ts tests/e2e/review.spec.ts tests/e2e/submission.spec.ts tests/e2e/settings-transfer.spec.ts tests/e2e/profile.spec.ts"
+SPEC=tests/e2e/classic-scrollbar.spec.ts
+run() {
+  label=$1; shift
+  bash run-shift.sh "$label" "$@" > "logs/run-$label.txt" 2>&1
+  echo "$label finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/progress.txt
+  node counts.mjs "logs/run-$label.txt" >> out/17-run-counts.txt 2>&1
+  bash cens.sh "c-$label" > "logs/cens-$label.log" 2>&1
+}
+# item 4: the real-clock FULL e2e, both projects
+run full-real real --workers=6
+# The remaining runs go on in foreground slices (one tool call each); this background run ends after the real-clock FULL run.
+echo runset-cut-after-full-real > out/runset.done
+exit 0

@@ -1,0 +1,11 @@
+WP5-CALDEF-AUDIT slips (rule breaks of my own, with their effect)
+
+1. Two node calls without Node 24 first on PATH (the env file not sourced), so the system Node v26.10.0 ran them: a `node.exe -v` that
+   printed the version into a scratch log, and `counts.mjs` reading the log 43-caldef-la-midnight.txt (a text count of an already
+   finished Playwright run). No product check, build, test or probe ran on that Node; the counts were rerun later with Node 24
+   (44-probe-counts.txt).
+2. Two of my own browser probes were wrong on the first run and were fixed and rerun (41-e2e-probe.txt, 41-e2e-probe-run2.txt): E2 looked
+   for the conflict step under the dialog's first name (the step renames the dialog), and the desktop E4 opened its second width after
+   the default had already changed (no second change, so no notice). Neither was a product failure.
+3. The first vitest probe run printed no observations (the console lines of a passed test are not shown by this vitest); the probe was
+   changed to write them to a file and run again (40-vitest-probe-run2.txt, 40-vitest-obs*.txt). Both runs passed 10/10.

@@ -1,0 +1,18 @@
+function under test:
+function recentMonday(now = Date.now()) {
+  // Step whole calendar dates from today's LA date; a day is not always 24 hours across DST.
+  const [year, month, day] = laDateParts(new Date(now)).date.split('-').map(Number);
+  for (let back = 1; back <= 7; back += 1) {
+    const candidate = new Date(Date.UTC(year, month - 1, day - back));
+    if (candidate.getUTCDay() === 1) return candidate.toISOString().slice(0, 10);
+  }
+  throw new Error('No Monday found');
+}
+2026-11-03T07:49:00Z (LA 2026-11-02 Mon): recentMonday 2026-10-26, oracle 2026-10-26
+2026-11-02T07:59:00Z (LA 2026-11-01 Sun): recentMonday 2026-10-26, oracle 2026-10-26
+2026-03-09T06:30:00Z (LA 2026-03-08 Sun): recentMonday 2026-03-02, oracle 2026-03-02
+2026-03-10T06:59:00Z (LA 2026-03-09 Mon): recentMonday 2026-03-02, oracle 2026-03-02
+2026-11-09T07:59:59Z (LA 2026-11-08 Sun): recentMonday 2026-11-02, oracle 2026-11-02
+2026-11-10T08:00:00Z (LA 2026-11-10 Tue): recentMonday 2026-11-09, oracle 2026-11-09
+checked 70080 instants (every 15 minutes, 2026-01-01..2028-01-01): mismatches 0
+exit 0

@@ -1,0 +1,18 @@
+. <task>/env.sh
+cd $T
+cp -r $T/export $T/export-mut
+echo "export-mut copied $(date -u +%H:%M:%SZ)" >> logs/prep.log
+node.exe zone.mjs > out/04-window.txt 2>&1
+# controls run in export-mut (a copy of export made after its build); validates the clock preload
+cp zz-control.spec.ts export-mut/tests/e2e/
+SHIFT_EXPORT=$T/export-mut bash run-shift.sh ctl-real real tests/e2e/zz-control.spec.ts > logs/control-real.txt 2>&1
+CONTROL_TODAY=2026-11-01 SHIFT_EXPORT=$T/export-mut bash run-shift.sh ctl-1101 2026-11-01T08:45:00Z tests/e2e/zz-control.spec.ts > logs/control-1101.txt 2>&1
+CONTROL_TODAY=2026-11-04 SHIFT_EXPORT=$T/export-mut bash run-shift.sh ctl-1104 2026-11-04T18:00:00Z tests/e2e/zz-control.spec.ts > logs/control-1104.txt 2>&1
+CONTROL_TODAY=2026-11-06 SHIFT_EXPORT=$T/export-mut bash run-shift.sh ctl-1106 2026-11-06T18:00:00Z tests/e2e/zz-control.spec.ts > logs/control-1106.txt 2>&1
+rm -f export-mut/tests/e2e/zz-control.spec.ts
+# probe of days[0] weekday and dock side on the real clock (desktop), read-only task-local spec
+cp zz-probe.spec.ts export-mut/tests/e2e/
+PROBE_OUT="$TW\\out\\04-probe-real.jsonl" SHIFT_EXPORT=$T/export-mut bash run-shift.sh probe-real real tests/e2e/zz-probe.spec.ts --project=desktop > logs/probe-real.txt 2>&1
+rm -f export-mut/tests/e2e/zz-probe.spec.ts
+echo "controls and probe done $(date -u +%H:%M:%SZ)" >> logs/prep.log
+grep -h "CONTROL\|exit=\|passed\|failed" logs/control-real.txt logs/control-1101.txt logs/control-1104.txt logs/control-1106.txt logs/probe-real.txt

@@ -1,0 +1,31 @@
+# Copies the task outputs into the evidence folder as masked LF .txt (refuses an address outside example.invalid).
+. <task>/env.sh
+cd $T
+mkdir -p $E
+ARGS=()
+for f in out/*.txt out/*.jsonl; do
+  [ -f "$f" ] || continue
+  b=$(basename $f .jsonl)
+  case $f in *.jsonl) b=$b.jsonl.txt;; *) b=$(basename $f);; esac
+  ARGS+=("$T/$f=$b")
+done
+for f in logs/*.txt; do
+  [ -f "$f" ] || continue
+  ARGS+=("$T/$f=log-$(basename $f)")
+done
+for f in logs/*.log; do
+  [ -f "$f" ] || continue
+  ARGS+=("$T/$f=log-$(basename $f .log).txt")
+done
+for f in mutants/*.txt; do
+  [ -f "$f" ] || continue
+  ARGS+=("$T/$f=mut-$(basename $f)")
+done
+ARGS+=("$T/README.txt=00-README.txt")
+for s in env.sh setup.sh digest.sh builds.sh chain01.sh prep.sh runset.sh one.sh mutrun.sh restore.sh after.sh run-shift.sh census.sh cens.sh finalize.sh; do
+  [ -f "$s" ] && ARGS+=("$T/$s=$s.txt")
+done
+for s in census.mjs counts.mjs mask.mjs probe-now.mjs shiftclock.mjs zone.mjs distcmp.mjs zz-control.spec.ts zz-probe.spec.ts; do
+  [ -f "$s" ] && ARGS+=("$T/$s=$s.txt")
+done
+node.exe $T/mask.mjs "<repo>\\handoff\\delivery\\evidence\\WP5-CALDEF-REGATE" "${ARGS[@]}"

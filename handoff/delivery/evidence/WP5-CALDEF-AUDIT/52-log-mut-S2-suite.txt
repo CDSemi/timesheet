@@ -1,0 +1,76 @@
+
+ RUN  v5.0.2 <task>/export-mut
+
+ ❯ tests/integration/sharing.test.ts (31 tests | 1 failed) 25305ms
+   ❯ access through /api/shared (AC-16) (9)
+     × lets an edit grantee write into the owner timesheet, attributed to the grantee; a view grantee gets 403 grant_scope 750ms
+ ❯ tests/integration/history.test.ts (14 tests | 1 failed) 8732ms
+   ❯ GET /api/history (14)
+     × WP3-C-02: every write a share can make is attributed, and nothing recorded outside /api/shared is 610ms
+ ❯ tests/integration/actor-subject.test.ts (15 tests | 1 failed) 5692ms
+   ❯ commands and audit record actor and subject (4)
+     × records both ids for a committed day batch and writes nothing for a preview 341ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/actor-subject.test.ts > commands and audit record actor and subject > records both ids for a committed day batch and writes nothing for a preview
+SqliteError: UNIQUE constraint failed: timesheets.user_id, timesheets.pay_period_id
+ ❯ ensureTimesheet src/server/services/timesheetCommands.ts:112:6
+    110|       `INSERT INTO timesheets (id, user_id, pay_period_id, version, cr…
+    111|     )
+    112|     .run(timesheet.id, ctx.user.id, payPeriodId, now, now);
+       |      ^
+    113|   edit.timesheet = timesheet;
+    114|   return timesheet;
+ ❯ applyDayEntryChange src/server/services/timesheetCommands.ts:368:23
+ ❯ sqliteTransaction.<anonymous> src/server/services/dayEntries.ts:244:33
+ ❯ sqliteTransaction node_modules/better-sqlite3/lib/methods/transaction.js:65:24
+ ❯ writeTransaction src/server/db/database.ts:23:31
+ ❯ commitDayBatch src/server/services/dayEntries.ts:208:19
+ ❯ tests/integration/actor-subject.test.ts:277:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/integration/history.test.ts > GET /api/history > WP3-C-02: every write a share can make is attributed, and nothing recorded outside /api/shared is
+AssertionError: {"error":{"code":"conflict","message":"A conflicting record already exists"}}: expected 409 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 409
+
+ ❯ tests/integration/history.test.ts:346:54
+    344|       body: { mode: 'commit', entries: [{ work_date: '2026-09-24', cat…
+    345|     });
+    346|     expect(batch.status, JSON.stringify(batch.body)).toBe(200);
+       |                                                      ^
+    347|     const deleted = await t.request('DELETE', `${base}/sessions/${sess…
+    348|     expect(deleted.status, JSON.stringify(deleted.body)).toBe(200);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/integration/sharing.test.ts > access through /api/shared (AC-16) > lets an edit grantee write into the owner timesheet, attributed to the grantee; a view grantee gets 403 grant_scope
+AssertionError: {"error":{"code":"conflict","message":"A conflicting record already exists"}}: expected 409 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 409
+
+ ❯ tests/integration/sharing.test.ts:417:54
+    415|       body: { mode: 'commit', entries: [{ work_date: '2026-09-23', cat…
+    416|     });
+    417|     expect(batch.status, JSON.stringify(batch.body)).toBe(200);
+       |                                                      ^
+    418|     const update = await t.request('PUT', shared(`/sessions/${sessionI…
+    419|       cookie: grantee.cookie,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  3 failed | 100 passed (103)
+      Tests  3 failed | 2422 passed (2425)
+   Start at  05:24:07
+   Duration  41.56s (tests 95%, import 4%, transform 1%)

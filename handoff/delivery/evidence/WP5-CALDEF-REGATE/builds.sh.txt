@@ -1,0 +1,11 @@
+. <task>/env.sh
+# Usage: bash builds.sh  - npm ci + build of PREV then target, each in its own export; dist comparison
+for X in export-prev export; do
+  cd $T/$X
+  export GIT_CONFIG_VALUE_0=$T/$X
+  npm ci > $T/out/02-ci-$X.txt 2>&1; echo "npm ci $X exit $?" >> $T/out/02-exits.txt
+  npm run build > $T/out/02-build-$X.txt 2>&1; echo "npm run build $X exit $?" >> $T/out/02-exits.txt
+done
+cd $T
+node.exe distcmp.mjs "$TW\\export-prev" "$TW\\export" "$TW\\out\\50-dist-compare.txt" prev target > out/50-dist-summary.txt 2>&1
+cat out/02-exits.txt out/50-dist-summary.txt

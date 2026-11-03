@@ -1,0 +1,28 @@
+import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+// Compares the whole dist/ of two trees (evidence tool): same relative path, same SHA-256 of the bytes.
+// Usage: node distcmp.mjs <rootA> <rootB> <outFile> <labelA> <labelB>
+const [rootA, rootB, out, labelA = 'A', labelB = 'B'] = process.argv.slice(2);
+const walk = (root, dir, found) => {
+  for (const name of readdirSync(join(root, dir))) {
+    const rel = `${dir}/${name}`;
+    if (statSync(join(root, rel)).isDirectory()) walk(root, rel, found);
+    else found.set(rel, createHash('sha256').update(readFileSync(join(root, rel))).digest('hex'));
+  }
+  return found;
+};
+const a = walk(rootA, 'dist', new Map());
+const b = walk(rootB, 'dist', new Map());
+const names = [...new Set([...a.keys(), ...b.keys()])].sort();
+const differ = names.filter((n) => a.has(n) && b.has(n) && a.get(n) !== b.get(n));
+const onlyA = names.filter((n) => !b.has(n));
+const onlyB = names.filter((n) => !a.has(n));
+const lines = [`dist/: ${a.size} files in ${labelA}, ${b.size} in ${labelB}; ${names.length - differ.length - onlyA.length - onlyB.length} identical, ${differ.length} differ, ${onlyA.length} only in ${labelA}, ${onlyB.length} only in ${labelB}`];
+for (const n of differ) lines.push(`  differs: ${n}`);
+for (const n of onlyA) lines.push(`  only in ${labelA}: ${n}`);
+for (const n of onlyB) lines.push(`  only in ${labelB}: ${n}`);
+const listing = names.map((n) => `${a.get(n) ?? '-'} ${b.get(n) ?? '-'} ${n}`);
+writeFileSync(out, `${lines.join('\n')}\n--- sha256 A, sha256 B, path ---\n${listing.join('\n')}\n`);
+process.stdout.write(`${lines.join('\n')}\n`);

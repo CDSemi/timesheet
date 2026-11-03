@@ -1,0 +1,45 @@
+# The auditor's mutants in export-mut, one at a time: apply, run what can catch it, restore byte-equal.
+. <task>/env.sh
+O=$T/out
+L=$T/logs
+P=$L/mut-progress.txt
+X=$O/50-mut-exits.txt
+step() { echo "$1 $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $P; }
+cd $T/export-mut || exit 2
+step "start"
+npm ci > $L/mut-ci.txt 2>&1; echo "export-mut npm ci exit $?" >> $X
+npm run build > $L/mut-build-0.txt 2>&1; echo "export-mut build exit $?" >> $X
+export AXE_PATH="$TW\\axe-pkg\\package\\axe.min.js"
+for M in S1 S2 S3 S4 S5 S6 S7; do
+  node.exe $T/mutate.mjs apply $M >> $O/50-mut-apply.txt 2>&1 || { echo "$M apply FAILED" >> $X; continue; }
+  node.exe node_modules/vitest/vitest.mjs run > $L/mut-$M-suite.txt 2>&1; echo "$M npm-test-suite exit $?" >> $X
+  cp $T/zz-audit-caldef.test.ts tests/integration/zz-audit-caldef.test.ts
+  node.exe node_modules/vitest/vitest.mjs run tests/integration/zz-audit-caldef.test.ts > $L/mut-$M-probe.txt 2>&1; echo "$M audit-api-probe exit $?" >> $X
+  rm tests/integration/zz-audit-caldef.test.ts
+  if [ "$M" = "S7" ] || [ "$M" = "S1" ] || [ "$M" = "S3" ] || [ "$M" = "S2" ]; then
+    npm run build:server > $L/mut-$M-build.txt 2>&1; echo "$M build:server exit $?" >> $X
+    SPECS="tests/e2e/calendar-default.spec.ts"
+    if [ "$M" = "S2" ]; then SPECS="tests/e2e/calendar-default.spec.ts tests/e2e/sharing.spec.ts"; fi
+    SHIFT_EXPORT=$T/export-mut bash $T/run-shift.sh mut-$M-caldef real $SPECS --project=desktop --workers=6 > $L/mut-$M-e2e-caldef.txt 2>&1
+    echo "$M e2e calendar-default desktop $(grep -o '^exit=[0-9]*' $L/mut-$M-e2e-caldef.txt)" >> $X
+    if [ "$M" = "S7" ]; then
+      cp $T/zz-audit-caldef.spec.ts tests/e2e/zz-audit-caldef.spec.ts
+      OBS_OUT="$TW\\logs\\mut-S7-obs.txt" SHIFT_EXPORT=$T/export-mut bash $T/run-shift.sh mut-S7-probe real tests/e2e/zz-audit-caldef.spec.ts --project=desktop --workers=2 -g "E2:" > $L/mut-S7-e2e-probe.txt 2>&1
+      echo "S7 e2e audit probe E2 $(grep -o '^exit=[0-9]*' $L/mut-S7-e2e-probe.txt)" >> $X
+      rm tests/e2e/zz-audit-caldef.spec.ts
+    fi
+  fi
+  node.exe $T/mutate.mjs restore $M >> $O/50-mut-apply.txt 2>&1
+  if [ "$M" = "S7" ] || [ "$M" = "S1" ] || [ "$M" = "S3" ] || [ "$M" = "S2" ]; then npm run build:server > $L/mut-$M-rebuild.txt 2>&1; echo "$M rebuild:server exit $?" >> $X; fi
+  step "$M done"
+done
+for M in C1 C2 C4 C5 C6; do
+  node.exe $T/mutate.mjs apply $M >> $O/50-mut-apply.txt 2>&1 || { echo "$M apply FAILED" >> $X; continue; }
+  npm run build:client > $L/mut-$M-build.txt 2>&1; echo "$M build:client exit $?" >> $X
+  SHIFT_EXPORT=$T/export-mut bash $T/run-shift.sh mut-$M-caldef real tests/e2e/calendar-default.spec.ts --project=desktop --project=mobile --workers=6 > $L/mut-$M-e2e-caldef.txt 2>&1
+  echo "$M e2e calendar-default both $(grep -o '^exit=[0-9]*' $L/mut-$M-e2e-caldef.txt)" >> $X
+  node.exe $T/mutate.mjs restore $M >> $O/50-mut-apply.txt 2>&1
+  step "$M done"
+done
+npm run build > $L/mut-build-final.txt 2>&1; echo "export-mut final build exit $?" >> $X
+step "mutants done"

@@ -3544,6 +3544,145 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - **Nếu bị gián đoạn:** kiểm tra `git log`, `git status` và origin/main trước. Nếu commit đã
   có, ghi nhận nó. Nếu chưa, giao cùng brief cho một committer mới (lần 2), trong thư mục
   task WP5-CALDEF-FIX2-FREEZE-a2.
+- **WP5-CALDEF-FIX2-FREEZE xong.** Commit b810ba942c608e058bd8c146de6f076734c48bf2 trên main,
+  đã push theo kiểu fast-forward từ 300d61f.
+  - D_PRE = digest của HEAD = 59e2ec3f (885 file). 404 đường dẫn được stage. Không file nào
+    bị che, chuyển đổi hay bỏ khỏi stage.
+  - Mọi bước kiểm tra đều exit 0.
+- **WP5-CALDEF-REGATE** (verifier, sonnet, thu hẹp) đã được giao, chạy một mình trên
+  b810ba9 / 59e2ec3f. `reviewed_commit` của audit là b810ba9.
+- **Nếu bị gián đoạn:** một verifier mới (lần 2) trên cùng brief, trong thư mục task
+  WP5-CALDEF-REGATE-a2, sau khi kiểm tra không còn tiến trình nào của gate đang chạy.
+- **WP5-CALDEF-REGATE: PASS** trên b810ba9 / 59e2ec3f (tự báo claude-sonnet-5-5,
+  11:48Z-12:52Z; các mục NAS vẫn NOT VERIFIED). Không có lỗi nào; không chạy lặp mục nào.
+  - Định danh: HEAD = origin/main = b810ba9 trước và sau. Digest là 59e2ec3f (885 file) trước
+    và sau, ở cả dạng export, `git ls-tree` và `npm run digest`.
+  - Phạm vi: đường dẫn duy nhất ngoài `handoff/` là file spec, và nó khớp bản vá của DIAG1.
+  - `dist/`: bản build sạch của 300d61f và b810ba9 giống hệt nhau (250/250), kể cả sau mọi lần
+    chạy. Vì vậy drill, 36 mutant, INT3, bằng chứng smoke, axe, tài liệu và các lượt stress
+    khác được giữ nguyên từ WP5-CALDEF-GATE.
+  - npm audit không thấy lỗ hổng nào. lint, typecheck, build và verify exit 0. npm test chạy
+    2.425 test, các validator exit 0 (check_recovery 141).
+  - FULL theo đồng hồ thật: desktop 508/37/0, mobile 429/116/0. days[0] là thứ Hai 2026-11-02,
+    nên drawer nằm bên phải.
+  - Sáu lượt quét không có lỗi nào. Stress `:143` đạt 20/20 ở cả hai phía drawer, và mutant M1,
+    M2 đều bị bắt ở cả hai phía.
+  - Tải luôn ở mức tối đa 1,83 lõi bận.
+  - Sơ suất: một lệnh `ls` bị pipe vào `head -0`. Lượt chạy nền bị cắt bằng cách sửa script
+    của nó trong lúc chạy.
+  - Bằng chứng: `evidence/WP5-CALDEF-REGATE/` (134 file).
+- **WP5-CALDEF-AUDIT** (timesheet-auditor mới, opus/xhigh) đã được giao, chạy một mình trên
+  b810ba9 / 59e2ec3f, cặp review `WP5_CALDEF_REVIEW` (+ vi). Trong lúc đó không có tác vụ nào
+  ghi source.
+- **Nếu bị gián đoạn:** một auditor mới (lần 2) trên cùng brief, trong thư mục task
+  WP5-CALDEF-AUDIT-a2, sau khi kiểm tra không còn tiến trình nào của audit đang chạy.
+- **WP5-CALDEF-AUDIT: PASS** trên b810ba9 / 59e2ec3f (tự báo claude-opus-5-5,
+  12:56Z-13:41Z). Cặp review `WP5_CALDEF_REVIEW` (+ vi); bằng chứng 126 file.
+  - **R-UX5I2-3 đã khép lại.** Quy tắc của chủ dự án đúng trên mọi đường auditor đã chạy thử.
+    Các quyết định phạm vi của coordinator giữ đúng ý chủ dự án.
+  - **Kiểm tra bắt buộc:**
+    - npm test 2.425;
+    - FULL 508/37/0 và 429/116/0;
+    - AC-13 với múi giờ Pacific/Chatham;
+    - bảy file lúc 2026-10-27T06:58:30Z, 0 lỗi;
+    - axe 24 lượt quét, 0 vi phạm.
+  - **Mutant tự viết (12):** bộ test diệt 7; S2 và S7 là khoảng trống của test; S1 và C5 sống
+    sót; S3 tương đương.
+  - **Phát hiện, chỉ ở tài liệu (luật AGENTS 14):**
+    - F-CALDEF-1: docs/03:24 EN/VI mất ba ý của dòng `day_entries`;
+    - F-CALDEF-2: docs/12.vi:63 trỏ tới bản handoff tiếng Anh.
+  - **Rủi ro tùy chọn:** R-CALDEF-1..4, ranh giới 2,05:1 và F2.
+- **WP5 được nghiệm thu trên b810ba9 / 59e2ec3f** (quyết định coordinator 2026-11-03).
+  - `current_source_digest` là 59e2ec3f.
+  - Bản ghi `non_product_since_acceptance` cũ đã được bỏ: 5b2f287 nằm trong snapshot đã
+    audit.
+  - RECHECK-RN và 12 audit từng trỏ tới nó nay ghi `superseded_by` WP5-CALDEF-AUDIT.
+  - STATE WP5 đã cập nhật: review, gate, định danh, bản ghi của vòng, rủi ro mang theo và
+    trạng thái pilot.
+- **Các bước nghiệm thu, là tài liệu theo luật AGENTS 14 (không gate, không audit):**
+  - Chạy song song:
+    - WP5-CALDEF-DOCFIX (worker, sonnet; docs/03, docs/12, README và DEVELOPMENT EN/VI; tác
+      vụ duy nhất ghi source);
+    - WP5-CALDEF-ACCEPT-HANDOFF (worker, sonnet; mục mới trong handoff WP5 "Re-acceptance
+      after the calendar-default round (WP5-CALDEF, R-UX5I2-3)").
+  - Sau đó:
+    1. WP5-CALDEF-ACCEPT-PACKET;
+    2. WP5-CALDEF-ACCEPT-REVIEW do một phiên mới làm;
+    3. bản ghi `non_product_since_acceptance` mới (gốc b810ba9 / 59e2ec3f);
+    4. commit WP5-CALDEF-ACCEPT;
+    5. `software_ready`.
+- **Nếu bị gián đoạn:** mỗi task được giao cho một worker mới (lần 2) trên cùng brief, trong
+  thư mục task `<task>-a2`, sau khi kiểm tra `git status` các file của nó.
+- **WP5-CALDEF-DOCFIX xong** (chưa commit; digest c0852196, 885 file; preflight 0).
+  - docs/03:24 EN/VI đã được khôi phục.
+  - docs/12:7 và :63 EN/VI nay ghi việc nghiệm thu của vòng, và link VI đã được sửa.
+  - README và DEVELOPMENT EN/VI nêu R-UX5I2-3.
+  - Báo lại nhưng không sửa: `day_entries` không có cột "confirmation". Bước review sẽ kiểm tra
+    cách viết này.
+- **WP5-CALDEF-ACCEPT-PACKET** (worker, sonnet, chỉ handoff) đã được giao, chạy cạnh
+  ACCEPT-HANDOFF.
+- **WP5-CALDEF-ACCEPT-HANDOFF xong** (chưa commit). Handoff WP5 EN/VI có mục mới
+  "Re-acceptance after the calendar-default round (WP5-CALDEF, R-UX5I2-3)". Phần văn bản cũ
+  được thêm sáu mệnh đề trỏ tới mục mới ở mỗi ngôn ngữ; lịch sử được giữ nguyên.
+  - Các SHA và digest khớp với bảng điều phối. Kiểm tra EN/VI và preflight đều sạch.
+  - Sơ suất: một heredoc rỗng và một pipe vào `head -0`, không ảnh hưởng gì.
+- **WP5-CALDEF-ACCEPT-PACKET xong** (chưa commit). Packet EN/VI đã được cập nhật theo
+  b810ba9 / 59e2ec3f:
+  - R-UX5I2-3 đã khép lại;
+  - drill nay lấy từ WP5-CALDEF-GATE trên 300d61f (209/0, image `sha256:742d2a26…`);
+  - R-CALDEF-3, R-CALDEF-4 và ranh giới 2,05:1 là các mục đã báo cho chủ dự án.
+
+  Worker phát hiện: mã tạo mẫu chạy qua `timesheetCommands` và `timesheets`, hai module vòng
+  này đã đổi. Vì vậy chưa chứng minh được các mẫu từ dc487c6 đại diện cho bản phát hành.
+- **Quyết định coordinator 2026-11-03: tạo lại các mẫu.** WP5-CALDEF-SAMPLES (verifier,
+  sonnet, chỉ tạo bằng chứng) chạy một mình.
+  - Nó chạy công thức T06, như mục 5 của REGATE15, trên một bản export sạch của b810ba9, rồi
+    so kết quả với các mẫu của REGATE15.
+  - Sau đó tác giả packet làm tiếp Addendum 1 để trích các mẫu mới. Tiếp theo là
+    ACCEPT-REVIEW do một phiên mới làm, bản ghi và commit nghiệm thu.
+- **Nếu bị gián đoạn:** một verifier mới (lần 2) trên cùng brief, trong thư mục task
+  WP5-CALDEF-SAMPLES-a2, sau khi kiểm tra không còn server tạo mẫu nào đang chạy.
+- **WP5-CALDEF-SAMPLES: PASS**, chạy trên một bản export sạch của b810ba9 (digest
+  59e2ec3f).
+  - **Lần chạy:** 11 email và 6 PDF; `pdf_hash_ok` đúng cho cả sáu, không có job nào chạy lại
+    hay cần can thiệp.
+  - **Nội dung:** giống hệt REGATE15 sau khi chuẩn hóa mã submission của từng lần chạy. Hash
+    PDF khác nhau do mã đó và do byte dao động giữa các lần chạy.
+  - **Header Date:** năm email khác nhau ở giờ gửi. Lưu ý: một thông báo tự động nộp chậm hơn
+    một lượt quét nhắc. Đây là cùng loại khác biệt, nhưng chưa có lần chạy đối chứng nào
+    chứng minh.
+  - **Ready check:** 200/200, schema 15.
+- **WP5-CALDEF-ACCEPT-PACKET Addendum 1** (cùng agent): packet trích dẫn các mẫu này. Sau đó
+  là ACCEPT-REVIEW do một phiên mới làm.
+- **Addendum 1 xong.**
+  - Packet EN/VI trích dẫn các mẫu và ready check từ b810ba9, kèm phần so sánh và lưu ý về
+    06:36.
+  - Packet VI trích dẫn tiêu đề tiếng Việt của mục trong handoff.
+  - Kiểm tra EN/VI, tìm kiếm và preflight đều sạch.
+- **WP5-CALDEF-ACCEPT-REVIEW** (worker mới, sonnet) đã được giao, chạy một mình trên mười hai
+  file.
+  - Sau đó coordinator ghi `non_product_since_acceptance`: gốc b810ba9 / 59e2ec3f, đầu là
+    digest cuối cùng của bước review.
+  - Rồi đến WP5-CALDEF-ACCEPT.
+- **Nếu bị gián đoạn:** một worker mới (lần 2) trên cùng brief, trong thư mục task
+  WP5-CALDEF-ACCEPT-REVIEW-a2, sau khi kiểm tra `git status` của mười hai file.
+- **WP5-CALDEF-ACCEPT-REVIEW xong** (worker mới; khoảng 60 dữ kiện được kiểm).
+  - Chữ "confirmation" được bỏ khỏi dòng `day_entries` của docs/03 EN/VI. Bảng này không có
+    cột đó; việc xác nhận giờ nghỉ vẫn nằm ở dòng `work_sessions`.
+  - Ba chỗ lệch trong handoff và packet đã được sửa.
+  - Digest cuối là 52ec1fc7 (885 file). Quyết định coordinator 2026-11-03: chấp nhận, không đổi
+    hành vi.
+- **Coordinator đã ghi:**
+  - `non_product_since_acceptance`: gốc b810ba9 / 59e2ec3f, đầu 52ec1fc7, tám đường dẫn tài
+    liệu, DOCFIX được ACCEPT-REVIEW review;
+  - `current_source_digest` 52ec1fc7;
+  - STATE;
+  - NEXT_ACTION (+ vi): vòng này đã xong, và các dòng trạng thái cũ đã được sửa.
+- **WP5-CALDEF-ACCEPT** (committer, sonnet) đã được giao, chạy một mình. Coordinator không ghi
+  file nào trong lúc nó chạy.
+- **Nếu bị gián đoạn:** kiểm tra `git log`, `git status` và origin/main trước. Nếu commit đã
+  có, ghi nhận nó. Nếu chưa, giao cùng brief cho một committer mới (lần 2), trong thư mục task
+  WP5-CALDEF-ACCEPT-a2.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

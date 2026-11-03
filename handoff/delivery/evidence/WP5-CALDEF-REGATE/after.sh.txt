@@ -1,0 +1,14 @@
+. <task>/env.sh
+cd $T
+bash digest.sh after
+node.exe distcmp.mjs "$TW\\export-prev" "$TW\\export" "$TW\\out\\63-dist-compare-after.txt" prev target-after-runs > out/63-dist-summary-after.txt 2>&1
+cat out/63-dist-summary-after.txt
+cd $REPO
+{ git rev-parse HEAD; git rev-parse origin/main; } > $T/out/00-head-after.txt 2>&1
+git status --short -- . ':!handoff' > $T/out/00-nonhandoff-status-after.txt 2>&1
+echo "non-handoff status lines after: $(wc -l < $T/out/00-nonhandoff-status-after.txt)" >> $T/out/00-nonhandoff-status-after.txt
+cat $T/out/00-head-after.txt $T/out/00-nonhandoff-status-after.txt
+cd $T
+bash cens.sh final
+powershell.exe -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { \$_.Name -in 'node.exe','msedge.exe','chrome.exe','chromium.exe' } | Select-Object Name,ProcessId,CreationDate | Format-Table -AutoSize | Out-String -Width 400" > $T/out/90-leftover-procs.txt 2>&1
+echo "leftover candidate processes (names, ids, creation dates only; includes processes the mission did not start): $(grep -cE 'exe' $T/out/90-leftover-procs.txt)" >> $T/out/90-leftover-procs.txt

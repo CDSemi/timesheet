@@ -157,3 +157,38 @@ queries. Never use `-ExecutionPolicy` or `-File`.
   - the audit result;
   - the counts of items 3 to 6, with the weekday of `days[0]` and the dock side of item 4;
   - the digests before and after.
+
+## Results
+
+Verifier: self-reported model claude-sonnet-5-5 (timesheet-verifier, 2026-11-03, 11:48Z to 12:52Z). Evidence: `handoff/delivery/evidence/WP5-CALDEF-REGATE/` (index `00-README.txt`).
+Nothing staged or committed; the repository changed only in this Results section and that evidence folder. Node v24.21.0, Edge, 32 logical processors.
+
+**Decision: PASS** (scope: tests-only change; NAS items stay NOT VERIFIED). No failure in any gate run; nothing repeated.
+
+1. Identity and scope. HEAD = origin/main = b810ba94 before and after; `git status` outside `handoff/` empty before and after. Digest 59e2ec3f22d951366d4a54d0564ed2731d3b4f8c1fa90bc1cfbea10ebf0d770a
+   (885 files) before and after in the export form, the `git ls-tree` form and `npm run digest` (`01-*`, `63-*`). `git diff --name-status 300d61f..b810ba9 -- . ':!handoff'` = `M tests/e2e/classic-scrollbar.spec.ts` only;
+   no package, lockfile or migration path; `git diff --check` exit 0. The diff equals DIAG1 `proposed.patch.txt` line for line: no loosened assertion, dropped step, raised timeout, sleep, skipped date or deprecated API (`22-*`, `70-diff-review.txt`).
+   Clean builds (each after its own `npm ci`, exit 0): `dist/` of 300d61f and of the target are 250 files each, 250 identical by path and SHA-256, 0 differ (`50-dist-compare.txt`); again identical after all runs (`63-*`).
+   The premise for the carry-forward holds.
+2. `npm audit --omit=dev`: exit 0, 0 vulnerabilities (`03-npm-audit.txt`; the only output besides is the npm `allow-scripts` configuration notice).
+3. Core (target export): `npm run lint`, `typecheck`, `build` exit 0, no chunk advisory and no deprecation text (`03-warn-grep.txt` only matches vite's "rendering chunks..." line); `npm run verify` exit 0, SMOKE PASSED;
+   `npm test` once: 103 files, 2,425 tests passed. Validators: `check_recovery.py` 141 PASS, `validate_package.py --preflight` PASS (no tzdata scratch needed), `validate_orchestration.py` PASS, exit 0 each (`11-*`).
+4. Real-clock FULL e2e (2026-11-03, one run, both projects, `--workers=6`, 9.1 min): desktop 508 passed / 37 skipped / 0 failed; mobile 429 passed / 116 skipped / 0 failed; 937 passed, exit 0.
+   Probe at the same clock (`04-probe-real.jsonl.txt`): `days[0]` = 2026-11-02, a Monday; the floating Day editor docks on the right, so the patched test presses near the left end of the card.
+5. Six simulated-clock sweeps, `--workers=6`, FIX10 wrapper; controls validated the preload first (`log-control-*.txt`: today_local 2026-11-01, 2026-11-04, 2026-11-06 and the real date confirmed). Full runs are sharded 1/2 and 2/2 (sums):
+   2026-10-26T16:00Z, 2026-11-01T08:45Z and 2027-03-14T10:30Z each desktop 508 / 37 skipped / 0 failed and mobile 429 / 116 / 0; the seven-file scope at 2026-10-27T06:58:30Z, 2027-01-01T07:30Z and 2027-01-01T08:30Z each
+   desktop 234 / 16 / 0 and mobile 166 / 84 / 0. All 0 failed, exit 0 (`17-run-counts.txt`).
+6. Changed test. Stress `classic-scrollbar.spec.ts:143`, desktop, `--repeat-each=20 --workers=6`: 20 passed at 2026-11-04T18:00Z (drawer right) and 20 passed at 2026-11-06T18:00Z (drawer left), 0 failed.
+   The whole spec on the real clock: desktop 3 passed, mobile 3 skipped (the spec skips that project), 0 failed.
+   Mutants, in a scratch copy of the target (`export-mut`), each at both instants: M1 (`onOwnScrollbar` always false) fails `:143` at "a scrollbar press is not a press on the page" (`toBeVisible`, element not found) at both;
+   M2 (`.sheet-week { overflow-x: hidden }` in the 480-929 px query) fails at "a week card with a sideways scrollbar in view" (`Received: null`) at both; the reasons are the ones DIAG1 and FIX2 recorded.
+   Both restored: `cmp` against `git show b810ba9:<path>` equal for both files, `diff -rq` of `src`, `tests` and `scripts` against the target export empty, the rebuild exit 0 and its `dist/` equals the target build (250/250 identical) (`61-*`, `62-*`).
+7. Carried forward from WP5-CALDEF-GATE (not rerun), on the premise of item 1 (one test file changed, `dist/` identical): the container drill (209 / 0), the 36 mutants of the round, the INT3 administrator probe,
+   the smoke DST proof, axe (21 scans, 0 violations), the documents parity, and the stress of `calendar-default.spec.ts`, FIX18, FIX19 and the unsaved-changes tests.
+
+Load: entry census 0.94 and 0.70 busy cores (limit about 8); the highest census after a run was 1.83; final 0.80 (`10-census-*`). No run was classified as starved or network-class because none failed.
+Leftovers: no mission process remains (`90-*`: the Edge and node processes listed are older than the task or children of the owner's Edge). No server, browser or Compose project was started outside the runs.
+
+Slips: one early `ls ... | head -0` (a forbidden pipe into `head`), no effect on a result. The background run `runset.sh` was cut after the real-clock FULL run by editing the script while it ran, because waiting is not allowed; all later runs were foreground slices.
+
+Status: done

@@ -1,0 +1,9 @@
+WP5-CALDEF-ACCEPT-HANDOFF commands and exits (Node v24.21.0 first on PATH; TEMP and TMP in the task folder under <user>-independent D:\.claude-tmp\timesheet\WP5-CALDEF-ACCEPT-HANDOFF)
+
+1. node dump.mjs, dump2.mjs (read the board tasks WP5-CALDEF-* and WP5-GOV-DOCS-*, owner_decisions, coordinator_decisions into the task folder): exit 0
+2. node parity.mjs (EN/VI parity, links, SHA spot-check): exit 0; result in 01-parity-sha-links.txt
+3. <workflow python> handoff/delivery/validate_package.py --preflight (python at <user>/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe, no scratch tzdata needed): exit 0; result in 02-preflight.txt (PASS, 143 translation pairs, 2593 local links)
+4. git status --short -- handoff/delivery/WP5_HANDOFF.md handoff/delivery/WP5_HANDOFF.vi.md: exit 0; result in 03-git-status.txt (only the two files, both " M")
+5. npm run digest: not run, by the brief (the parallel DOCFIX changes files outside handoff/).
+
+Shell slips (no effect on the result): one empty heredoc created an empty scratch file (dump2.mjs, then written with the Write tool); one earlier grep pipeline ended in "| head -0" (printed nothing, no file changed).

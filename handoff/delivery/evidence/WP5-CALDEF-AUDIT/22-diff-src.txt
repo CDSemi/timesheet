@@ -1,0 +1,736 @@
+diff --git a/src/client/DayEditor.tsx b/src/client/DayEditor.tsx
+index cbf99bc9..a26b0cb9 100644
+--- a/src/client/DayEditor.tsx
++++ b/src/client/DayEditor.tsx
+@@ -1,5 +1,5 @@
+ import { type KeyboardEvent, type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+-import { type DayView, ownRequest, type PolicyVersion, type Requester, type Session } from './api.ts';
++import { type DayCategory, type DayView, ownRequest, type PolicyVersion, type Requester, type Session } from './api.ts';
+ import { ConfirmDialog } from './components/ConfirmDialog.tsx';
+ import { dayBanner, deleteFacts, editorChips, editorTitle } from './components/dayEditorModel.ts';
+ import { DayFieldsForm } from './components/DayFieldsForm.tsx';
+@@ -330,6 +330,25 @@ export function DayEditor({
+     }
+   }
+ 
++  /**
++   * "Use {default}" in the day fields form (R-UX5I2-3): the form took the new calendar default for its category and sent nothing. The period
++   * behind the editor is refreshed, and the day is read once: it is taken as `saved()` does, without a new generation (the form keeps what
++   * was typed), only when it shows the new default as the category and everything else as held (see sameDayFields). Anything else is
++   * ignored, with no notice; the version guard still decides at the save. A failed read changes nothing.
++   */
++  function defaultTaken(category: DayCategory) {
++    onChanged();
++    dayStamp.current += 1;
++    const stamp = dayStamp.current;
++    request<DayView>('GET', `/days/${workDate}`).then(
++      (fresh) => {
++        if (stamp !== dayStamp.current || nestedOpen.current) return;
++        setDay((held) => (held !== null && fresh.category === category && sameDayFields({ ...held, category }, fresh) ? fresh : held));
++      },
++      () => undefined,
++    );
++  }
++
+   function startEditing(next: Editing) {
+     setNotice(null);
+     setActionError(null);
+@@ -575,6 +594,7 @@ export function DayEditor({
+                 reasonRequired={reasonRequired}
+                 onSaved={(next) => saved(next, 'Day fields saved.')}
+                 onStale={stale}
++                onDefaultTaken={defaultTaken}
+                 footSlot={bottomSheet ? foot : undefined}
+                 request={request}
+               />
+diff --git a/src/client/TimesheetScreen.tsx b/src/client/TimesheetScreen.tsx
+index 4dd820de..701cc3dd 100644
+--- a/src/client/TimesheetScreen.tsx
++++ b/src/client/TimesheetScreen.tsx
+@@ -19,7 +19,7 @@ import { ClockPanel } from './components/ClockPanel.tsx';
+ import { useClock } from './components/ClockProvider.tsx';
+ import { ConfirmDialog } from './components/ConfirmDialog.tsx';
+ import { dayPeriodPill } from './components/dayEditorModel.ts';
+-import { batchEntries, staleDates, staleReloadMessage } from './components/dayModel.ts';
++import { batchEntries, movedPreviewDates, staleDates, staleReloadMessage } from './components/dayModel.ts';
+ import { whollyCovered } from './components/editorLayoutModel.ts';
+ import { describeError } from './components/errors.ts';
+ import { displayZone } from './components/format.ts';
+@@ -479,7 +479,8 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+       if (editDate !== null && result.changed.includes(editDate)) setEditorRefresh((value) => value + 1);
+       load();
+     } catch (caught) {
+-      if (caught instanceof ApiRequestError && caught.status === 409 && caught.code === 'stale_version') {
++      // A date that changed since the period was loaded: an entry version (stale_version) or a calendar default (default_changed, R-UX5I2-3).
++      if (caught instanceof ApiRequestError && caught.status === 409 && (caught.code === 'stale_version' || caught.code === 'default_changed')) {
+         setPreview(null);
+         setStaleNotice(staleReloadMessage(staleDates(caught.details)));
+       } else if (inDialog) {
+@@ -534,6 +535,10 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
+   function closePreview() {
+     if (previewSource.kind === 'label') returnToPicker.current = previewSource.entry.work_date;
+     else returnToBatchOpener.current = true;
++    // A review that found dates changed elsewhere or with a new calendar default has nothing to commit: "Reload period" is how the
++    // person sees the new categories (R-UX5I2-3), so the page offers it for those dates.
++    const moved = preview === null ? [] : movedPreviewDates(preview);
++    if (moved.length > 0) setStaleNotice(staleReloadMessage(moved));
+     setPreview(null);
+   }
+ 
+diff --git a/src/client/api.ts b/src/client/api.ts
+index 4f991366..ee471813 100644
+--- a/src/client/api.ts
++++ b/src/client/api.ts
+@@ -201,6 +201,8 @@ export interface DayBatchEntry {
+   notes?: string;
+   /** The entry version the caller saw; omit or null for a date without an entry. */
+   expected_version?: number | null;
++  /** The calendar default the caller was shown for the date (null: none); the server refuses a changed default (409 default_changed). */
++  default_category?: DayCategory | null;
+ }
+ 
+ export interface DayBatchRequest {
+@@ -232,7 +234,7 @@ export interface DayBatchPreview {
+   conflicts: BatchConflict[];
+   entries: Array<{
+     work_date: string;
+-    status: 'create' | 'update' | 'unchanged' | 'stale' | 'invalid';
++    status: 'create' | 'update' | 'unchanged' | 'stale' | 'invalid' | 'default_changed';
+     current_version: number | null;
+     period_relation: PeriodRelation;
+     reason_required: boolean;
+@@ -305,6 +307,8 @@ export interface DayEntryRequest {
+   wfh: boolean;
+   notes: string;
+   expected_version: number | null;
++  /** The calendar default this form showed when it opened (null: none); the server refuses a changed default (409 default_changed). */
++  default_category?: DayCategory | null;
+   reason?: string;
+ }
+ 
+diff --git a/src/client/components/BatchDialog.tsx b/src/client/components/BatchDialog.tsx
+index de681f3f..835b8b93 100644
+--- a/src/client/components/BatchDialog.tsx
++++ b/src/client/components/BatchDialog.tsx
+@@ -9,6 +9,7 @@ const STATUS_TEXT: Record<DayBatchPreview['entries'][number]['status'], string>
+   unchanged: 'no change',
+   stale: 'changed elsewhere',
+   invalid: 'not valid',
++  default_changed: 'calendar default changed',
+ };
+ 
+ /**
+@@ -89,7 +90,7 @@ export function BatchDialog({
+                 </span>
+                 <span className="muted">
+                   {STATUS_TEXT[entry.status]}
+-                  {entry.status === 'invalid' && entry.error !== null ? `: ${entry.error.message}` : ''}
++                  {(entry.status === 'invalid' || entry.status === 'default_changed') && entry.error !== null ? `: ${entry.error.message}` : ''}
+                 </span>
+               </li>
+             ))}
+diff --git a/src/client/components/DayFieldsForm.tsx b/src/client/components/DayFieldsForm.tsx
+index 08733d26..2af193ba 100644
+--- a/src/client/components/DayFieldsForm.tsx
++++ b/src/client/components/DayFieldsForm.tsx
+@@ -1,7 +1,7 @@
+-import { type MouseEvent, type SubmitEvent, useId, useLayoutEffect, useState } from 'react';
++import { type MouseEvent, type SubmitEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+ import { createPortal } from 'react-dom';
+ import { type DayCategory, type DayView, type LeaveKind, ownRequest, type Requester } from '../api.ts';
+-import { describeError, isStaleVersion } from './errors.ts';
++import { type DefaultChange, defaultChangeOf, describeError, isStaleVersion } from './errors.ts';
+ import { LeaveDialog } from './LeaveDialog.tsx';
+ import { type LeaveInput, leaveSummary } from './leaveInputModel.ts';
+ import { buildDayEntryRequest, CATEGORIES, type DayFieldsDraft, dayFieldsDraft, otMismatchNotice } from './sessionModel.ts';
+@@ -22,6 +22,11 @@ function draftKey(draft: DayFieldsDraft): string {
+  * leave minutes the day endpoint always took. The E-2 notice appears when the server reports that the day's OT-kind leave differs
+  * from consumed OT leave; it informs only, and this form never spends, reserves or releases OT.
+  *
++ * R-UX5I2-3: the form remembers the calendar default it showed when it mounted (`shownDefault`, state, never the live prop) and sends
++ * it with every save. When the server answers 409 `default_changed` (the default moved since, e.g. an administrator's holiday import),
++ * nothing was saved and a notice offers the owner's two choices: "Use {new default}" (the category follows the calendar; nothing is sent)
++ * or "Save {category} anyway" (the same save, naming the new default). Every typed field is kept.
++ *
+  * "Save day fields" sits at the end of the form, except on the phone's bottom sheet (U5-26): there the sheet gives it a foot that
+  * stays in view while the body scrolls (`footSlot`), and the button is drawn into that foot but still submits this form.
+  */
+@@ -31,6 +36,7 @@ export function DayFieldsForm({
+   reasonRequired,
+   onSaved,
+   onStale,
++  onDefaultTaken,
+   onDirtyChange,
+   footSlot,
+   request = ownRequest,
+@@ -40,6 +46,8 @@ export function DayFieldsForm({
+   reasonRequired: boolean;
+   onSaved: (day: DayView) => void;
+   onStale: () => void;
++  /** Called after "Use {default}": the day behind the form now takes the new calendar default (the page refreshes and the editor reads the day). */
++  onDefaultTaken?: (category: DayCategory) => void;
+   /** Called when the fields start or stop differing from the day as loaded or last saved (the unsaved-edit guard of the page). */
+   onDirtyChange?: (dirty: boolean) => void;
+   /** Undefined: the Save button ends the form. An element: the button is drawn there (the phone sheet's foot). Null: that foot is not mounted yet. */
+@@ -58,6 +66,20 @@ export function DayFieldsForm({
+     onDirtyChange?.(dirty);
+   }, [dirty, onDirtyChange]);
+   const [error, setError] = useState<string | null>(null);
++  /** The calendar default this form showed when it mounted (null: none); sent with every save, so a later change of the calendar is seen by the server. */
++  const [shownDefault, setShownDefault] = useState<DayCategory | null>(() => day.default_category);
++  /** The refused save of a changed calendar default, until a choice is made, the save is stale or the form remounts. */
++  const [defaultNotice, setDefaultNotice] = useState<DefaultChange | null>(null);
++  /** The polite status after "Use {default}". */
++  const [status, setStatus] = useState<string | null>(null);
++  const categorySelect = useRef<HTMLSelectElement>(null);
++  const noticeBox = useRef<HTMLDivElement>(null);
++  // The notice is announced (role alert) and takes focus, scrolled into view so the phone sheet's foot does not hide it.
++  useEffect(() => {
++    if (defaultNotice === null) return;
++    noticeBox.current?.focus();
++    noticeBox.current?.scrollIntoView({ block: 'nearest' });
++  }, [defaultNotice]);
+   /** The Partial leave dialog, open or not, and the Change or Add button that opened it. */
+   const [leaveDialog, setLeaveDialog] = useState<{ opener: HTMLElement } | null>(null);
+   const [busy, setBusy] = useState(false);
+@@ -78,29 +100,69 @@ export function DayFieldsForm({
+     setLeaveDialog(null);
+   }
+ 
+-  async function save(event: SubmitEvent<HTMLFormElement>) {
+-    event.preventDefault();
++  /** The one write: the current draft, the live entry version, the reason and the default `shown` names (the mount-time default, or the new one after "Save anyway"). */
++  async function write(shown: DayCategory | null, fromNotice: boolean) {
+     if (reasonMissing) return;
+     // Only the leave can refuse here, and the dialog lets only readable leave into the draft; the check stays for the model's sake.
+-    const built = buildDayEntryRequest(draft, day.entry?.version ?? null, reason);
++    const built = buildDayEntryRequest(draft, day.entry?.version ?? null, reason, shown);
+     if (!built.ok) {
+       setError(built.message);
+       return;
+     }
+     setBusy(true);
+     setError(null);
++    setStatus(null);
+     try {
+       const next = await request<DayView>('PUT', `/days/${day.work_date}`, built.request);
+       setBaseline(draftKey(draft));
++      // The button that was pressed leaves with the notice: focus goes to the field the choice was about.
++      if (fromNotice) categorySelect.current?.focus();
++      setDefaultNotice(null);
+       onSaved(next);
+     } catch (caught) {
+-      if (isStaleVersion(caught)) onStale();
+-      else setError(describeError(caught));
++      const change = defaultChangeOf(caught);
++      if (isStaleVersion(caught)) {
++        setDefaultNotice(null);
++        onStale();
++      } else if (change !== null) {
++        setDefaultNotice(change);
++      } else {
++        setError(describeError(caught));
++      }
+     } finally {
+       setBusy(false);
+     }
+   }
+ 
++  function save(event: SubmitEvent<HTMLFormElement>) {
++    event.preventDefault();
++    void write(shownDefault, false);
++  }
++
++  /** "Save {category} anyway": the same save naming the new default, so the person's category is recorded over it. */
++  function saveAnyway(change: DefaultChange) {
++    setShownDefault(change.current);
++    void write(change.current, true);
++  }
++
++  /** "Use {default}": nothing is sent. The category follows the calendar, every other typed field stays, and what is typed is the only unsaved edit. */
++  function useDefault(change: DefaultChange) {
++    const next = { ...draft, category: change.current };
++    const rebased = draftKey({ ...dayFieldsDraft(day), category: change.current });
++    setDraft(next);
++    setShownDefault(change.current);
++    setBaseline(rebased);
++    setDefaultNotice(null);
++    setError(null);
++    setStatus(
++      `Category set to ${change.current}, the calendar default now. ${
++        draftKey(next) === rebased ? 'Nothing needs saving.' : 'Save day fields to keep your other changes.'
++      }`,
++    );
++    categorySelect.current?.focus();
++    onDefaultTaken?.(change.current);
++  }
++
+   const saveButton = (
+     <button type="submit" form={formId} disabled={busy || reasonMissing}>
+       Save day fields
+@@ -111,6 +173,22 @@ export function DayFieldsForm({
+     <>
+       <form id={formId} className="editor-form editor-section stack" onSubmit={save} aria-label="Day fields" noValidate>
+         <h3>Category and leave</h3>
++        {defaultNotice !== null && (
++          <div className="stale" role="alert" tabIndex={-1} ref={noticeBox} data-warning="default-changed">
++            <p>
++              <strong>Notice.</strong> The calendar default for this day changed from {defaultNotice.expected ?? 'none'} to{' '}
++              {defaultNotice.current} since it was loaded. Nothing was saved. Use the new default, or save your category over it.
++            </p>
++            <div className="button-row">
++              <button type="button" className="secondary" disabled={busy} onClick={() => useDefault(defaultNotice)}>
++                Use {defaultNotice.current}
++              </button>
++              <button type="button" disabled={busy || reasonMissing} onClick={() => saveAnyway(defaultNotice)}>
++                Save {draft.category} anyway
++              </button>
++            </div>
++          </div>
++        )}
+         {mismatch !== null && (
+           <p className="warn-box" role="status" data-warning="ot-leave-mismatch">
+             <strong>Notice.</strong> {mismatch}
+@@ -121,6 +199,7 @@ export function DayFieldsForm({
+           <label className="label-select">
+             Category
+             <select
++              ref={categorySelect}
+               value={draft.category}
+               onChange={(event) => setDraft({ ...draft, category: event.target.value as DayCategory })}
+               aria-describedby={day.category_source === 'default' ? `${id}-category-hint` : undefined}
+@@ -166,6 +245,11 @@ export function DayFieldsForm({
+           Notes
+           <textarea value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} rows={2} maxLength={2000} />
+         </label>
++        {status !== null && (
++          <p className="muted hint" role="status">
++            {status}
++          </p>
++        )}
+         {error !== null && (
+           <p className="error" role="alert">
+             {error}
+diff --git a/src/client/components/dayModel.ts b/src/client/components/dayModel.ts
+index 8deefe80..58081021 100644
+--- a/src/client/components/dayModel.ts
++++ b/src/client/components/dayModel.ts
+@@ -1,5 +1,5 @@
+ import { isoWeekday } from '../../domain/dates.ts';
+-import type { BatchConflict, DayBatchEntry, DayCategory, DayView, Session, TimesheetView } from '../api.ts';
++import type { BatchConflict, DayBatchEntry, DayBatchPreview, DayCategory, DayView, Session, TimesheetView } from '../api.ts';
+ 
+ /*
+  * Pure presentation logic for the timesheet views. It maps fields the server already computed
+@@ -111,11 +111,16 @@ export function reviewStatus(timesheet: TimesheetView['timesheet']): 'Draft' | '
+   return timesheet.finalized ? 'Finalized' : 'Draft';
+ }
+ 
+-/** One batch entry per selected date, in date order, each carrying the version the caller saw. */
++/** One batch entry per selected date, in date order, each carrying the version and the calendar default the caller saw. */
+ export function batchEntries(days: readonly DayView[], selected: ReadonlySet<string>, category: DayCategory): DayBatchEntry[] {
+   return days
+     .filter((day) => selected.has(day.work_date))
+-    .map((day) => ({ work_date: day.work_date, category, expected_version: day.entry?.version ?? null }));
++    .map((day) => ({
++      work_date: day.work_date,
++      category,
++      expected_version: day.entry?.version ?? null,
++      default_category: day.default_category,
++    }));
+ }
+ 
+ export interface ConflictDetail {
+@@ -138,6 +143,14 @@ export function staleDates(details: Record<string, unknown> | undefined): string
+   return Array.isArray(dates) ? dates.filter((item): item is string => typeof item === 'string') : [];
+ }
+ 
++/**
++ * The dates of a preview that changed elsewhere (a newer entry version) or whose calendar default moved since the period was loaded
++ * (R-UX5I2-3). Closing such a review has nothing to commit, so the page offers "Reload period" for these dates.
++ */
++export function movedPreviewDates(preview: DayBatchPreview): string[] {
++  return preview.entries.filter((entry) => entry.status === 'stale' || entry.status === 'default_changed').map((entry) => entry.work_date);
++}
++
+ export function staleReloadMessage(dates: readonly string[]): string {
+   const named = dates.length === 0 ? 'Some dates' : dates.join(', ');
+   return `${named} changed since this period was loaded. Nothing was saved. Reload the period, review the new categories and try again.`;
+diff --git a/src/client/components/errors.ts b/src/client/components/errors.ts
+index b38f5ab3..38d97593 100644
+--- a/src/client/components/errors.ts
++++ b/src/client/components/errors.ts
+@@ -1,4 +1,5 @@
+-import { ApiRequestError } from '../api.ts';
++import { ApiRequestError, type DayCategory } from '../api.ts';
++import { CATEGORIES } from './sessionModel.ts';
+ 
+ /** A one-line message for a failed request: the server's own message and its code. */
+ export function describeError(caught: unknown): string {
+@@ -9,3 +10,26 @@ export function describeError(caught: unknown): string {
+ export function isStaleVersion(caught: unknown): boolean {
+   return caught instanceof ApiRequestError && caught.status === 409 && caught.code === 'stale_version';
+ }
++
++/** A calendar default that changed under an open editor: what the form showed (null: none) and what the calendar gives now. */
++export interface DefaultChange {
++  workDate: string;
++  expected: DayCategory | null;
++  current: DayCategory;
++}
++
++const isCategory = (value: unknown): value is DayCategory => CATEGORIES.some((category) => category === value);
++
++/**
++ * A 409 default_changed of PUT /days/:date (R-UX5I2-3) with the shape the notice needs; null for any other failure, so the
++ * caller falls back to the generic message. The batch commit's answer (work_dates, changes) is not this shape.
++ */
++export function defaultChangeOf(caught: unknown): DefaultChange | null {
++  if (!(caught instanceof ApiRequestError) || caught.status !== 409 || caught.code !== 'default_changed') return null;
++  const details = caught.details;
++  if (details === undefined) return null;
++  const { work_date: workDate, expected_default: expected, current_default: current } = details;
++  if (typeof workDate !== 'string' || !isCategory(current)) return null;
++  if (expected !== null && !isCategory(expected)) return null;
++  return { workDate, expected, current };
++}
+diff --git a/src/client/components/labelPickerModel.ts b/src/client/components/labelPickerModel.ts
+index 40f656af..e1206514 100644
+--- a/src/client/components/labelPickerModel.ts
++++ b/src/client/components/labelPickerModel.ts
+@@ -37,12 +37,12 @@ export function currentLabelChoice(day: DayView): LabelChoice | null {
+ }
+ 
+ /**
+- * The one batch entry of a pick, with the version the page loaded. Worked and Work from home also
++ * The one batch entry of a pick, with the version and the calendar default the page loaded. Worked and Work from home also
+  * set WFH (off and on); any other label sends only the category, so the server keeps the day's
+  * leave, WFH and notes as stored (an omitted batch field keeps its value).
+  */
+ export function labelEntry(day: DayView, choice: LabelChoice): DayBatchEntry {
+-  const base = { work_date: day.work_date, expected_version: day.entry?.version ?? null };
++  const base = { work_date: day.work_date, expected_version: day.entry?.version ?? null, default_category: day.default_category };
+   if (choice === WORK_FROM_HOME) return { ...base, category: 'Worked', wfh: true };
+   if (choice === 'Worked') return { ...base, category: 'Worked', wfh: false };
+   return { ...base, category: choice };
+diff --git a/src/client/components/sessionModel.ts b/src/client/components/sessionModel.ts
+index bd2fb189..104e5f96 100644
+--- a/src/client/components/sessionModel.ts
++++ b/src/client/components/sessionModel.ts
+@@ -453,9 +453,16 @@ export type DayEntryBuild = { ok: true; request: DayEntryRequest } | { ok: false
+ /**
+  * The PUT /api/days/:date body. The hours and minutes become the same integer `leave_minutes` as
+  * before (0 to 1440). The kind is sent only with leave minutes; the server answers
+- * `leave_kind_required` when it is missing.
++ * `leave_kind_required` when it is missing. `shownDefault` is the calendar default the form showed when it opened (null: none); it is
++ * sent as `default_category` so the server can refuse a category recorded over a default that changed since (R-UX5I2-3), and left out
++ * when undefined.
+  */
+-export function buildDayEntryRequest(draft: DayFieldsDraft, expectedVersion: number | null, reason?: string): DayEntryBuild {
++export function buildDayEntryRequest(
++  draft: DayFieldsDraft,
++  expectedVersion: number | null,
++  reason?: string,
++  shownDefault?: DayCategory | null,
++): DayEntryBuild {
+   const parsed = parseLeaveInput(draft.leave);
+   if (!parsed.ok) return { ok: false, message: parsed.message };
+   const minutes = parsed.minutes;
+@@ -467,6 +474,7 @@ export function buildDayEntryRequest(draft: DayFieldsDraft, expectedVersion: num
+     notes: draft.notes,
+     expected_version: expectedVersion,
+   };
++  if (shownDefault !== undefined) request.default_category = shownDefault;
+   const why = reason?.trim() ?? '';
+   if (why !== '') request.reason = why;
+   return { ok: true, request };
+diff --git a/src/server/http/errors.ts b/src/server/http/errors.ts
+index 501bac6b..0f33d626 100644
+--- a/src/server/http/errors.ts
++++ b/src/server/http/errors.ts
+@@ -29,6 +29,21 @@ export const notFound = (what = 'Resource'): ApiError => new ApiError(404, 'not_
+ export const staleVersion = (): ApiError =>
+   new ApiError(409, 'stale_version', 'This record changed since it was loaded; reload and review it again');
+ 
++/** A calendar default that changed under a caller who showed the old one (R-UX5I2-3); nothing was written. */
++export interface DefaultChange {
++  work_date: string;
++  expected_default: string | null;
++  current_default: string;
++}
++
++export const defaultChanged = (change: DefaultChange): ApiError =>
++  new ApiError(
++    409,
++    'default_changed',
++    `The calendar default for ${change.work_date} changed from ${change.expected_default ?? 'none'} to ${change.current_default} since it was loaded. Nothing was saved.`,
++    { work_date: change.work_date, expected_default: change.expected_default, current_default: change.current_default },
++  );
++
+ export function errorBody(code: string, message: string, details?: Record<string, unknown>) {
+   return { error: details === undefined ? { code, message } : { code, message, details } };
+ }
+diff --git a/src/server/http/schemas.ts b/src/server/http/schemas.ts
+index 5d99ed99..df0d22d7 100644
+--- a/src/server/http/schemas.ts
++++ b/src/server/http/schemas.ts
+@@ -83,6 +83,13 @@ const dayCategory = z.enum(['Worked', 'Off', 'Vacation', 'Sick', 'Holiday', 'Shu
+ /** What the day's leave minutes are; the kind never reserves or spends OT. */
+ const leaveKind = z.enum(['vacation', 'sick', 'ot']);
+ 
++/**
++ * The calendar default the caller was shown for the date (null: none). For a date without an entry or with a
++ * default-sourced entry, a value different from today's default is refused (409 `default_changed`) unless the
++ * category equals today's default. Optional: an omitted field is not checked.
++ */
++const shownDefault = dayCategory.nullable().optional();
++
+ export const dayEntryBody = z.strictObject({
+   category: dayCategory,
+   leave_minutes: z.number().int().min(0).max(1440),
+@@ -92,6 +99,7 @@ export const dayEntryBody = z.strictObject({
+   notes: z.string().max(2000),
+   /** Required when the entry exists; omit or null to create it. */
+   expected_version: z.number().int().positive().nullable().optional(),
++  default_category: shownDefault,
+   reason,
+ });
+ export type DayEntryBody = z.infer<typeof dayEntryBody>;
+@@ -112,6 +120,7 @@ export const dayBatchEntry = z.strictObject({
+   notes: z.string().max(2000).optional(),
+   /** The entry version the caller saw; omit or null for a date without an entry. */
+   expected_version: z.number().int().positive().nullable().optional(),
++  default_category: shownDefault,
+ });
+ export type DayBatchEntry = z.infer<typeof dayBatchEntry>;
+ 
+diff --git a/src/server/services/dayEntries.ts b/src/server/services/dayEntries.ts
+index 95a40286..7e488187 100644
+--- a/src/server/services/dayEntries.ts
++++ b/src/server/services/dayEntries.ts
+@@ -1,10 +1,8 @@
+-import { type DayCategory, defaultCategory } from '../../domain/attendance.ts';
+-import { classifyDate } from '../../domain/calendar.ts';
++import type { DayCategory } from '../../domain/attendance.ts';
+ import { assertCivilDate, type CivilDate } from '../../domain/dates.ts';
+ import type { PeriodRelation } from '../../domain/editReason.ts';
+-import { isDomainError } from '../../domain/errors.ts';
+ import { writeTransaction } from '../db/database.ts';
+-import { ApiError, staleVersion } from '../http/errors.ts';
++import { ApiError, type DefaultChange, staleVersion } from '../http/errors.ts';
+ import type { DayBatchBody, DayBatchEntry } from '../http/schemas.ts';
+ import { normalizeReason } from '../http/validation.ts';
+ import {
+@@ -13,8 +11,10 @@ import {
+   type DayEntryInput,
+   type DayEntryIssue,
+   dayEntryIssue,
++  defaultChangeOf,
+ } from './timesheetCommands.ts';
+ import {
++  calendarDefaultOn,
+   type DayEntryRow,
+   dayEntryJson,
+   editRequirementFor,
+@@ -38,7 +38,7 @@ import {
+  * employee must confirm it explicitly.
+  */
+ 
+-type EntryStatus = 'create' | 'update' | 'unchanged' | 'stale' | 'invalid';
++type EntryStatus = 'create' | 'update' | 'unchanged' | 'stale' | 'invalid' | 'default_changed';
+ 
+ export interface BatchConflict {
+   work_date: CivilDate;
+@@ -59,6 +59,8 @@ interface PlannedEntry {
+   reasonRequired: boolean;
+   conflict: BatchConflict | null;
+   error: DayEntryIssue | null;
++  /** Set with status 'default_changed': the calendar default moved since the caller loaded the date (R-UX5I2-3). */
++  defaultChange: DefaultChange | null;
+ }
+ 
+ /** Fields an omitted batch value takes from the existing entry (or the neutral default). */
+@@ -72,6 +74,7 @@ function resolveInput(entry: DayBatchEntry, existing: DayEntryRow | undefined):
+     wfh: entry.wfh ?? existing?.wfh === 1,
+     notes: entry.notes ?? existing?.notes ?? '',
+     expected_version: entry.expected_version ?? null,
++    ...(entry.default_category === undefined ? {} : { default_category: entry.default_category }),
+   };
+ }
+ 
+@@ -88,13 +91,7 @@ function isUnchanged(existing: DayEntryRow | undefined, input: DayEntryInput): b
+ }
+ 
+ function currentCategoryOf(scope: UserScope, workDate: CivilDate, existing: DayEntryRow | undefined): DayCategory | null {
+-  if (existing !== undefined) return effectiveCategory(scope, existing);
+-  try {
+-    return defaultCategory(classifyDate(scope.calendarVersions, workDate));
+-  } catch (error) {
+-    if (!isDomainError(error)) throw error;
+-    return null;
+-  }
++  return existing !== undefined ? effectiveCategory(scope, existing) : calendarDefaultOn(scope, workDate);
+ }
+ 
+ function planBatch(ctx: CommandContext, scope: UserScope, body: DayBatchBody): PlannedEntry[] {
+@@ -119,11 +116,25 @@ function planBatch(ctx: CommandContext, scope: UserScope, body: DayBatchBody): P
+       reasonRequired: requirement.reasonRequired,
+       conflict: null,
+       error: null,
++      defaultChange: null,
+     };
+     const stale = existing === undefined ? input.expected_version !== null : input.expected_version !== existing.version;
+     if (stale) return { ...planned, status: 'stale' };
+     const issue = dayEntryIssue(scope, workDate, input);
+     if (issue !== null) return { ...planned, status: 'invalid', error: issue };
++    const defaultChange = defaultChangeOf(scope, workDate, existing, input);
++    if (defaultChange !== null) {
++      return {
++        ...planned,
++        status: 'default_changed',
++        defaultChange,
++        error: {
++          code: 'default_changed',
++          message: `The calendar default is now ${defaultChange.current_default} (was ${defaultChange.expected_default ?? 'none'})`,
++          details: { expected_default: defaultChange.expected_default, current_default: defaultChange.current_default },
++        },
++      };
++    }
+     if (isUnchanged(existing, input)) return planned;
+     const sessions = loadSessions(ctx.db, ctx.user.id, workDate, workDate);
+     const currentCategory = currentCategoryOf(scope, workDate, existing);
+@@ -168,7 +179,7 @@ export function previewDayBatch(ctx: CommandContext, body: DayBatchBody) {
+   const reasonDates = changes.filter((item) => item.reasonRequired).map((item) => item.workDate);
+   return {
+     mode: 'preview' as const,
+-    can_commit: !plan.some((item) => item.status === 'stale' || item.status === 'invalid'),
++    can_commit: !plan.some((item) => item.status === 'stale' || item.status === 'invalid' || item.status === 'default_changed'),
+     changed_count: changes.length,
+     reason_required: reasonDates.length > 0,
+     reason_required_dates: reasonDates,
+@@ -212,6 +223,15 @@ export function commitDayBatch(ctx: CommandContext, body: DayBatchBody) {
+         work_dates: reasonDates,
+       });
+     }
++    const moved = plan.flatMap((item) => (item.defaultChange === null ? [] : [item.defaultChange]));
++    if (moved.length > 0) {
++      throw new ApiError(
++        409,
++        'default_changed',
++        `The calendar default changed for ${moved.map((change) => change.work_date).join(', ')} since it was loaded. Nothing was saved.`,
++        { work_dates: moved.map((change) => change.work_date), changes: moved },
++      );
++    }
+     const conflicts = changes.flatMap((item) => (item.conflict === null ? [] : [item.conflict]));
+     if (conflicts.length > 0 && body.confirm_conflicts !== true) {
+       throw new ApiError(
+diff --git a/src/server/services/timesheetCommands.ts b/src/server/services/timesheetCommands.ts
+index 361c6042..2f03a0de 100644
+--- a/src/server/services/timesheetCommands.ts
++++ b/src/server/services/timesheetCommands.ts
+@@ -11,7 +11,7 @@ import { assertTimeZone, localDateOf, resolveLocalDateTime } from '../../domain/
+ import type { SessionUser } from '../auth/sessions.ts';
+ import { type Clock, nowEpoch, nowUtc } from '../clock.ts';
+ import { type Db, writeTransaction } from '../db/database.ts';
+-import { ApiError, notFound, staleVersion } from '../http/errors.ts';
++import { ApiError, type DefaultChange, defaultChanged, notFound, staleVersion } from '../http/errors.ts';
+ import type {
+   BreakInput,
+   ClockInBody,
+@@ -26,6 +26,7 @@ import { normalizeReason } from '../http/validation.ts';
+ import { recordAudit } from './audit.ts';
+ import { ensurePayPeriodRow } from './periods.ts';
+ import {
++  calendarDefaultOn,
+   type DayEntryRow,
+   dayEntryJson,
+   editRequirementFor,
+@@ -287,6 +288,28 @@ export interface DayEntryInput {
+   notes: string;
+   /** The version the caller last saw; null when the caller saw no entry for the date. */
+   expected_version: number | null;
++  /** The calendar default the caller was shown (null: none); undefined means the caller did not say. */
++  default_category?: DayCategory | null;
++}
++
++/**
++ * R-UX5I2-3: the default the caller showed no longer holds. Only a date without an entry or with a
++ * default-sourced entry follows the calendar, so only those are checked; an explicit entry is the
++ * person's own. Nothing is refused when the field is omitted, the calendar cannot classify the date,
++ * the shown default is still the default, or the category being saved already equals the new default
++ * (both choices then record the same category).
++ */
++export function defaultChangeOf(
++  scope: UserScope,
++  workDate: CivilDate,
++  existing: DayEntryRow | undefined,
++  input: Pick<DayEntryInput, 'category' | 'default_category'>,
++): DefaultChange | null {
++  if (input.default_category === undefined) return null;
++  if (existing !== undefined && existing.category_source !== 'default') return null;
++  const current = calendarDefaultOn(scope, workDate);
++  if (current === null || input.default_category === current || input.category === current) return null;
++  return { work_date: workDate, expected_default: input.default_category, current_default: current };
+ }
+ 
+ export interface DayEntryIssue {
+@@ -322,7 +345,7 @@ export interface AppliedDayEntry {
+ 
+ /**
+  * Writes one day entry inside the caller's transaction: reason (R-07), leave validation,
+- * optimistic version, an explicit category source, the timesheet version bump and one
++ * optimistic version, the changed-default refusal (R-UX5I2-3), an explicit category source, the timesheet version bump and one
+  * audit event with before/after. Shared by PUT /days/:date and the batch commit.
+  */
+ export function applyDayEntryChange(
+@@ -339,6 +362,8 @@ export function applyDayEntryChange(
+   const now = nowUtc(ctx.clock);
+   if (existing === undefined) {
+     if (input.expected_version !== null) throw staleVersion();
++    const change = defaultChangeOf(scope, workDate, existing, input);
++    if (change !== null) throw defaultChanged(change);
+     classifyDate(scope.calendarVersions, workDate);
+     const timesheet = ensureTimesheet(ctx, edit);
+     const entry: DayEntryRow = {
+@@ -378,6 +403,8 @@ export function applyDayEntryChange(
+     return { operation: 'day_entry.create', entry };
+   }
+   if (input.expected_version !== existing.version) throw staleVersion();
++  const change = defaultChangeOf(scope, workDate, existing, input);
++  if (change !== null) throw defaultChanged(change);
+   const updated: DayEntryRow = {
+     ...existing,
+     category: input.category,
+@@ -434,6 +461,7 @@ export function upsertDayEntry(ctx: CommandContext, workDateInput: string, input
+         wfh: input.wfh,
+         notes: input.notes,
+         expected_version: input.expected_version ?? null,
++        ...(input.default_category === undefined ? {} : { default_category: input.default_category }),
+       },
+       input.reason,
+     );
+diff --git a/src/server/services/timesheets.ts b/src/server/services/timesheets.ts
+index f37990cb..70ab4581 100644
+--- a/src/server/services/timesheets.ts
++++ b/src/server/services/timesheets.ts
+@@ -245,13 +245,17 @@ export function sessionJson(session: StoredSession) {
+  * calendar version effective on the date (so an import never has to write the row).
+  */
+ export function effectiveCategory(scope: Pick<UserScope, 'calendarVersions'>, entry: DayEntryRow): DayCategory {
+-  let calendarDefault: DayCategory | null = null;
++  return resolveDayCategory(entry.category_source, entry.category, calendarDefaultOn(scope, entry.work_date));
++}
++
++/** The calendar default of a date in the scope's calendar; null when no calendar version classifies the date. */
++export function calendarDefaultOn(scope: Pick<UserScope, 'calendarVersions'>, workDate: CivilDate): DayCategory | null {
+   try {
+-    calendarDefault = defaultCategory(classifyDate(scope.calendarVersions, entry.work_date));
++    return defaultCategory(classifyDate(scope.calendarVersions, workDate));
+   } catch (error) {
+     if (!isDomainError(error)) throw error;
++    return null;
+   }
+-  return resolveDayCategory(entry.category_source, entry.category, calendarDefault);
+ }
+ 
+ export function dayEntryJson(entry: DayEntryRow, category: DayCategory = entry.category) {

@@ -1,0 +1,18 @@
+. <task>/env.sh
+export NODE_OPTIONS="--trace-deprecation --pending-deprecation"
+O=$T/out
+cd $T/export
+npm audit --omit=dev > $O/03-npm-audit.txt 2>&1; echo "npm audit --omit=dev exit $?" >> $O/03-exits.txt
+npm run lint > $O/03-lint.txt 2>&1; echo "lint exit $?" >> $O/03-exits.txt
+npm run typecheck > $O/03-typecheck.txt 2>&1; echo "typecheck exit $?" >> $O/03-exits.txt
+grep -inE 'deprecat|chunk|warn' $O/02-build-export.txt $O/03-lint.txt $O/03-typecheck.txt > $O/03-warn-grep.txt 2>&1; echo "warn grep exit $? (1 = none)" >> $O/03-warn-grep.txt
+bash $T/cens.sh post-lint > $T/logs/cens-post-lint.log 2>&1
+npm run verify > $O/03-verify.txt 2>&1; echo "verify exit $?" >> $O/03-exits.txt
+bash $T/cens.sh post-verify > $T/logs/cens-post-verify.log 2>&1
+npm test > $O/05-test-1.txt 2>&1; echo "npm test exit $?" >> $O/03-exits.txt
+bash $T/cens.sh post-test > $T/logs/cens-post-test.log 2>&1
+cd $T/export
+$PY handoff/delivery/validate_package.py --preflight > $O/11-validate_package.txt 2>&1; echo "validate_package exit $?" >> $O/11-exits.txt
+$PY handoff/delivery/validate_orchestration.py > $O/11-validate_orchestration.txt 2>&1; echo "validate_orchestration exit $?" >> $O/11-exits.txt
+$PY handoff/delivery/check_recovery.py > $O/11-check_recovery.txt 2>&1; echo "check_recovery exit $?" >> $O/11-exits.txt
+echo chain01-done > $O/chain01.done

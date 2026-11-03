@@ -1,0 +1,78 @@
+import { readFileSync, existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+
+const root = process.argv[2];
+const dir = resolve(root, 'handoff/delivery');
+const en = readFileSync(resolve(dir, 'WP5_PILOT_PACKET.md'), 'utf8');
+const vi = readFileSync(resolve(dir, 'WP5_PILOT_PACKET.vi.md'), 'utf8');
+const handoff = readFileSync(resolve(dir, 'WP5_HANDOFF.md'), 'utf8');
+const out = [];
+const log = (s) => out.push(s);
+
+const h2 = (t) => t.split('\n').filter((l) => /^## /.test(l)).length;
+const h3 = (t) => t.split('\n').filter((l) => /^### /.test(l)).length;
+log(`sections (##): EN ${h2(en)} VI ${h2(vi)}; subsections (###): EN ${h3(en)} VI ${h3(vi)}`);
+const rows = (t) => t.split('\n').filter((l) => l.startsWith('|')).length;
+const boxes = (t) => (t.match(/- \[ \]/g) || []).length;
+const ticked = (t) => (t.match(/- \[[xX]\]/g) || []).length;
+log(`table rows EN ${rows(en)} VI ${rows(vi)}; empty boxes EN ${boxes(en)} VI ${boxes(vi)}; ticked EN ${ticked(en)} VI ${ticked(vi)}`);
+
+const eqSet = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const u = (a) => [...new Set(a)].sort();
+const sE = u(en.match(/\b[0-9a-f]{64}\b/g) || []), sV = u(vi.match(/\b[0-9a-f]{64}\b/g) || []);
+log(`64-hex: EN ${sE.length} VI ${sV.length}; identical ${eqSet(sE, sV)}`);
+const cE = u(en.match(/\b[0-9a-f]{40}\b/g) || []), cV = u(vi.match(/\b[0-9a-f]{40}\b/g) || []);
+log(`40-hex: EN ${cE.length} VI ${cV.length}; identical ${eqSet(cE, cV)}`);
+const shE = u(en.match(/`[0-9a-f]{7}`/g) || []), shV = u(vi.match(/`[0-9a-f]{7}`/g) || []);
+log(`7-hex SHAs: EN ${shE.length} VI ${shV.length}; identical ${eqSet(shE, shV)}`);
+const idsOf = (t) => u(t.match(/\b(?:WP5-[A-Z0-9-]+|R-[A-Z0-9]+-\d+|[DFGHQE]-\d+)\b/g) || []);
+const iE = idsOf(en), iV = idsOf(vi);
+log(`IDs: EN ${iE.length} VI ${iV.length}; only EN: ${iE.filter((x) => !iV.includes(x)).join(',') || '-'}; only VI: ${iV.filter((x) => !iE.includes(x)).join(',') || '-'}`);
+const evp = (t) => u(t.match(/evidence\/[A-Za-z0-9-]+\/[A-Za-z0-9._\/-]*/g) || []);
+log(`evidence paths: EN ${evp(en).length} VI ${evp(vi).length}; identical ${eqSet(evp(en), evp(vi))}`);
+
+function links(t, file) {
+  const res = [...t.matchAll(/\]\(([^)\s]+)\)/g)].map((m) => m[1]);
+  const set = u(res);
+  const missing = [];
+  for (const l of set) {
+    if (/^(https?:|#|mailto:)/.test(l)) continue;
+    if (!existsSync(resolve(dirname(file), l.split('#')[0]))) missing.push(l);
+  }
+  return { n: res.length, uniq: set.length, missing };
+}
+const lE = links(en, resolve(dir, 'WP5_PILOT_PACKET.md'));
+const lV = links(vi, resolve(dir, 'WP5_PILOT_PACKET.vi.md'));
+log(`links: EN ${lE.n} (${lE.uniq} unique) missing ${lE.missing.length} ${lE.missing.join(' ')}; VI ${lV.n} (${lV.uniq} unique) missing ${lV.missing.length} ${lV.missing.join(' ')}`);
+const norm = (l) => l.replace(/\.vi\.md/g, '.md');
+const tE = u((en.match(/\]\(([^)\s]+)\)/g) || []).map(norm)), tV = u((vi.match(/\]\(([^)\s]+)\)/g) || []).map(norm));
+log(`link target sets equal after .vi normalisation: ${eqSet(tE, tV)}; only EN: ${tE.filter((x) => !tV.includes(x)).join(' ') || '-'}; only VI: ${tV.filter((x) => !tE.includes(x)).join(' ') || '-'}`);
+
+const evMissing = [];
+for (const [name, t] of [['EN', en], ['VI', vi]]) {
+  for (const raw of u(t.match(/`evidence\/[^`]*`|`handoff\/delivery\/evidence\/[^`]*`/g) || [])) {
+    const p = raw.replace(/`/g, '').replace(/^evidence\//, 'handoff/delivery/evidence/');
+    if (/<|\.\.\./.test(p)) continue;
+    if (!existsSync(resolve(root, p))) evMissing.push(`${name}: ${p}`);
+  }
+}
+log(`backticked evidence paths that do not exist: ${evMissing.length} ${evMissing.join(' ; ')}`);
+
+const title = 'Re-acceptance after the calendar-default round (WP5-CALDEF, R-UX5I2-3)';
+log(`handoff heading "## ${title}" exists in WP5_HANDOFF.md: ${handoff.split('\n').includes('## ' + title)}`);
+log(`title used in EN packet: ${en.includes('"' + title + '"')}; in VI packet: ${vi.includes('"' + title + '"')}`);
+
+log('--- search ---');
+for (const term of ['a54061f', '690fd8f', 'RECHECK-RN', 'REGATE16', 'R-UX5I2-3', 'open owner decision', 'not answered', 'in progress', 'Open owner decision', 'còn mở', 'chưa trả lời', 'đang thực hiện', 'dc487c6', 'not re-run', 'not regenerated', 'REGATE15', 'chưa chạy lại']) {
+  for (const [name, t] of [['EN', en], ['VI', vi]]) {
+    t.split('\n').forEach((l, i) => {
+      let idx = l.indexOf(term);
+      while (idx !== -1) {
+        log(`${name}:${i + 1} [${term}] ...${l.slice(Math.max(0, idx - 100), idx + 100).replace(/\s+/g, ' ')}...`);
+        idx = l.indexOf(term, idx + term.length);
+      }
+    });
+  }
+}
+process.stdout.write(out.join('\n') + '\n');
+const hv = readFileSync(resolve(dir, 'WP5_HANDOFF.vi.md'), 'utf8'); console.log('VI handoff heading exists: ' + hv.split('\n').includes('## ' + title) + '; title appears anywhere in VI handoff: ' + hv.includes(title));

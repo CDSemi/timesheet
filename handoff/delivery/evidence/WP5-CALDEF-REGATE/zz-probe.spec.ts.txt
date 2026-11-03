@@ -1,0 +1,36 @@
+import { appendFileSync } from 'node:fs';
+import { namedDayButton } from './dayButton.ts';
+import { expect, test } from './fixtures.ts';
+
+// Task-local probe (never part of the repository): days[0], its weekday and the side the floating Day editor docks on.
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh', launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } });
+test.skip(({ isMobile }) => isMobile, 'desktop only');
+
+const OUT = process.env.PROBE_OUT ?? '';
+
+test('probe: days[0], weekday and dock side', async ({ page, employeeSeed, signInThroughUi }) => {
+  test.setTimeout(120_000);
+  const periods = await employeeSeed.periodsCurrent();
+  const days = await employeeSeed.displayedPeriodFreeWorkdays();
+  const facts: Record<string, unknown> = {
+    processClock: new Date().toISOString(),
+    today_local: periods.today_local,
+    reporting_zone: periods.reporting_zone,
+    current_payroll_date: periods.current.payroll_date,
+    free_days: days,
+  };
+  await page.setViewportSize({ width: 900, height: 900 });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const first = days[0] ?? '';
+  facts.day = first;
+  if (first !== '') {
+    facts.day_weekday = new Date(`${first}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
+    await namedDayButton(page, first, 'Edit').click();
+    await expect(page.getByRole('dialog', { name: /Day editor/ })).toBeVisible();
+    await page.waitForTimeout(400);
+  }
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  facts.editor_side = first === '' ? null : await editor.getAttribute('data-side');
+  appendFileSync(OUT, `${JSON.stringify(facts)}\n`);
+});

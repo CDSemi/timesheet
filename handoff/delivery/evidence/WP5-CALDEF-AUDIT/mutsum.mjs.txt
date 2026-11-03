@@ -1,0 +1,26 @@
+// Summarises the mutant logs: for each log, the failing tests (vitest " FAIL " lines, Playwright "x" lines) and the first error lines.
+// Usage: node mutsum.mjs <logDir> <id> [<id> ...]
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [dir, ...ids] = process.argv.slice(2);
+const files = readdirSync(dir);
+for (const id of ids) {
+  console.log(`== ${id}`);
+  for (const name of files.filter((file) => file.startsWith(`mut-${id}-`) && !file.includes('build')).sort()) {
+    const path = join(dir, name);
+    if (!existsSync(path)) continue;
+    const text = readFileSync(path, 'utf8').replace(/\r/g, '').replace(/\u001b\[[0-9;]*[A-Za-z]/g, '');
+    const lines = text.split('\n');
+    const vitestFail = lines.filter((line) => /^ FAIL {2}/.test(line)).map((line) => line.trim());
+    const vitestSummary = lines.filter((line) => /^\s+(Test Files|Tests) /.test(line)).map((line) => line.trim());
+    const pwFail = lines.filter((line) => /^\s+(x|✘)\s+\d+ \[/.test(line)).map((line) => line.trim().replace(/\s+\(\d.*\)$/, ''));
+    const pwSummary = lines.filter((line) => /^\s+\d+ (passed|failed|flaky|skipped)/.test(line)).map((line) => line.trim());
+    const errors = [...new Set(lines.filter((line) => /^\s+(Error|AssertionError|TimeoutError)/.test(line)).map((line) => line.trim()))].slice(0, 6);
+    const exit = /^exit=(\d+)/m.exec(text)?.[1];
+    console.log(`-- ${name}${exit === undefined ? '' : ` exit=${exit}`}`);
+    for (const line of [...vitestSummary, ...pwSummary]) console.log(`   ${line}`);
+    for (const line of [...vitestFail, ...pwFail]) console.log(`   FAILED ${line}`);
+    for (const line of errors) console.log(`   ${line}`);
+  }
+}

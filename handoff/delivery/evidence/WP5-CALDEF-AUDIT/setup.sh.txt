@@ -1,0 +1,18 @@
+# Identity, scope lists and clean exports (target, the accepted a54061f, the first freeze 300d61f).
+. <task>/env.sh
+mkdir -p $T/out $T/logs $T/tmp $T/data $T/export $T/export-acc $T/export-mut
+cd $REPO
+{ date -u +%Y-%m-%dT%H:%M:%SZ; git rev-parse HEAD; git rev-parse origin/main; git branch --show-current; git log -1 --format='%H %s'; git merge-base --is-ancestor $TARGET HEAD && echo "target is an ancestor of HEAD"; git diff --name-only $TARGET..HEAD -- . ':!handoff' | wc -l | sed 's/^/paths outside handoff changed TARGET..HEAD: /'; } > $T/out/00-head-before.txt 2>&1
+git status --short -- . ':!handoff' > $T/out/00-nonhandoff-status-before.txt 2>&1; echo "status exit $? lines $(wc -l < $T/out/00-nonhandoff-status-before.txt)" >> $T/out/00-nonhandoff-status-before.txt
+git diff --name-status $ACC..$TARGET -- . ':!handoff' > $T/out/20-namestatus-acc-target.txt 2>&1
+git diff --stat $ACC..$TARGET -- . ':!handoff' > $T/out/20-diffstat-acc-target.txt 2>&1
+git diff --name-status $PREV..$TARGET -- . ':!handoff' > $T/out/20-namestatus-prev-target.txt 2>&1
+git diff --check $ACC..$TARGET -- . ':!handoff' > $T/out/21-diff-check.txt 2>&1; echo "diff --check exit $?" >> $T/out/21-diff-check.txt
+git diff $ACC..$TARGET -- src > $T/out/22-diff-src.txt 2>&1
+git diff $ACC..$TARGET -- tests > $T/out/22-diff-tests.txt 2>&1
+git diff $ACC..$TARGET -- docs README.md README.vi.md DEVELOPMENT.md DEVELOPMENT.vi.md > $T/out/22-diff-docs.txt 2>&1
+git diff $ACC..$TARGET -- scripts > $T/out/22-diff-scripts.txt 2>&1
+git archive $TARGET | tar -x -C $T/export
+git archive $ACC | tar -x -C $T/export-acc
+git archive $TARGET | tar -x -C $T/export-mut
+echo "setup done $(date -u +%Y-%m-%dT%H:%M:%SZ)"

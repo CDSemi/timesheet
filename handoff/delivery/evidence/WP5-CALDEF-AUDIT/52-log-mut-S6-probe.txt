@@ -1,0 +1,43 @@
+
+ RUN  v5.0.2 <task>/export-mut
+
+stdout | tests/integration/zz-audit-caldef.test.ts > WP5-CALDEF-AUDIT API probes > A1: an import effective from a later date changes only the dates on and after it
+OBS A1 defaults {"2026-09-21":"Worked","2026-09-22":"Holiday"}
+
+stdout | tests/integration/zz-audit-caldef.test.ts > WP5-CALDEF-AUDIT API probes > A1: an import effective from a later date changes only the dates on and after it
+OBS A1 statuses {"before":200,"from":409,"code":"default_changed","details":{"work_date":"2026-09-22","expected_default":"Worked","current_default":"Holiday","calendar_hint":"synthetic-leak"}}
+
+ ❯ tests/integration/zz-audit-caldef.test.ts (10 tests | 1 failed) 3106ms
+   ❯ WP5-CALDEF-AUDIT API probes (10)
+     × A1: an import effective from a later date changes only the dates on and after it 258ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/zz-audit-caldef.test.ts > WP5-CALDEF-AUDIT API probes > A1: an import effective from a later date changes only the dates on and after it
+AssertionError: expected { work_date: '2026-09-22', …(3) } to deeply equal { work_date: '2026-09-22', …(2) }
+
+- Expected
++ Received
+
+  {
++   "calendar_hint": "synthetic-leak",
+    "current_default": "Holiday",
+    "expected_default": "Worked",
+    "work_date": "2026-09-22",
+  }
+
+ ❯ tests/integration/zz-audit-caldef.test.ts:80:40
+     78|     expect(keep.status, JSON.stringify(keep.body)).toBe(200);
+     79|     expect(refused.status).toBe(409);
+     80|     expect(refused.body.error.details).toEqual({ work_date: '2026-09-2…
+       |                                        ^
+     81|   });
+     82|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 passed (10)
+   Start at  05:29:48
+   Duration  3.85s (tests 82%, transform 11%, import 7%)

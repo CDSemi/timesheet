@@ -1,0 +1,51 @@
+== mut-S7-probe: real start 2026-11-03T13:31:35Z, simulated start real, AB8_SHIFT_MS=0
+process clock 2026-11-03T13:31:35.919Z (Date.now 1793712695928); America/Los_Angeles Tue, 2026-11-03, 05:31; shift ms 0; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/zz-audit-caldef.spec.ts --project=desktop --workers=2 -g E2: --output=<task>\pw-mut-S7-probe
+
+Running 1 test using 1 worker
+
+(node:73312) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  1 [desktop] › tests\e2e\zz-audit-caldef.spec.ts:131:3 › WP5-CALDEF-AUDIT probes › E2: the picker on a day with recorded work after an import: refused, Reload period, then the conflict review saves the pick (8.0s)
+
+
+  1) [desktop] › tests\e2e\zz-audit-caldef.spec.ts:131:3 › WP5-CALDEF-AUDIT probes › E2: the picker on a day with recorded work after an import: refused, Reload period, then the conflict review saves the pick 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('dialog', { name: 'Review category change for 2026-11-02' })
+    Expected substring: "calendar default changed"
+    Received string:    "Review category change for 2026-11-021 day will change. Nothing is saved until you commit.2026-11-02Worked to Vacationcategory changeCancelReview conflicts"
+    Timeout: 7000ms
+
+    Call log:
+      - Expect "toContainText" getByRole('dialog', { name: 'Review category change for 2026-11-02' }) with timeout 7000ms
+      - waiting for getByRole('dialog', { name: 'Review category change for 2026-11-02' })
+        18 × locator resolved to <dialog open="" class="dialog" aria-labelledby="batch-title">…</dialog>
+           - unexpected value "Review category change for 2026-11-021 day will change. Nothing is saved until you commit.2026-11-02Worked to Vacationcategory changeCancelReview conflicts"
+
+
+      147 |     note(`E2 review: ${(await review.innerText()).replace(/\s+/g, ' ')}`);
+      148 |     note(`E2 first preview entry: ${JSON.stringify(batch[0]?.entries)}`);
+    > 149 |     await expect(review).toContainText('calendar default changed');
+          |                          ^
+      150 |     const buttons = await review.getByRole('button').allInnerTexts();
+      151 |     const enabled = await review.getByRole('button', { name: /Commit changes|Review conflicts/ }).isEnabled();
+      152 |     note(`E2 review buttons ${JSON.stringify(buttons)}; commit/review-conflicts enabled ${enabled}`);
+        at <task>\export-mut\tests\e2e\zz-audit-caldef.spec.ts:149:26
+
+    Error Context: ..\pw-mut-S7-probe\zz-audit-caldef-WP5-CALDEF-9960c-flict-review-saves-the-pick-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-S7-probe\zz-audit-caldef-WP5-CALDEF-9960c-flict-review-saves-the-pick-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-S7-probe\zz-audit-caldef-WP5-CALDEF-9960c-flict-review-saves-the-pick-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\zz-audit-caldef.spec.ts:131:3 › WP5-CALDEF-AUDIT probes › E2: the picker on a day with recorded work after an import: refused, Reload period, then the conflict review saves the pick 
+exit=1
+process clock 2026-11-03T13:31:47.406Z (Date.now 1793712707415); America/Los_Angeles Tue, 2026-11-03, 05:31; shift ms 0; instanceof true
+== mut-S7-probe real end 2026-11-03T13:31:47Z

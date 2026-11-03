@@ -156,3 +156,9 @@ Append briefly:
 Return at most 80 words, beginning 'Self-reported model: ...', with the full commit SHA.
 
 ## Results
+
+- HEAD before 300d61f055a859857aa8eb3845ed21f4560e82fa; after b810ba942c608e058bd8c146de6f076734c48bf2.
+- Pushed to origin main (fast-forward); remote SHA b810ba942c608e058bd8c146de6f076734c48bf2.
+- D_PRE = HEAD digest = 59e2ec3f22d951366d4a54d0564ed2731d3b4f8c1fa90bc1cfbea10ebf0d770a.
+- Staged 404 paths; nothing masked, converted or unstaged. All checks exit 0.
+  Details in evidence/WP5-CALDEF-FIX2-FREEZE/checks.txt.
