@@ -3286,8 +3286,21 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
   - WP5-GOV-DOCS-VALIDATOR fixed it (Addendum 2). The count is now 141 probes.
   - WP5-GOV-DOCS-REVIEW reread the fix and ran both validators on the real board: exit 0.
   - The digest stays 4ac52e6b.
-- **Running now:** WP5-GOV-DOCS-COMMIT, alone, continuing. The board goes to `software_ready`
-  after it.
+- **WP5-GOV-DOCS-COMMIT done.**
+  - Commit 5b2f28793e1def408e7a2c57df5054917450a1f2 on main. It was pushed as a fast-forward
+    from 27567d1.
+  - 65 paths were staged. D_PRE equals both HEAD digests: 4ac52e6b. Every check exited 0,
+    including `check_recovery` (141 probes) and `--non-product-range a54061f..HEAD`.
+- **Mission back to `software_ready` (2026-11-02).**
+  - Accepted source: a54061f / 690fd8fd (WP5-UX5-RECHECK-RN).
+  - Latest documentation-only commit: 5b2f287 / 4ac52e6b.
+  - The board edits made after this commit (COMMIT done, `software_ready`) stay uncommitted
+    until the next commit, as after earlier accepts.
+- **Next, the owner:**
+  - review the pilot packet;
+  - decide R-UX5I2-3;
+  - do the pilot device checks;
+  - run the NAS steps.
 - **The rule change** follows the WP5-UX5-ACCEPT commit, as WP5-GOV-DOCS.
   - A planner first defines:
     - which files count as documentation;
@@ -3298,6 +3311,81 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - **Then:**
   - ACCEPT-DOCS;
   - WP5-UX5-ACCEPT.
+
+### Owner answer to R-UX5I2-3; fix round WP5-CALDEF (2026-11-02)
+
+- **Owner answer (verbatim on the board under `owner_decisions`).** When a day's calendar
+  default changed since the editor loaded it, show a notice and let the person choose to save
+  (overwrite) or to update to the new default. It is an owner variant of option (c).
+- **It changes the product,** so it runs a fix round: plan, fix, freeze, gate and a fresh
+  independent audit. The canonical documents and docs/10 change with the code task.
+- **Board.** Mission `running`, phase `wp5-caldef-fix-round`, `next_task_id`
+  WP5-CALDEF-PLAN.
+  - The accepted source stays a54061f / 690fd8fd until the round's audit passes.
+  - `non_product_since_acceptance` (5b2f287 / 4ac52e6b) stays until that acceptance
+    replaces it.
+- **WP5-CALDEF-PLAN** (planner, sonnet, read-only) is dispatched. Its brief:
+  `handoff/delivery/tasks/WP5-CALDEF-PLAN.md`.
+- **WP5-CALDEF-PLAN done** (planner, self-reported claude-sonnet-5-5; read-only).
+  - Mechanism: the save sends nothing about the calendar default and the server checks only
+    the entry version, so a changed default is invisible (INT3 E3).
+  - Design A: an optional `default_category` on the day save and each batch entry; a
+    different current default answers 409 `default_changed`; the Day editor shows a notice
+    with "Use the new default" and "Save anyway".
+  - Plan: `handoff/delivery/evidence/WP5-CALDEF-PLAN/plan.txt`.
+- **Coordinator decisions (board, 2026-11-02).**
+  - The two-button notice is in the Day editor; the label picker and "Change several days"
+    keep their reload flow.
+  - `default_category` stays optional.
+  - The docs task runs after the fix, not beside it (one source writer).
+- **WP5-CALDEF-PLAN-REVIEW** (fresh planner, opus, read-only) is dispatched to challenge the
+  plan before any code. If interrupted: attempt 2 on the same brief, task folder
+  WP5-CALDEF-PLAN-REVIEW-a2.
+- **WP5-CALDEF-PLAN-REVIEW done** (fresh planner, self-reported claude-opus-5-5; read-only):
+  sound with corrections. The coordinator accepted all of them.
+  - MF1: refuse only when the category being saved differs from the current default.
+  - MF2: closing a preview that holds stale or changed-default entries shows the page's
+    stale notice, so "Reload period" is reachable.
+  - MF3: the fix updates two label-pick body assertions in `day-editor.spec.ts`.
+  - MF4: the docs task follows the fix and includes the docs/12 entry.
+  - S1-S14 and mutants M16-M23; the amended plan is `review.txt` section 6.
+- **WP5-CALDEF-FIX** (worker-high, sonnet) is dispatched as the only source writer. Brief:
+  `handoff/delivery/tasks/WP5-CALDEF-FIX.md`. If interrupted: check `git status` outside
+  `handoff/` against its owned paths, then attempt 2 continues in task folder
+  WP5-CALDEF-FIX-a2.
+- **WP5-CALDEF-FIX done** (worker-high, self-reported claude-sonnet-5-5). Uncommitted.
+  - 21 paths outside `handoff/`, all owned; digest 1b40bf8a (885 files).
+  - Reproduced on a54061f first (new tests fail there).
+  - 36 mutants, all killed. `npm test` 2,425; real-clock FULL e2e on both projects 0
+    failed; axe with the notice open 0 violations.
+  - `npm run verify` failed once only at smoke: a pre-existing DST defect in
+    `scripts/smoke-built-server.mjs` (a54061f fails the same). The rerun after midnight
+    passed.
+  - Leftover check: no process of the worker remains.
+- **Coordinator decision (2026-11-03):** WP5-CALDEF-SMOKE fixes the smoke script in this
+  round, after the docs task and before the freeze.
+- **WP5-CALDEF-DOCS done** (worker, self-reported claude-sonnet-5-5). Uncommitted.
+  - docs/02, 03, 04, 06, 10 and 12, each with VI (12 files), written against the code as
+    built; no disagreement with the fix's Results.
+  - Preflight exit 0 (142 pairs, 2538 links) with a scratch tz database: the host Python has
+    none.
+  - Digest 81f9cc3b (885 files).
+- **WP5-CALDEF-SMOKE** (worker, sonnet) is dispatched as the only source writer. If
+  interrupted: attempt 2 continues in task folder WP5-CALDEF-SMOKE-a2.
+- **WP5-CALDEF-EVID done** (light, sonnet; handoff only, beside SMOKE). It renamed the fix's
+  80 non-`.txt` evidence files to `name-ext.txt`, because the freeze stages only `.txt`
+  evidence. The board's evidence list now uses the new names.
+- **WP5-CALDEF-SMOKE done** (worker, self-reported claude-sonnet-5-5). Uncommitted.
+  - Reproduced at fixed instants without changing the host clock: the old code fails at
+    2026-11-02 23:49 Los Angeles time.
+  - The new code steps calendar dates; 0 mismatches against an independent oracle over 840
+    hourly instants of both 2026 DST weeks.
+  - `npm run verify` exit 0 with SMOKE PASSED. Digest e24274b9 (885 files), the round's
+    final pre-freeze digest.
+- **WP5-CALDEF-PATHS** (light, haiku, read-only) lists every path before the freeze, so the
+  commit scope needs no change after dispatch.
+- **Next:** WP5-CALDEF-FREEZE (registered, brief written; D_PRE e24274b9, 34 paths outside
+  `handoff/`), then the gate and a fresh opus audit.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

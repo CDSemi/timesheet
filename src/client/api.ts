@@ -201,6 +201,8 @@ export interface DayBatchEntry {
   notes?: string;
   /** The entry version the caller saw; omit or null for a date without an entry. */
   expected_version?: number | null;
+  /** The calendar default the caller was shown for the date (null: none); the server refuses a changed default (409 default_changed). */
+  default_category?: DayCategory | null;
 }
 
 export interface DayBatchRequest {
@@ -232,7 +234,7 @@ export interface DayBatchPreview {
   conflicts: BatchConflict[];
   entries: Array<{
     work_date: string;
-    status: 'create' | 'update' | 'unchanged' | 'stale' | 'invalid';
+    status: 'create' | 'update' | 'unchanged' | 'stale' | 'invalid' | 'default_changed';
     current_version: number | null;
     period_relation: PeriodRelation;
     reason_required: boolean;
@@ -305,6 +307,8 @@ export interface DayEntryRequest {
   wfh: boolean;
   notes: string;
   expected_version: number | null;
+  /** The calendar default this form showed when it opened (null: none); the server refuses a changed default (409 default_changed). */
+  default_category?: DayCategory | null;
   reason?: string;
 }
 

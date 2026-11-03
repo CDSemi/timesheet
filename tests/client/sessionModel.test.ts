@@ -457,6 +457,21 @@ describe('server figures, E-2 notice and day fields', () => {
     expect(partial).toMatchObject({ ok: true, request: { leave_minutes: 90, leave_kind: 'ot' } });
   });
 
+  it('sends the default the form showed as default_category: a category, null (none shown), and nothing when it is not given (R-UX5I2-3)', () => {
+    const draft = { category: 'Worked' as const, leave: { hours: '0', minutes: '0' }, leaveKind: '' as const, wfh: false, notes: 'typed' };
+    const withDefault = buildDayEntryRequest(draft, 4, undefined, 'Holiday');
+    expect(withDefault).toEqual({
+      ok: true,
+      request: { category: 'Worked', leave_minutes: 0, leave_kind: null, wfh: false, notes: 'typed', expected_version: 4, default_category: 'Holiday' },
+    });
+    const none = buildDayEntryRequest(draft, null, ' because ', null);
+    expect(none).toMatchObject({ ok: true, request: { expected_version: null, default_category: null, reason: 'because' } });
+    // Present with a null value: the key is there, so the server compares "none was shown" with today's default.
+    expect(none.ok && Object.keys(none.request)).toContain('default_category');
+    const omitted = buildDayEntryRequest(draft, 4);
+    expect(omitted.ok && Object.keys(omitted.request)).not.toContain('default_category');
+  });
+
   it('leaves a missing kind to the server and rejects only malformed or out-of-range leave fields', () => {
     const missingKind = buildDayEntryRequest({ category: 'Worked', leave: { hours: '4', minutes: '' }, leaveKind: '', wfh: false, notes: '' }, 1);
     expect(missingKind).toMatchObject({ ok: true, request: { leave_minutes: 240, leave_kind: null } });

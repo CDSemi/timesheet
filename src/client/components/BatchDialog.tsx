@@ -9,6 +9,7 @@ const STATUS_TEXT: Record<DayBatchPreview['entries'][number]['status'], string> 
   unchanged: 'no change',
   stale: 'changed elsewhere',
   invalid: 'not valid',
+  default_changed: 'calendar default changed',
 };
 
 /**
@@ -89,7 +90,7 @@ export function BatchDialog({
                 </span>
                 <span className="muted">
                   {STATUS_TEXT[entry.status]}
-                  {entry.status === 'invalid' && entry.error !== null ? `: ${entry.error.message}` : ''}
+                  {(entry.status === 'invalid' || entry.status === 'default_changed') && entry.error !== null ? `: ${entry.error.message}` : ''}
                 </span>
               </li>
             ))}

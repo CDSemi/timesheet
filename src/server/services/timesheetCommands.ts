@@ -11,7 +11,7 @@ import { assertTimeZone, localDateOf, resolveLocalDateTime } from '../../domain/
 import type { SessionUser } from '../auth/sessions.ts';
 import { type Clock, nowEpoch, nowUtc } from '../clock.ts';
 import { type Db, writeTransaction } from '../db/database.ts';
-import { ApiError, notFound, staleVersion } from '../http/errors.ts';
+import { ApiError, type DefaultChange, defaultChanged, notFound, staleVersion } from '../http/errors.ts';
 import type {
   BreakInput,
   ClockInBody,
@@ -26,6 +26,7 @@ import { normalizeReason } from '../http/validation.ts';
 import { recordAudit } from './audit.ts';
 import { ensurePayPeriodRow } from './periods.ts';
 import {
+  calendarDefaultOn,
   type DayEntryRow,
   dayEntryJson,
   editRequirementFor,
@@ -287,6 +288,28 @@ export interface DayEntryInput {
   notes: string;
   /** The version the caller last saw; null when the caller saw no entry for the date. */
   expected_version: number | null;
+  /** The calendar default the caller was shown (null: none); undefined means the caller did not say. */
+  default_category?: DayCategory | null;
+}
+
+/**
+ * R-UX5I2-3: the default the caller showed no longer holds. Only a date without an entry or with a
+ * default-sourced entry follows the calendar, so only those are checked; an explicit entry is the
+ * person's own. Nothing is refused when the field is omitted, the calendar cannot classify the date,
+ * the shown default is still the default, or the category being saved already equals the new default
+ * (both choices then record the same category).
+ */
+export function defaultChangeOf(
+  scope: UserScope,
+  workDate: CivilDate,
+  existing: DayEntryRow | undefined,
+  input: Pick<DayEntryInput, 'category' | 'default_category'>,
+): DefaultChange | null {
+  if (input.default_category === undefined) return null;
+  if (existing !== undefined && existing.category_source !== 'default') return null;
+  const current = calendarDefaultOn(scope, workDate);
+  if (current === null || input.default_category === current || input.category === current) return null;
+  return { work_date: workDate, expected_default: input.default_category, current_default: current };
 }
 
 export interface DayEntryIssue {
@@ -322,7 +345,7 @@ export interface AppliedDayEntry {
 
 /**
  * Writes one day entry inside the caller's transaction: reason (R-07), leave validation,
- * optimistic version, an explicit category source, the timesheet version bump and one
+ * optimistic version, the changed-default refusal (R-UX5I2-3), an explicit category source, the timesheet version bump and one
  * audit event with before/after. Shared by PUT /days/:date and the batch commit.
  */
 export function applyDayEntryChange(
@@ -339,6 +362,8 @@ export function applyDayEntryChange(
   const now = nowUtc(ctx.clock);
   if (existing === undefined) {
     if (input.expected_version !== null) throw staleVersion();
+    const change = defaultChangeOf(scope, workDate, existing, input);
+    if (change !== null) throw defaultChanged(change);
     classifyDate(scope.calendarVersions, workDate);
     const timesheet = ensureTimesheet(ctx, edit);
     const entry: DayEntryRow = {
@@ -378,6 +403,8 @@ export function applyDayEntryChange(
     return { operation: 'day_entry.create', entry };
   }
   if (input.expected_version !== existing.version) throw staleVersion();
+  const change = defaultChangeOf(scope, workDate, existing, input);
+  if (change !== null) throw defaultChanged(change);
   const updated: DayEntryRow = {
     ...existing,
     category: input.category,
@@ -434,6 +461,7 @@ export function upsertDayEntry(ctx: CommandContext, workDateInput: string, input
         wfh: input.wfh,
         notes: input.notes,
         expected_version: input.expected_version ?? null,
+        ...(input.default_category === undefined ? {} : { default_category: input.default_category }),
       },
       input.reason,
     );

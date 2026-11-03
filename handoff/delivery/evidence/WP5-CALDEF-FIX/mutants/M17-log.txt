@@ -1,0 +1,36 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/integration/calendar-default-change.test.ts (18 tests | 1 failed) 5001ms
+   ❯ ownership and calendars (2)
+     × I12: the shared edit route checks the owner calendar, not the grantee calendar; a read-only grantee is still 403 364ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 17 passed (18)
+   Start at  23:11:32
+   Duration  5.89s (tests 86%, transform 9%, import 5%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > ownership and calendars > I12: the shared edit route checks the owner calendar, not the grantee calendar; a read-only grantee is still 403
+AssertionError: {"work_date":"2026-09-21","classification":{"day_class":"nonworking","reason":"holiday","name":"Synthetic Holiday","calendar_version_id":"c377686e-2bdb-425f-a235-13aa8fa5e23b"},"default_category":"Holiday","category":"Worked","category_source":"explicit","attendance_expected":false,"leave_minutes":0,"leave_kind":null,"wfh":false,"ot_leave":{"kind_minutes":0,"consumed_minutes":0,"reversed_minutes":0,"mismatch":false},"entry":{"id":"c8afe07f-e3f5-464c-aa6e-d50f6857a8be","work_date":"2026-09-21","category":"Worked","category_source":"explicit","leave_minutes":0,"leave_kind":null,"wfh":false,"notes":"","version":1},"sessions":[],"calculation":{"status":"no_records","provisional":true,"policy_version_id":"a3e7e47a-9512-4d45-afd2-62746f38d285","gross_seconds":null,"excluded_break_seconds":null,"regular_seconds":null,"nonworking_seconds":null,"regular_minutes":null,"nonworking_minutes":null,"normal_excess_minutes":null,"eligible_minutes":null,"credited_minutes":null,"segments":[]},"calculation_error":null,"deficit_minutes":0,"edit":{"period_relation":"current","reason_required":false}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/integration/calendar-default-change.test.ts:424:58
+    422|     const rows = entryRows();
+    423|     const refused = await t.request('PUT', path(DAY_A), { cookie: gran…
+    424|     expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+       |                                                          ^
+    425|     expect(refused.body.error).toMatchObject({
+    426|       code: 'default_changed',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit=1

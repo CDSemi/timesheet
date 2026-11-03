@@ -78,8 +78,8 @@ Không đổi billing hay cài đặt quyền.
 ~~~
 
 Luồng hiện tại:
-0. **Đang làm (đã tiếp tục ngày 2026-10-26 sau lần tạm dừng vì hạn mức ngày 2026-10-23):
-   vòng thay đổi UI lần 4 và 5.**
+0. **Đã xong: vòng thay đổi UI lần 4 và 5, và luật của chủ dự án cho tài liệu và công cụ quy
+   trình.** Các bước, theo thứ tự:
    - Commit đã push gần nhất là 94accda (digest 462a1cd7).
    - Những gì đã xảy ra từ 5b8b718:
      - WP5-UX5-REGATE3 không đạt vì lỗi của test và bộ chạy test, cùng hai cảnh báo của npm
@@ -206,30 +206,22 @@ Luồng hiện tại:
      dự án ngày 2026-10-29 cho tài liệu.
    - Commit WP5-UX5-ACCEPT là 27567d1, đã push. **WP5 đã được nghiệm thu lại sau vòng 4 và 5
      trên a54061f / 690fd8fd.**
-   - Đang chạy: WP5-GOV-DOCS, luật mới của chủ dự án ngày 2026-10-29. Tài liệu không cần test,
-     gate hay audit, chỉ cần duyệt và sửa.
-     - Kế hoạch đã xong (WP5-GOV-DOCS-PLAN).
-     - Chủ dự án đã trả lời Q1 (a), Q2 (a) ngày 2026-11-02. Luật làm việc viết bằng Markdown
-       cũng là tài liệu. Lần sửa này chạy probe của validator và một lượt duyệt, không có gate
-       hay audit opus.
-     - Cùng ngày, chủ dự án quyết định validator, profile agent, skill và script cũng không
-       cần gate hay audit. Chúng được duyệt như tài liệu và tự chạy các kiểm tra của mình.
-     - WP5-GOV-DOCS-VALIDATOR (141 probe), -RULES và -REVIEW (không có chỗ lệch) đã xong.
-     - Đang chạy: commit WP5-GOV-DOCS-COMMIT.
-   - Sau đó board trở về `software_ready`, rồi chủ dự án duyệt gói pilot và quyết định
-     R-UX5I2-3.
-   - Để tiếp tục sau khi bị gián đoạn, dùng prompt khởi động ở trên. Điều phối viên làm tiếp
-     ở `next_task_id` của board.
+   - WP5-GOV-DOCS, luật của chủ dự án ngày 2026-10-29 và 2026-11-02, đã xong và đã push
+     (5b2f287).
+     - Tài liệu và công cụ quy trình không cần gate hay audit: một lượt duyệt và sửa bởi một
+       instance mới, và công cụ tự chạy các kiểm tra của mình (AGENTS rule 14; tài liệu 08,
+       "Tài liệu và công cụ quy trình").
+     - Validator giữ nguyên nghiệm thu qua bản ghi `non_product_since_acceptance` trên board.
    - Chi tiết: [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.vi.md), mục "REGATE3
      không đạt; hai việc chẩn đoán đang chạy (2026-10-26)" và các mục sau đó.
-   - Cho đến commit nghiệm thu, pilot packet vẫn ghi 8e55710 / 507de97c. Đừng dùng định danh
-     đó cho pilot.
 1. **Đã xong: WP5 đã nghiệm thu, rồi nghiệm thu lại sau mỗi vòng thay đổi UI.** Biên bản
    nghiệm thu đầu đã commit ở dd0c7d1. Các biên bản nghiệm thu lại nằm trong
    [WP5 handoff](delivery/WP5_HANDOFF.vi.md):
    - 90b98ef / 57e2974c (WP5-UX-AUDIT-AB9);
    - a643794 / 229df806 (WP5-UX2-AUDIT2);
-   - 8e55710 / 507de97c (WP5-UX3-AUDIT-INT).
+   - 8e55710 / 507de97c (WP5-UX3-AUDIT-INT);
+   - **a54061f / 690fd8fd (WP5-UX5-RECHECK-RN), kết quả nghiệm thu hiện hành.** Commit
+     5b2f287 (digest 4ac52e6b) sau đó chỉ sửa tài liệu, nên các file ứng dụng giống hệt.
 2. **Đã xong: GOV-RECOVERY.** `check_recovery.py` không còn lấy trạng thái thật của
    mission (bản sửa đóng băng ở 7f750e9, gate PASS,
    [GOV recovery review](delivery/GOV_RECOVERY_REVIEW.vi.md) PASS). Board ghi mission là
@@ -238,11 +230,16 @@ Luồng hiện tại:
    - WP5-UX2: nghiệm thu lại trên a643794 / 229df806.
    - WP5-UX3: nghiệm thu lại trên 8e55710 / 507de97c (gate WP5-UX3-REGATE5, audit
      WP5-UX3-AUDIT-INT PASS). Định danh trong pilot packet đã cập nhật.
-4. **Tiếp theo, chủ dự án: duyệt pilot.** Đọc
-   [pilot packet](delivery/WP5_PILOT_PACKET.vi.md) và trả lời D-1..D-15.
-   - D-1, D-7, D-8 và D-13 cần có trước khi kích hoạt.
-   - Câu trả lời nào khác mặc định hiện tại sẽ kéo theo một vòng sửa (sửa, đóng băng,
-     gate, audit độc lập) trước khi kích hoạt.
+4. **Đang chạy: vòng sửa WP5-CALDEF cho R-UX5I2-3 (chủ dự án trả lời 2026-11-02).** Nếu loại
+   ngày mặc định theo lịch đã đổi kể từ lúc Day editor tải ngày đó, một thông báo cho người
+   dùng chọn lưu (ghi đè) hay cập nhật theo giá trị mặc định mới.
+   - Trước tiên là WP5-CALDEF-PLAN (planner, chỉ đọc); sau đó là sửa, đóng băng, gate và một
+     audit độc lập mới; rồi cập nhật pilot packet và bàn giao WP5.
+   - Mã nguồn đã nghiệm thu vẫn là a54061f / 690fd8fd cho đến khi audit đó đạt.
+   - Tiếp tục từ `next_task_id` trên board.
+5. **Tiếp theo, chủ dự án: duyệt pilot.** Đọc
+   [pilot packet](delivery/WP5_PILOT_PACKET.vi.md). D-1..D-15 và R-UX5I2-3 đã được trả lời.
+   - Làm các kiểm tra trên thiết bị thật (mục 10 của gói).
    - Làm các bước NAS của chủ dự án trong docs/11 và mẫu khôi phục trên máy đích.
    - Chỉ gửi thật, triển khai và kích hoạt sau khi chủ dự án cho phép rõ ràng. Khi đó
      resume coordinator bằng prompt ở trên.

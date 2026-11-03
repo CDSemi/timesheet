@@ -1,0 +1,65 @@
+import { appendFileSync, readFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { expect, newPerson, SeedClient, test } from 'D:/Dropbox/Work.CDSemi/timesheet/tests/e2e/fixtures.ts';
+
+// WP5-CALDEF-FIX evidence probe (never part of the repository): one axe-core scan with the default-changed notice open, per viewport and theme.
+// axe-core 4.14.0 comes from a scratch install outside the repository; synthetic data only.
+const AXE = readFileSync(process.env.AXE_JS ?? '', 'utf8');
+const OUT = process.env.AXE_OUT ?? '';
+test.use({ bypassCSP: true });
+
+const WIDTHS = [1440, 1024, 390];
+
+async function scan(page: Page, label: string): Promise<number> {
+  await page.evaluate(AXE);
+  const result = await page.evaluate(`axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'] } }).then((r) => ({
+    violations: r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.map((n) => n.target.join(' ')).slice(0, 5) })),
+    passes: r.passes.length, incomplete: r.incomplete.map((v) => v.id), engine: axe.version,
+  }))`) as { violations: Array<{ id: string; impact: string; nodes: string[] }>; passes: number; incomplete: string[]; engine: string };
+  appendFileSync(OUT, `${label}: axe ${result.engine}, ${result.violations.length} violations, ${result.passes} rules passed, incomplete: ${result.incomplete.join(',') || 'none'} ${JSON.stringify(result.violations)}\n`);
+  return result.violations.length;
+}
+
+for (const width of WIDTHS) {
+  test(`axe with the default-changed notice open at ${width}px`, async ({ page, privateServer }) => {
+    test.setTimeout(120_000);
+    const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+    const person = await newPerson(admin, privateServer, { displayName: `Synthetic Axe ${width}`, signature: 'none' });
+    const [date = ''] = await person.api.displayedPeriodFreeWorkdays();
+    await person.api.seedCompleteDay(date);
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto(`${privateServer.origin}/#/timesheet`);
+    await page.getByLabel('Email').fill(person.account.email);
+    await page.getByLabel('Password').fill(person.account.password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    await page.getByLabel('Open a day').fill(date);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor.getByRole('form', { name: 'Day fields' })).toBeVisible();
+    await editor.getByLabel('Notes').fill('Synthetic note typed and not saved');
+    const calendar = await admin.call<{ id: string }>('GET', '/api/calendar');
+    const csv = `date,name,kind\n${date},Synthetic Admin Holiday,holiday`;
+    const base = { calendar_id: calendar.id, year: Number(date.slice(0, 4)), csv, remove_dates: [] };
+    const first = await admin.call<{ earliest_effective_from: string }>('POST', '/api/admin/calendar/import/preview', { ...base, effective_from: '2099-01-01' });
+    const body = { ...base, effective_from: first.earliest_effective_from };
+    const preview = await admin.call<{ preview_hash: string }>('POST', '/api/admin/calendar/import/preview', body);
+    await admin.call('POST', '/api/admin/calendar/import/commit', { ...body, preview_hash: preview.preview_hash }, 201);
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    const notice = editor.getByRole('alert').filter({ hasText: 'The calendar default for this day changed' });
+    await expect(notice).toBeVisible();
+    await expect(notice).toBeFocused();
+    let total = 0;
+    for (const [theme, apply] of [
+      ['light', async () => page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' })],
+      ['dark (system)', async () => page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' })],
+      ['dark (chosen)', async () => { await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' }); await page.evaluate("document.documentElement.setAttribute('data-theme', 'dark')"); }],
+    ] as const) {
+      await page.evaluate("document.documentElement.removeAttribute('data-theme')");
+      await apply();
+      await page.waitForTimeout(150);
+      total += await scan(page, `${width}px ${theme}`);
+    }
+    expect(total, 'axe violations with the notice open').toBe(0);
+  });
+}

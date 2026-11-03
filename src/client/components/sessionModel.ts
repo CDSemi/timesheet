@@ -453,9 +453,16 @@ export type DayEntryBuild = { ok: true; request: DayEntryRequest } | { ok: false
 /**
  * The PUT /api/days/:date body. The hours and minutes become the same integer `leave_minutes` as
  * before (0 to 1440). The kind is sent only with leave minutes; the server answers
- * `leave_kind_required` when it is missing.
+ * `leave_kind_required` when it is missing. `shownDefault` is the calendar default the form showed when it opened (null: none); it is
+ * sent as `default_category` so the server can refuse a category recorded over a default that changed since (R-UX5I2-3), and left out
+ * when undefined.
  */
-export function buildDayEntryRequest(draft: DayFieldsDraft, expectedVersion: number | null, reason?: string): DayEntryBuild {
+export function buildDayEntryRequest(
+  draft: DayFieldsDraft,
+  expectedVersion: number | null,
+  reason?: string,
+  shownDefault?: DayCategory | null,
+): DayEntryBuild {
   const parsed = parseLeaveInput(draft.leave);
   if (!parsed.ok) return { ok: false, message: parsed.message };
   const minutes = parsed.minutes;
@@ -467,6 +474,7 @@ export function buildDayEntryRequest(draft: DayFieldsDraft, expectedVersion: num
     notes: draft.notes,
     expected_version: expectedVersion,
   };
+  if (shownDefault !== undefined) request.default_category = shownDefault;
   const why = reason?.trim() ?? '';
   if (why !== '') request.reason = why;
   return { ok: true, request };

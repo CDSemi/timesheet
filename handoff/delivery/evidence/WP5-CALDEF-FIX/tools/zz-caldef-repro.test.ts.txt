@@ -1,0 +1,30 @@
+// Temporary reproduction of INT3 E3 (default-sourced entry) and the no-entry shape on the unchanged source
+// (WP5-CALDEF-FIX). It was run as tests/integration/zz-caldef-repro.test.ts with REPRO_OUT set and deleted afterwards;
+// the observation is in 00-repro-observation.txt and the run in 00-repro-unchanged-source-log.txt.
+import { appendFileSync } from 'node:fs';
+import { expect, it } from 'vitest';
+import { createTestContext, la } from '../support/testApp.ts';
+
+const OUT = process.env.REPRO_OUT ?? '';
+async function run(withSession: boolean) {
+  const t = await createTestContext('2026-09-29T20:00:00Z');
+  const cookie = await t.login('employee');
+  const admin = await t.login('admin');
+  const date = '2026-09-21';
+  if (withSession) {
+    await t.request('POST', `/api/days/${date}/sessions`, { cookie, body: { start: la(`${date}T09:00`), end: la(`${date}T12:00`), input_zone: 'America/Los_Angeles', breaks: [], breaks_confirmed: true } });
+  }
+  const shown = (await t.request('GET', `/api/days/${date}`, { cookie })).body;
+  const csv = `date,name,kind\n${date},Synthetic Holiday,holiday`;
+  const body = { calendar_id: t.calendarId, year: 2026, effective_from: '2026-09-14', csv, remove_dates: [] };
+  const preview = await t.request('POST', '/api/admin/calendar/import/preview', { cookie: admin, body });
+  const commit = await t.request('POST', '/api/admin/calendar/import/commit', { cookie: admin, body: { ...body, preview_hash: preview.body.preview_hash } });
+  const now = (await t.request('GET', `/api/days/${date}`, { cookie })).body;
+  const saved = await t.request('PUT', `/api/days/${date}`, { cookie, body: { category: shown.category, leave_minutes: 0, wfh: false, notes: 'typed', expected_version: shown.entry?.version ?? null } });
+  const after = (await t.request('GET', `/api/days/${date}`, { cookie })).body;
+  appendFileSync(OUT, `REPRO ${withSession ? 'default-sourced entry' : 'no entry'}: shown ${shown.category}/${shown.category_source}; import commit ${commit.status}; after import ${now.category}/${now.category_source} default ${now.default_category} entry v${now.entry?.version}; PUT status ${saved.status}; server now ${after.category}/${after.category_source} entry v${after.entry?.version} attendance_expected ${after.attendance_expected}\n`);
+  expect(saved.status).toBe(200);
+  t.close();
+}
+it('repro default-sourced', () => run(true));
+it('repro no entry', () => run(false));

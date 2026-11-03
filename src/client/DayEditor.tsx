@@ -1,5 +1,5 @@
 import { type KeyboardEvent, type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { type DayView, ownRequest, type PolicyVersion, type Requester, type Session } from './api.ts';
+import { type DayCategory, type DayView, ownRequest, type PolicyVersion, type Requester, type Session } from './api.ts';
 import { ConfirmDialog } from './components/ConfirmDialog.tsx';
 import { dayBanner, deleteFacts, editorChips, editorTitle } from './components/dayEditorModel.ts';
 import { DayFieldsForm } from './components/DayFieldsForm.tsx';
@@ -330,6 +330,25 @@ export function DayEditor({
     }
   }
 
+  /**
+   * "Use {default}" in the day fields form (R-UX5I2-3): the form took the new calendar default for its category and sent nothing. The period
+   * behind the editor is refreshed, and the day is read once: it is taken as `saved()` does, without a new generation (the form keeps what
+   * was typed), only when it shows the new default as the category and everything else as held (see sameDayFields). Anything else is
+   * ignored, with no notice; the version guard still decides at the save. A failed read changes nothing.
+   */
+  function defaultTaken(category: DayCategory) {
+    onChanged();
+    dayStamp.current += 1;
+    const stamp = dayStamp.current;
+    request<DayView>('GET', `/days/${workDate}`).then(
+      (fresh) => {
+        if (stamp !== dayStamp.current || nestedOpen.current) return;
+        setDay((held) => (held !== null && fresh.category === category && sameDayFields({ ...held, category }, fresh) ? fresh : held));
+      },
+      () => undefined,
+    );
+  }
+
   function startEditing(next: Editing) {
     setNotice(null);
     setActionError(null);
@@ -575,6 +594,7 @@ export function DayEditor({
                 reasonRequired={reasonRequired}
                 onSaved={(next) => saved(next, 'Day fields saved.')}
                 onStale={stale}
+                onDefaultTaken={defaultTaken}
                 footSlot={bottomSheet ? foot : undefined}
                 request={request}
               />

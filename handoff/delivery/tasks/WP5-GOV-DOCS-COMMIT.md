@@ -137,3 +137,5 @@ Append briefly:
 Return at most 80 words, beginning 'Self-reported model: ...', with the full commit SHA.
 
 ## Results
+
+Commit 5b2f28793e1def408e7a2c57df5054917450a1f2 on main, pushed (27567d12..5b2f2879, remote SHA = HEAD). D_PRE = HEAD digest = 4ac52e6b. 65 files staged. All checks exit 0 (check_recovery 141 probes; range PASS). Details: evidence/WP5-GOV-DOCS-COMMIT/checks.txt.

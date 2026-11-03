@@ -22,6 +22,8 @@ An overnight session normally belongs to its starting `work_date` in the saved r
 
 Split actual net work at reporting-zone calendar boundaries. R = minutes on scheduled weekdays excluding company holidays/closures; O = minutes outside that calendar. Holiday/closure overrides weekday. Personal leave/Off labels do not change calendar eligibility.
 
+The category of a day is the calendar default (Worked on scheduled weekdays, Holiday on company holidays, Shutdown on closures, Off otherwise) until the person saves a category; a saved (explicit) category is the person's own and a calendar change never replaces it. A write that would record a category over a calendar default that differs from the default the person was shown (a date with no entry, or an entry still on the default, after a holiday import) is not written until the person decides between saving over the new default and using it (owner decision 2026-11-02, R-UX5I2-3; [04 UX](04_UX_AND_SETTINGS.md) "Day editor", [03 Architecture](03_ARCHITECTURE_AND_DATA.md) "API and hosting boundary"). If the category being saved already equals the new default, both choices record the same category and nothing is refused.
+
 Example default: Friday 22:00–Saturday 02:00, no breaks, has R=120, O=120, credited OT=120, recorded on Friday. Monday 22:00–Tuesday 07:00 less 60 breaks has R=480, O=0, OT=0. B/N/M use the policy effective for the work date; calendar classification uses the version effective on each segment date.
 
 ## R-04 — daily formula

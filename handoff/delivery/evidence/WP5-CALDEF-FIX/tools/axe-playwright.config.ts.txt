@@ -1,0 +1,16 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { defineConfig } from '@playwright/test';
+
+// Evidence-only config: the repository config with this folder as testDir.
+export default defineConfig({
+  testDir: '.',
+  testMatch: '**/*.spec.ts',
+  outputDir: join(tmpdir(), 'timesheet-e2e-output-axe'),
+  workers: 1,
+  reporter: 'list',
+  timeout: 30_000,
+  expect: { timeout: 7_000 },
+  use: { channel: 'msedge', headless: true, screenshot: 'off', trace: 'off' },
+  projects: [{ name: 'desktop', use: { viewport: { width: 1280, height: 800 } } }],
+});

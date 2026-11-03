@@ -19,7 +19,7 @@ import { ClockPanel } from './components/ClockPanel.tsx';
 import { useClock } from './components/ClockProvider.tsx';
 import { ConfirmDialog } from './components/ConfirmDialog.tsx';
 import { dayPeriodPill } from './components/dayEditorModel.ts';
-import { batchEntries, staleDates, staleReloadMessage } from './components/dayModel.ts';
+import { batchEntries, movedPreviewDates, staleDates, staleReloadMessage } from './components/dayModel.ts';
 import { whollyCovered } from './components/editorLayoutModel.ts';
 import { describeError } from './components/errors.ts';
 import { displayZone } from './components/format.ts';
@@ -479,7 +479,8 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
       if (editDate !== null && result.changed.includes(editDate)) setEditorRefresh((value) => value + 1);
       load();
     } catch (caught) {
-      if (caught instanceof ApiRequestError && caught.status === 409 && caught.code === 'stale_version') {
+      // A date that changed since the period was loaded: an entry version (stale_version) or a calendar default (default_changed, R-UX5I2-3).
+      if (caught instanceof ApiRequestError && caught.status === 409 && (caught.code === 'stale_version' || caught.code === 'default_changed')) {
         setPreview(null);
         setStaleNotice(staleReloadMessage(staleDates(caught.details)));
       } else if (inDialog) {
@@ -534,6 +535,10 @@ export function TimesheetScreen({ user, shared }: { user: User; shared?: SharedM
   function closePreview() {
     if (previewSource.kind === 'label') returnToPicker.current = previewSource.entry.work_date;
     else returnToBatchOpener.current = true;
+    // A review that found dates changed elsewhere or with a new calendar default has nothing to commit: "Reload period" is how the
+    // person sees the new categories (R-UX5I2-3), so the page offers it for those dates.
+    const moved = preview === null ? [] : movedPreviewDates(preview);
+    if (moved.length > 0) setStaleNotice(staleReloadMessage(moved));
     setPreview(null);
   }
 

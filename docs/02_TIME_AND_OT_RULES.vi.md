@@ -22,6 +22,8 @@ Ca qua đêm thường thuộc `work_date` lúc bắt đầu theo múi giờ IAN
 
 Chia giờ thực làm ròng tại ranh giới ngày theo múi giờ báo cáo. R = phút trong ngày làm theo lịch, loại lễ/đóng cửa công ty; O = phút ngoài lịch đó. Lễ/đóng cửa ưu tiên hơn thứ. Nhãn nghỉ/Off cá nhân không đổi loại lịch.
 
+Loại của một ngày là mặc định theo lịch (Worked vào ngày làm theo lịch, Holiday vào lễ công ty, Shutdown vào ngày đóng cửa, còn lại là Off) cho đến khi người dùng lưu một loại; loại đã lưu (explicit) là của riêng người dùng và thay đổi lịch không bao giờ thay nó. Một lần ghi sẽ ghi loại đè lên mặc định theo lịch khác với mặc định người dùng đã thấy (ngày không có entry, hoặc entry vẫn theo mặc định, sau khi import lễ) thì không được ghi cho đến khi người dùng quyết định giữa lưu đè lên mặc định mới và dùng mặc định mới (quyết định của chủ 2026-11-02, R-UX5I2-3; [04 UX](04_UX_AND_SETTINGS.vi.md) "Day editor", [03 Architecture](03_ARCHITECTURE_AND_DATA.vi.md) "API and hosting boundary"). Nếu loại sắp lưu đã bằng mặc định mới thì hai lựa chọn ghi cùng một loại và không có gì bị từ chối.
+
 Ví dụ mặc định: thứ Sáu 22:00–thứ Bảy 02:00 không nghỉ cho R=120, O=120, OT=120, ghi vào thứ Sáu. Thứ Hai 22:00–thứ Ba 07:00 trừ nghỉ 60 cho R=480, O=0, OT=0. B/N/M dùng quy tắc hiệu lực ngày ghi sổ; phân loại lịch dùng phiên bản hiệu lực tại từng ngày của đoạn ca.
 
 ## R-04 — công thức theo ngày

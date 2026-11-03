@@ -1,0 +1,195 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/integration/calendar-default-change.test.ts (18 tests | 9 failed) 5136ms
+   ❯ PUT /api/days/:date refuses a category recorded over a changed calendar default (11)
+     × I1: a day with no entry: 409 default_changed with both defaults, nothing written 311ms
+     × I2: a default-sourced entry: 409, and the entry, its version and its notes are unchanged 280ms
+     × I5: no false notice for an import that moves another date, a rename, or an unchanged category; a kind change refuses 312ms
+     × I7: reason (422) and stale_version (409) are answered before default_changed 252ms
+   ❯ POST /api/days/batch with a changed calendar default (5)
+     × I9: the preview marks the date default_changed, cannot commit, and writes nothing 254ms
+     × I10: a commit with one changed default is 409 with the dates and writes neither date; stale_version wins 266ms
+     × I15: the commit order is stale, invalid, reason, default_changed, then conflicts 295ms
+   ❯ ownership and calendars (2)
+     × I12: the shared edit route checks the owner calendar, not the grantee calendar; a read-only grantee is still 403 367ms
+     × I13: another user on another calendar is unaffected by an import on the first calendar 373ms
+
+ Test Files  1 failed (1)
+      Tests  9 failed | 9 passed (18)
+   Start at  23:10:48
+   Duration  6.22s (tests 84%, transform 11%, import 5%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I1: a day with no entry: 409 default_changed with both defaults, nothing written
+AssertionError: {"work_date":"2026-09-21","classification":{"day_class":"nonworking","reason":"holiday","name":"Synthetic Holiday","calendar_version_id":"4a8d2a65-2870-4561-9c4b-b548069c8f11"},"default_category":"Holiday","category":"Worked","category_source":"explicit","attendance_expected":false,"leave_minutes":0,"leave_kind":null,"wfh":false,"ot_leave":{"kind_minutes":0,"consumed_minutes":0,"reversed_minutes":0,"mismatch":false},"entry":{"id":"9ca8bb02-6c6b-4b1b-a5b7-268cb91f65c3","work_date":"2026-09-21","category":"Worked","category_source":"explicit","leave_minutes":0,"leave_kind":null,"wfh":false,"notes":"","version":1},"sessions":[],"calculation":{"status":"no_records","provisional":true,"policy_version_id":"cfc20bef-eada-4db1-becb-46c8058b5355","gross_seconds":null,"excluded_break_seconds":null,"regular_seconds":null,"nonworking_seconds":null,"regular_minutes":null,"nonworking_minutes":null,"normal_excess_minutes":null,"eligible_minutes":null,"credited_minutes":null,"segments":[]},"calculation_error":null,"deficit_minutes":0,"edit":{"period_relation":"current","reason_required":false}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/integration/calendar-default-change.test.ts:113:60
+    111|     const audits = auditCount();
+    112|     const response = await put(DAY_A, dayBody('Worked', { default_cate…
+    113|     expect(response.status, JSON.stringify(response.body)).toBe(409);
+       |                                                            ^
+    114|     expect(response.body.error).toMatchObject({
+    115|       code: 'default_changed',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I2: a default-sourced entry: 409, and the entry, its version and its notes are unchanged
+AssertionError: {"work_date":"2026-09-21","classification":{"day_class":"nonworking","reason":"holiday","name":"Synthetic Holiday","calendar_version_id":"d1e5b4a9-ed23-423b-aba0-29bf300b55dc"},"default_category":"Holiday","category":"Worked","category_source":"explicit","attendance_expected":false,"leave_minutes":0,"leave_kind":null,"wfh":false,"ot_leave":{"kind_minutes":0,"consumed_minutes":0,"reversed_minutes":0,"mismatch":false},"entry":{"id":"593aae82-7c1c-48b8-9fa2-8249fcf8cdd7","work_date":"2026-09-21","category":"Worked","category_source":"explicit","leave_minutes":0,"leave_kind":null,"wfh":false,"notes":"typed","version":2},"sessions":[{"id":"8ffaa8cb-841f-4999-86d3-94dde1225e5e","work_date":"2026-09-21","start_utc":"2026-09-21T16:00:00Z","end_utc":"2026-09-21T19:00:00Z","input_zone":"America/Los_Angeles","source":"manual","breaks_confirmed":true,"version":1,"breaks":[]}],"calculation":{"status":"complete","provisional":true,"policy_version_id":"7cadf3ee-6ce1-484a-ba09-cac5dd568404","gross_seconds":10800,"excluded_break_seconds":0,"regular_seconds":0,"nonworking_seconds":10800,"regular_minutes":0,"nonworking_minutes":180,"normal_excess_minutes":0,"eligible_minutes":180,"credited_minutes":180,"segments":[{"local_date":"2026-09-21","day_class":"nonworking","reason":"holiday","calendar_version_id":"d1e5b4a9-ed23-423b-aba0-29bf300b55dc","seconds":10800}]},"calculation_error":null,"deficit_minutes":0,"edit":{"period_relation":"current","reason_required":false}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/integration/calendar-default-change.test.ts:132:60
+    130|     const audits = auditCount();
+    131|     const response = await put(DAY_A, dayBody('Worked', { notes: 'type…
+    132|     expect(response.status, JSON.stringify(response.body)).toBe(409);
+       |                                                            ^
+    133|     expect(response.body.error).toMatchObject({
+    134|       code: 'default_changed',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I5: no false notice for an import that moves another date, a rename, or an unchanged category; a kind change refuses
+AssertionError: {"work_date":"2026-09-22","classification":{"day_class":"nonworking","reason":"closure","name":"Synthetic Other Holiday","calendar_version_id":"32fed457-f48d-49c2-bfed-210830b6dce3"},"default_category":"Shutdown","category":"Holiday","category_source":"explicit","attendance_expected":false,"leave_minutes":0,"leave_kind":null,"wfh":false,"ot_leave":{"kind_minutes":0,"consumed_minutes":0,"reversed_minutes":0,"mismatch":false},"entry":{"id":"47ba02a5-dd60-49fb-b804-01c1231dcbcb","work_date":"2026-09-22","category":"Holiday","category_source":"explicit","leave_minutes":0,"leave_kind":null,"wfh":false,"notes":"","version":1},"sessions":[],"calculation":{"status":"no_records","provisional":true,"policy_version_id":"fd9420b3-65be-4ee1-8403-4607c85ed596","gross_seconds":null,"excluded_break_seconds":null,"regular_seconds":null,"nonworking_seconds":null,"regular_minutes":null,"nonworking_minutes":null,"normal_excess_minutes":null,"eligible_minutes":null,"credited_minutes":null,"segments":[]},"calculation_error":null,"deficit_minutes":0,"edit":{"period_relation":"current","reason_required":false}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/integration/calendar-default-change.test.ts:190:52
+    188|     await importRow(DAY_B, 'Synthetic Other Holiday', 'closure');
+    189|     const kind = await put(DAY_B, dayBody('Holiday', { default_categor…
+    190|     expect(kind.status, JSON.stringify(kind.body)).toBe(409);
+       |                                                    ^
+    191|     expect(kind.body.error.details).toMatchObject({ expected_default: …
+    192|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I7: reason (422) and stale_version (409) are answered before default_changed
+AssertionError: {"work_date":"2026-09-09","classification":{"day_class":"normal","reason":"scheduled_weekday","name":null,"calendar_version_id":"c0ee517d-3b19-4c3f-afb4-a630ba60386a"},"default_category":"Worked","category":"Off","category_source":"explicit","attendance_expected":false,"leave_minutes":0,"leave_kind":null,"wfh":false,"ot_leave":{"kind_minutes":0,"consumed_minutes":0,"reversed_minutes":0,"mismatch":false},"entry":{"id":"b5b209d5-c6c8-4929-9855-8f2f251ff1ab","work_date":"2026-09-09","category":"Off","category_source":"explicit","leave_minutes":0,"leave_kind":null,"wfh":false,"notes":"","version":1},"sessions":[],"calculation":{"status":"no_records","provisional":true,"policy_version_id":"870ac461-bbe6-4bb5-960a-14c13a1a5751","gross_seconds":null,"excluded_break_seconds":null,"regular_seconds":null,"nonworking_seconds":null,"regular_minutes":null,"nonworking_minutes":null,"normal_excess_minutes":null,"eligible_minutes":null,"credited_minutes":null,"segments":[]},"calculation_error":null,"deficit_minutes":0,"edit":{"period_relation":"old","reason_required":true}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/integration/calendar-default-change.test.ts:214:64
+    212|     expect(noReason.body.error.code).toBe('reason_required');
+    213|     const withReason = await put(OLD, dayBody('Off', { default_categor…
+    214|     expect(withReason.status, JSON.stringify(withReason.body)).toBe(40…
+       |                                                                ^
+    215|     expect(withReason.body.error.code).toBe('default_changed');
+    216|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I9: the preview marks the date default_changed, cannot commit, and writes nothing
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/integration/calendar-default-change.test.ts:286:38
+    284|     });
+    285|     expect(response.status, JSON.stringify(response.body)).toBe(200);
+    286|     expect(response.body.can_commit).toBe(false);
+       |                                      ^
+    287|     expect(response.body.entries[0]).toMatchObject({
+    288|       work_date: DAY_A,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/9]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I10: a commit with one changed default is 409 with the dates and writes neither date; stale_version wins
+AssertionError: {"mode":"commit","changed":["2026-09-21","2026-09-22"],"unchanged":[],"days":[{"work_date":"2026-09-21","classification":{"day_class":"nonworking","reason":"holiday","name":"Synthetic Holiday","calendar_version_id":"78b3df0d-51db-437c-ae56-eee581d90630"},"default_category":"Holiday","category":"Worked","category_source":"explicit","attendance_expected":false,"leave_minutes":0,"leave_kind":null,"wfh":false,"ot_leave":{"kind_minutes":0,"consumed_minutes":0,"reversed_minutes":0,"mismatch":false},"entry":{"id":"726f33eb-8a15-4093-85b2-37d6e7fb2412","work_date":"2026-09-21","category":"Worked","category_source":"explicit","leave_minutes":0,"leave_kind":null,"wfh":false,"notes":"","version":1},"sessions":[],"calculation":{"status":"no_records","provisional":true,"policy_version_id":"e7d1caba-9349-4cef-ae55-caeb6c98bd54","gross_seconds":null,"excluded_break_seconds":null,"regular_seconds":null,"nonworking_seconds":null,"regular_minutes":null,"nonworking_minutes":null,"normal_excess_minutes":null,"eligible_minutes":null,"credited_minutes":null,"segments":[]},"calculation_error":null,"deficit_minutes":0,"edit":{"period_relation":"current","reason_required":false}},{"work_date":"2026-09-22","classification":{"day_class":"normal","reason":"scheduled_weekday","name":null,"calendar_version_id":"78b3df0d-51db-437c-ae56-eee581d90630"},"default_category":"Worked","category":"Off","category_source":"explicit","attendance_expected":false,"leave_minutes":0,"leave_kind":null,"wfh":false,"ot_leave":{"kind_minutes":0,"consumed_minutes":0,"reversed_minutes":0,"mismatch":false},"entry":{"id":"b4eb8c94-b677-45c3-b4a6-e3756812425a","work_date":"2026-09-22","category":"Off","category_source":"explicit","leave_minutes":0,"leave_kind":null,"wfh":false,"notes":"","version":1},"sessions":[],"calculation":{"status":"no_records","provisional":true,"policy_version_id":"e7d1caba-9349-4cef-ae55-caeb6c98bd54","gross_seconds":null,"excluded_break_seconds":null,"regular_seconds":null,"nonworking_seconds":null,"regular_minutes":null,"nonworking_minutes":null,"normal_excess_minutes":null,"eligible_minutes":null,"credited_minutes":null,"segments":[]},"calculation_error":null,"deficit_minutes":0,"edit":{"period_relation":"current","reason_required":false}}]}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/integration/calendar-default-change.test.ts:311:58
+    309|       entries: [entry(DAY_A, 'Worked', { default_category: 'Worked' })…
+    310|     });
+    311|     expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+       |                                                          ^
+    312|     expect(refused.body.error).toMatchObject({
+    313|       code: 'default_changed',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/9]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I15: the commit order is stale, invalid, reason, default_changed, then conflicts
+AssertionError: expected 'conflicts_require_confirmation' to be 'default_changed' // Object.is equality
+
+Expected: "default_changed"
+Received: "conflicts_require_confirmation"
+
+ ❯ tests/integration/calendar-default-change.test.ts:374:37
+    372|     const refused = await batch(body);
+    373|     expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+    374|     expect(refused.body.error.code).toBe('default_changed');
+       |                                     ^
+    375|     const confirmedToo = await batch({ ...body, confirm_conflicts: tru…
+    376|     expect(confirmedToo.status).toBe(409);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/9]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > ownership and calendars > I12: the shared edit route checks the owner calendar, not the grantee calendar; a read-only grantee is still 403
+AssertionError: {"work_date":"2026-09-21","classification":{"day_class":"nonworking","reason":"holiday","name":"Synthetic Holiday","calendar_version_id":"0e1954ff-5aa4-447a-ba8e-d110da58128d"},"default_category":"Holiday","category":"Worked","category_source":"explicit","attendance_expected":false,"leave_minutes":0,"leave_kind":null,"wfh":false,"ot_leave":{"kind_minutes":0,"consumed_minutes":0,"reversed_minutes":0,"mismatch":false},"entry":{"id":"7e898562-bfd6-41a3-bb5b-12e3e26516b2","work_date":"2026-09-21","category":"Worked","category_source":"explicit","leave_minutes":0,"leave_kind":null,"wfh":false,"notes":"","version":1},"sessions":[],"calculation":{"status":"no_records","provisional":true,"policy_version_id":"58d5b47a-44c5-46c7-8c62-a961782c0de4","gross_seconds":null,"excluded_break_seconds":null,"regular_seconds":null,"nonworking_seconds":null,"regular_minutes":null,"nonworking_minutes":null,"normal_excess_minutes":null,"eligible_minutes":null,"credited_minutes":null,"segments":[]},"calculation_error":null,"deficit_minutes":0,"edit":{"period_relation":"current","reason_required":false}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/integration/calendar-default-change.test.ts:424:58
+    422|     const rows = entryRows();
+    423|     const refused = await t.request('PUT', path(DAY_A), { cookie: gran…
+    424|     expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+       |                                                          ^
+    425|     expect(refused.body.error).toMatchObject({
+    426|       code: 'default_changed',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/9]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > ownership and calendars > I13: another user on another calendar is unaffected by an import on the first calendar
+AssertionError: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/integration/calendar-default-change.test.ts:458:27
+    456|     expect(mine.status, JSON.stringify(mine.body)).toBe(200);
+    457|     const theirs = await t.request('PUT', `/api/days/${DAY_B}`, { cook…
+    458|     expect(theirs.status).toBe(409);
+       |                           ^
+    459|   });
+    460| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/9]⎯
+
+
+exit=1

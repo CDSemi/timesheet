@@ -1,10 +1,8 @@
-import { type DayCategory, defaultCategory } from '../../domain/attendance.ts';
-import { classifyDate } from '../../domain/calendar.ts';
+import type { DayCategory } from '../../domain/attendance.ts';
 import { assertCivilDate, type CivilDate } from '../../domain/dates.ts';
 import type { PeriodRelation } from '../../domain/editReason.ts';
-import { isDomainError } from '../../domain/errors.ts';
 import { writeTransaction } from '../db/database.ts';
-import { ApiError, staleVersion } from '../http/errors.ts';
+import { ApiError, type DefaultChange, staleVersion } from '../http/errors.ts';
 import type { DayBatchBody, DayBatchEntry } from '../http/schemas.ts';
 import { normalizeReason } from '../http/validation.ts';
 import {
@@ -13,8 +11,10 @@ import {
   type DayEntryInput,
   type DayEntryIssue,
   dayEntryIssue,
+  defaultChangeOf,
 } from './timesheetCommands.ts';
 import {
+  calendarDefaultOn,
   type DayEntryRow,
   dayEntryJson,
   editRequirementFor,
@@ -38,7 +38,7 @@ import {
  * employee must confirm it explicitly.
  */
 
-type EntryStatus = 'create' | 'update' | 'unchanged' | 'stale' | 'invalid';
+type EntryStatus = 'create' | 'update' | 'unchanged' | 'stale' | 'invalid' | 'default_changed';
 
 export interface BatchConflict {
   work_date: CivilDate;
@@ -59,6 +59,8 @@ interface PlannedEntry {
   reasonRequired: boolean;
   conflict: BatchConflict | null;
   error: DayEntryIssue | null;
+  /** Set with status 'default_changed': the calendar default moved since the caller loaded the date (R-UX5I2-3). */
+  defaultChange: DefaultChange | null;
 }
 
 /** Fields an omitted batch value takes from the existing entry (or the neutral default). */
@@ -72,6 +74,7 @@ function resolveInput(entry: DayBatchEntry, existing: DayEntryRow | undefined): 
     wfh: entry.wfh ?? existing?.wfh === 1,
     notes: entry.notes ?? existing?.notes ?? '',
     expected_version: entry.expected_version ?? null,
+    ...(entry.default_category === undefined ? {} : { default_category: entry.default_category }),
   };
 }
 
@@ -88,13 +91,7 @@ function isUnchanged(existing: DayEntryRow | undefined, input: DayEntryInput): b
 }
 
 function currentCategoryOf(scope: UserScope, workDate: CivilDate, existing: DayEntryRow | undefined): DayCategory | null {
-  if (existing !== undefined) return effectiveCategory(scope, existing);
-  try {
-    return defaultCategory(classifyDate(scope.calendarVersions, workDate));
-  } catch (error) {
-    if (!isDomainError(error)) throw error;
-    return null;
-  }
+  return existing !== undefined ? effectiveCategory(scope, existing) : calendarDefaultOn(scope, workDate);
 }
 
 function planBatch(ctx: CommandContext, scope: UserScope, body: DayBatchBody): PlannedEntry[] {
@@ -119,11 +116,25 @@ function planBatch(ctx: CommandContext, scope: UserScope, body: DayBatchBody): P
       reasonRequired: requirement.reasonRequired,
       conflict: null,
       error: null,
+      defaultChange: null,
     };
     const stale = existing === undefined ? input.expected_version !== null : input.expected_version !== existing.version;
     if (stale) return { ...planned, status: 'stale' };
     const issue = dayEntryIssue(scope, workDate, input);
     if (issue !== null) return { ...planned, status: 'invalid', error: issue };
+    const defaultChange = defaultChangeOf(scope, workDate, existing, input);
+    if (defaultChange !== null) {
+      return {
+        ...planned,
+        status: 'default_changed',
+        defaultChange,
+        error: {
+          code: 'default_changed',
+          message: `The calendar default is now ${defaultChange.current_default} (was ${defaultChange.expected_default ?? 'none'})`,
+          details: { expected_default: defaultChange.expected_default, current_default: defaultChange.current_default },
+        },
+      };
+    }
     if (isUnchanged(existing, input)) return planned;
     const sessions = loadSessions(ctx.db, ctx.user.id, workDate, workDate);
     const currentCategory = currentCategoryOf(scope, workDate, existing);
@@ -168,7 +179,7 @@ export function previewDayBatch(ctx: CommandContext, body: DayBatchBody) {
   const reasonDates = changes.filter((item) => item.reasonRequired).map((item) => item.workDate);
   return {
     mode: 'preview' as const,
-    can_commit: !plan.some((item) => item.status === 'stale' || item.status === 'invalid'),
+    can_commit: !plan.some((item) => item.status === 'stale' || item.status === 'invalid' || item.status === 'default_changed'),
     changed_count: changes.length,
     reason_required: reasonDates.length > 0,
     reason_required_dates: reasonDates,
@@ -211,6 +222,15 @@ export function commitDayBatch(ctx: CommandContext, body: DayBatchBody) {
       throw new ApiError(422, 'reason_required', 'Editing an old or finalized period requires a reason', {
         work_dates: reasonDates,
       });
+    }
+    const moved = plan.flatMap((item) => (item.defaultChange === null ? [] : [item.defaultChange]));
+    if (moved.length > 0) {
+      throw new ApiError(
+        409,
+        'default_changed',
+        `The calendar default changed for ${moved.map((change) => change.work_date).join(', ')} since it was loaded. Nothing was saved.`,
+        { work_dates: moved.map((change) => change.work_date), changes: moved },
+      );
     }
     const conflicts = changes.flatMap((item) => (item.conflict === null ? [] : [item.conflict]));
     if (conflicts.length > 0 && body.confirm_conflicts !== true) {

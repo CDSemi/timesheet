@@ -10,7 +10,7 @@ Gói này là đặc tả, chưa có app chạy. Kiểm tra gói không chứng 
 | AC-02 | Fixture giờ/OT đạt: biên N/M, ngày nghỉ, vào linh hoạt, qua đêm, cộng giây, DST, khoảng sai | WP1 |
 | AC-03 | Ghi/tiêu phép lặp và đồng thời không trùng sự kiện hay dùng trùng giữ chỗ | WP2/WP3 |
 | AC-04 | Nháp hiện tại không lý do; cũ/đã chốt cần; giữ audit/lịch sử/quy tắc/PDF gốc | WP2/WP3 |
-| AC-05 | Import lễ preview/kiểm ngày trùng/sai, giữ override và lịch sử đã chốt | WP2 |
+| AC-05 | Import lễ preview/kiểm ngày trùng/sai, giữ override và lịch sử đã chốt; ngày đang theo lịch mà import lễ đã đổi mặc định thì editor, bộ chọn hoặc batch cũ không ghi đè được nếu người dùng chưa chọn (409 `default_changed`, thông báo của Day editor; quyết định R-UX5I2-3 của chủ) | WP2 |
 | AC-06 | Sign-off là hành động của chủ đang đăng nhập, ghi tên tài khoản và ảnh khi đã lưu, và gắn payload đã xem; nó không gửi gì, và việc gửi là một hành động riêng của chủ (WP5-UX5-T01b); tên gõ vào không đổi gì; ảnh được lưu hoặc thay sau lúc xem, hay sửa đồng thời, gây xung đột | WP3, WP5 |
 | AC-07 | Tự nộp bật/tắt, dòng ghi chú tự nộp (mặc định tắt, sửa được nội dung) và phép dùng ảnh hoạt động đúng; bản tự nộp gửi đi không có dấu hiệu tự động trong khi bản ghi giữ nguồn tự động, chờ xác nhận, signed_at trống và không sign-off; kỳ chưa lưu dữ liệu được nộp theo nhãn mặc định, không OT, không thiếu giờ; đến hạn mà bật tự nộp thì revision đã ký nhưng chưa từng gửi được gửi đúng như đã ký (một lần gửi deadline, không revision mới, không đổi sổ), tắt thì nhận cảnh báo quá hạn, và kỳ đã có lần gửi thì không bao giờ được gửi lại (quyết định của chủ F-2 a) | WP3, WP5 |
 | AC-08 | Restart trước/sau PDF và quanh lúc gửi giữ job; chưa rõ chấp nhận không tự gửi lại mù | WP3 |

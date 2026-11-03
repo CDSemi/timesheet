@@ -1,0 +1,56 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/integration/calendar-default-change.test.ts (18 tests | 2 failed) 5101ms
+   ❯ PUT /api/days/:date refuses a category recorded over a changed calendar default (11)
+     × I8: a null default means "none was shown": refused when the calendar has one; unknown values are 422 249ms
+     × I14: a category equal to the new default is not refused (both choices give the same category) 262ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 16 passed (18)
+   Start at  23:11:25
+   Duration  6.03s (tests 86%, transform 9%, import 5%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I8: a null default means "none was shown": refused when the calendar has one; unknown values are 422
+AssertionError: {"error":{"code":"default_changed","message":"The calendar default for 2026-09-21 changed from none to Worked since it was loaded. Nothing was saved.","details":{"work_date":"2026-09-21","expected_default":null,"current_default":"Worked"}}}: expected 409 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 409
+
+ ❯ tests/integration/calendar-default-change.test.ts:227:52
+    225|     expect(entryRows()).toEqual([]);
+    226|     const same = await put(DAY_A, dayBody('Worked', { default_category…
+    227|     expect(same.status, JSON.stringify(same.body)).toBe(200);
+       |                                                    ^
+    228|
+    229|     for (const bad of ['OT-funded leave', 7, 'worked']) {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I14: a category equal to the new default is not refused (both choices give the same category)
+AssertionError: {"error":{"code":"default_changed","message":"The calendar default for 2026-09-21 changed from Worked to Holiday since it was loaded. Nothing was saved.","details":{"work_date":"2026-09-21","expected_default":"Worked","current_default":"Holiday"}}}: expected 409 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 409
+
+ ❯ tests/integration/calendar-default-change.test.ts:243:54
+    241|     await importRow(DAY_A, 'Synthetic Holiday');
+    242|     const saved = await put(DAY_A, dayBody('Holiday', { expected_versi…
+    243|     expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+       |                                                      ^
+    244|     expect(saved.body).toMatchObject({ category: 'Holiday', category_s…
+    245|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+exit=1

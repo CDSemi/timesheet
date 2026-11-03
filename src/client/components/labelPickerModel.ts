@@ -37,12 +37,12 @@ export function currentLabelChoice(day: DayView): LabelChoice | null {
 }
 
 /**
- * The one batch entry of a pick, with the version the page loaded. Worked and Work from home also
+ * The one batch entry of a pick, with the version and the calendar default the page loaded. Worked and Work from home also
  * set WFH (off and on); any other label sends only the category, so the server keeps the day's
  * leave, WFH and notes as stored (an omitted batch field keeps its value).
  */
 export function labelEntry(day: DayView, choice: LabelChoice): DayBatchEntry {
-  const base = { work_date: day.work_date, expected_version: day.entry?.version ?? null };
+  const base = { work_date: day.work_date, expected_version: day.entry?.version ?? null, default_category: day.default_category };
   if (choice === WORK_FROM_HOME) return { ...base, category: 'Worked', wfh: true };
   if (choice === 'Worked') return { ...base, category: 'Worked', wfh: false };
   return { ...base, category: choice };

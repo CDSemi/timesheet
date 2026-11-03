@@ -1,0 +1,39 @@
+import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+// Compares dist/server, dist/domain and dist/client of two builds (evidence tool): same relative path, same SHA-256 of the bytes.
+const [baseRoot, mineRoot, out] = process.argv.slice(2);
+const walk = (root, dir, found) => {
+  for (const name of readdirSync(join(root, dir))) {
+    const rel = `${dir}/${name}`;
+    if (statSync(join(root, rel)).isDirectory()) walk(root, rel, found);
+    else found.set(rel, createHash('sha256').update(readFileSync(join(root, rel))).digest('hex').slice(0, 16));
+  }
+  return found;
+};
+const lines = [];
+for (const part of ['dist/server', 'dist/domain', 'dist/client']) {
+  let base;
+  let mine;
+  try {
+    base = walk(baseRoot, part, new Map());
+  } catch {
+    base = new Map();
+  }
+  try {
+    mine = walk(mineRoot, part, new Map());
+  } catch {
+    mine = new Map();
+  }
+  const names = [...new Set([...base.keys(), ...mine.keys()])].sort();
+  const differ = names.filter((name) => base.has(name) && mine.has(name) && base.get(name) !== mine.get(name));
+  const onlyBase = names.filter((name) => !mine.has(name));
+  const onlyMine = names.filter((name) => !base.has(name));
+  lines.push(`${part}: ${base.size} files in a54061f, ${mine.size} in the tree; ${names.length - differ.length - onlyBase.length - onlyMine.length} identical, ${differ.length} differ, ${onlyBase.length} only in a54061f, ${onlyMine.length} only in the tree`);
+  for (const name of differ) lines.push(`  differs: ${name}`);
+  for (const name of onlyBase) lines.push(`  only in a54061f: ${name}`);
+  for (const name of onlyMine) lines.push(`  only in the tree: ${name}`);
+}
+writeFileSync(out, `${lines.join('\n')}\n`);
+process.stdout.write(`${lines.join('\n')}\n`);

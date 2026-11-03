@@ -1,0 +1,77 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/integration/calendar-default-change.test.ts (18 tests | 3 failed) 4904ms
+   ❯ PUT /api/days/:date refuses a category recorded over a changed calendar default (11)
+     × I6: an omitted default_category is not checked 254ms
+   ❯ POST /api/days/batch with a changed calendar default (5)
+     × I11b: an omitted default_category and an explicit entry are not checked in a batch 247ms
+     × I15: the commit order is stale, invalid, reason, default_changed, then conflicts 272ms
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 15 passed (18)
+   Start at  23:10:23
+   Duration  5.80s (tests 86%, transform 9%, import 5%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I6: an omitted default_category is not checked
+AssertionError: {"error":{"code":"default_changed","message":"The calendar default for 2026-09-21 changed from none to Holiday since it was loaded. Nothing was saved.","details":{"work_date":"2026-09-21","current_default":"Holiday"}}}: expected 409 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 409
+
+ ❯ tests/integration/calendar-default-change.test.ts:197:60
+    195|     await importRow(DAY_A, 'Synthetic Holiday');
+    196|     const response = await put(DAY_A, dayBody('Worked'));
+    197|     expect(response.status, JSON.stringify(response.body)).toBe(200);
+       |                                                            ^
+    198|     expect(response.body).toMatchObject({ category: 'Worked', category…
+    199|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I11b: an omitted default_category and an explicit entry are not checked in a batch
+AssertionError: {"error":{"code":"default_changed","message":"The calendar default changed for 2026-09-21 since it was loaded. Nothing was saved.","details":{"work_dates":["2026-09-21"],"changes":[{"work_date":"2026-09-21","current_default":"Holiday"}]}}}: expected 409 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 409
+
+ ❯ tests/integration/calendar-default-change.test.ts:348:58
+    346|     await importRow(DAY_A, 'Synthetic Holiday');
+    347|     const omitted = await batch({ mode: 'commit', entries: [entry(DAY_…
+    348|     expect(omitted.status, JSON.stringify(omitted.body)).toBe(200);
+       |                                                          ^
+    349|     await importRow(DAY_B, 'Synthetic Holiday Two');
+    350|     const explicit = await put(DAY_C, dayBody('Worked'));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I15: the commit order is stale, invalid, reason, default_changed, then conflicts
+AssertionError: expected 409 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 409
+
+ ❯ tests/integration/calendar-default-change.test.ts:394:27
+    392|       entries: [entry(DAY_B, 'Worked', { default_category: 'Worked' })…
+    393|     });
+    394|     expect(reason.status).toBe(422);
+       |                           ^
+    395|     expect(reason.body.error.code).toBe('reason_required');
+    396|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+exit=1

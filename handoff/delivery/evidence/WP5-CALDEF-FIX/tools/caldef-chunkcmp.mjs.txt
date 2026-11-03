@@ -1,0 +1,11 @@
+import { readdirSync, readFileSync } from 'node:fs';
+const [a, b] = process.argv.slice(2);
+const norm = (text) => text.replace(/(index|AdminScreen|ImportScreen|ReviewScreen|SettingsTransfer|SettingsTransferFile)-[A-Za-z0-9_-]{8}\.js/g, '$1-H.js');
+const list = (dir) => readdirSync(dir).filter((name) => name.endsWith('.js'));
+const key = (name) => name.replace(/-[A-Za-z0-9_-]{8}\.js$/, '');
+const old = new Map(list(a).map((name) => [key(name), name]));
+for (const name of list(b)) {
+  const other = old.get(key(name));
+  const same = other !== undefined && norm(readFileSync(`${a}/${other}`, 'utf8')) === norm(readFileSync(`${b}/${name}`, 'utf8'));
+  console.log(`${key(name)}: ${same ? 'same code (only the chunk hash names differ)' : 'CODE DIFFERS'}`);
+}

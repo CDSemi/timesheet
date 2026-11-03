@@ -1,7 +1,7 @@
-import { type MouseEvent, type SubmitEvent, useId, useLayoutEffect, useState } from 'react';
+import { type MouseEvent, type SubmitEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { type DayCategory, type DayView, type LeaveKind, ownRequest, type Requester } from '../api.ts';
-import { describeError, isStaleVersion } from './errors.ts';
+import { type DefaultChange, defaultChangeOf, describeError, isStaleVersion } from './errors.ts';
 import { LeaveDialog } from './LeaveDialog.tsx';
 import { type LeaveInput, leaveSummary } from './leaveInputModel.ts';
 import { buildDayEntryRequest, CATEGORIES, type DayFieldsDraft, dayFieldsDraft, otMismatchNotice } from './sessionModel.ts';
@@ -22,6 +22,11 @@ function draftKey(draft: DayFieldsDraft): string {
  * leave minutes the day endpoint always took. The E-2 notice appears when the server reports that the day's OT-kind leave differs
  * from consumed OT leave; it informs only, and this form never spends, reserves or releases OT.
  *
+ * R-UX5I2-3: the form remembers the calendar default it showed when it mounted (`shownDefault`, state, never the live prop) and sends
+ * it with every save. When the server answers 409 `default_changed` (the default moved since, e.g. an administrator's holiday import),
+ * nothing was saved and a notice offers the owner's two choices: "Use {new default}" (the category follows the calendar; nothing is sent)
+ * or "Save {category} anyway" (the same save, naming the new default). Every typed field is kept.
+ *
  * "Save day fields" sits at the end of the form, except on the phone's bottom sheet (U5-26): there the sheet gives it a foot that
  * stays in view while the body scrolls (`footSlot`), and the button is drawn into that foot but still submits this form.
  */
@@ -31,6 +36,7 @@ export function DayFieldsForm({
   reasonRequired,
   onSaved,
   onStale,
+  onDefaultTaken,
   onDirtyChange,
   footSlot,
   request = ownRequest,
@@ -40,6 +46,8 @@ export function DayFieldsForm({
   reasonRequired: boolean;
   onSaved: (day: DayView) => void;
   onStale: () => void;
+  /** Called after "Use {default}": the day behind the form now takes the new calendar default (the page refreshes and the editor reads the day). */
+  onDefaultTaken?: (category: DayCategory) => void;
   /** Called when the fields start or stop differing from the day as loaded or last saved (the unsaved-edit guard of the page). */
   onDirtyChange?: (dirty: boolean) => void;
   /** Undefined: the Save button ends the form. An element: the button is drawn there (the phone sheet's foot). Null: that foot is not mounted yet. */
@@ -58,6 +66,20 @@ export function DayFieldsForm({
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
   const [error, setError] = useState<string | null>(null);
+  /** The calendar default this form showed when it mounted (null: none); sent with every save, so a later change of the calendar is seen by the server. */
+  const [shownDefault, setShownDefault] = useState<DayCategory | null>(() => day.default_category);
+  /** The refused save of a changed calendar default, until a choice is made, the save is stale or the form remounts. */
+  const [defaultNotice, setDefaultNotice] = useState<DefaultChange | null>(null);
+  /** The polite status after "Use {default}". */
+  const [status, setStatus] = useState<string | null>(null);
+  const categorySelect = useRef<HTMLSelectElement>(null);
+  const noticeBox = useRef<HTMLDivElement>(null);
+  // The notice is announced (role alert) and takes focus, scrolled into view so the phone sheet's foot does not hide it.
+  useEffect(() => {
+    if (defaultNotice === null) return;
+    noticeBox.current?.focus();
+    noticeBox.current?.scrollIntoView({ block: 'nearest' });
+  }, [defaultNotice]);
   /** The Partial leave dialog, open or not, and the Change or Add button that opened it. */
   const [leaveDialog, setLeaveDialog] = useState<{ opener: HTMLElement } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -78,27 +100,67 @@ export function DayFieldsForm({
     setLeaveDialog(null);
   }
 
-  async function save(event: SubmitEvent<HTMLFormElement>) {
-    event.preventDefault();
+  /** The one write: the current draft, the live entry version, the reason and the default `shown` names (the mount-time default, or the new one after "Save anyway"). */
+  async function write(shown: DayCategory | null, fromNotice: boolean) {
     if (reasonMissing) return;
     // Only the leave can refuse here, and the dialog lets only readable leave into the draft; the check stays for the model's sake.
-    const built = buildDayEntryRequest(draft, day.entry?.version ?? null, reason);
+    const built = buildDayEntryRequest(draft, day.entry?.version ?? null, reason, shown);
     if (!built.ok) {
       setError(built.message);
       return;
     }
     setBusy(true);
     setError(null);
+    setStatus(null);
     try {
       const next = await request<DayView>('PUT', `/days/${day.work_date}`, built.request);
       setBaseline(draftKey(draft));
+      // The button that was pressed leaves with the notice: focus goes to the field the choice was about.
+      if (fromNotice) categorySelect.current?.focus();
+      setDefaultNotice(null);
       onSaved(next);
     } catch (caught) {
-      if (isStaleVersion(caught)) onStale();
-      else setError(describeError(caught));
+      const change = defaultChangeOf(caught);
+      if (isStaleVersion(caught)) {
+        setDefaultNotice(null);
+        onStale();
+      } else if (change !== null) {
+        setDefaultNotice(change);
+      } else {
+        setError(describeError(caught));
+      }
     } finally {
       setBusy(false);
     }
+  }
+
+  function save(event: SubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void write(shownDefault, false);
+  }
+
+  /** "Save {category} anyway": the same save naming the new default, so the person's category is recorded over it. */
+  function saveAnyway(change: DefaultChange) {
+    setShownDefault(change.current);
+    void write(change.current, true);
+  }
+
+  /** "Use {default}": nothing is sent. The category follows the calendar, every other typed field stays, and what is typed is the only unsaved edit. */
+  function useDefault(change: DefaultChange) {
+    const next = { ...draft, category: change.current };
+    const rebased = draftKey({ ...dayFieldsDraft(day), category: change.current });
+    setDraft(next);
+    setShownDefault(change.current);
+    setBaseline(rebased);
+    setDefaultNotice(null);
+    setError(null);
+    setStatus(
+      `Category set to ${change.current}, the calendar default now. ${
+        draftKey(next) === rebased ? 'Nothing needs saving.' : 'Save day fields to keep your other changes.'
+      }`,
+    );
+    categorySelect.current?.focus();
+    onDefaultTaken?.(change.current);
   }
 
   const saveButton = (
@@ -111,6 +173,22 @@ export function DayFieldsForm({
     <>
       <form id={formId} className="editor-form editor-section stack" onSubmit={save} aria-label="Day fields" noValidate>
         <h3>Category and leave</h3>
+        {defaultNotice !== null && (
+          <div className="stale" role="alert" tabIndex={-1} ref={noticeBox} data-warning="default-changed">
+            <p>
+              <strong>Notice.</strong> The calendar default for this day changed from {defaultNotice.expected ?? 'none'} to{' '}
+              {defaultNotice.current} since it was loaded. Nothing was saved. Use the new default, or save your category over it.
+            </p>
+            <div className="button-row">
+              <button type="button" className="secondary" disabled={busy} onClick={() => useDefault(defaultNotice)}>
+                Use {defaultNotice.current}
+              </button>
+              <button type="button" disabled={busy || reasonMissing} onClick={() => saveAnyway(defaultNotice)}>
+                Save {draft.category} anyway
+              </button>
+            </div>
+          </div>
+        )}
         {mismatch !== null && (
           <p className="warn-box" role="status" data-warning="ot-leave-mismatch">
             <strong>Notice.</strong> {mismatch}
@@ -121,6 +199,7 @@ export function DayFieldsForm({
           <label className="label-select">
             Category
             <select
+              ref={categorySelect}
               value={draft.category}
               onChange={(event) => setDraft({ ...draft, category: event.target.value as DayCategory })}
               aria-describedby={day.category_source === 'default' ? `${id}-category-hint` : undefined}
@@ -166,6 +245,11 @@ export function DayFieldsForm({
           Notes
           <textarea value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} rows={2} maxLength={2000} />
         </label>
+        {status !== null && (
+          <p className="muted hint" role="status">
+            {status}
+          </p>
+        )}
         {error !== null && (
           <p className="error" role="alert">
             {error}

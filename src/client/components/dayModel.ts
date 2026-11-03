@@ -1,5 +1,5 @@
 import { isoWeekday } from '../../domain/dates.ts';
-import type { BatchConflict, DayBatchEntry, DayCategory, DayView, Session, TimesheetView } from '../api.ts';
+import type { BatchConflict, DayBatchEntry, DayBatchPreview, DayCategory, DayView, Session, TimesheetView } from '../api.ts';
 
 /*
  * Pure presentation logic for the timesheet views. It maps fields the server already computed
@@ -111,11 +111,16 @@ export function reviewStatus(timesheet: TimesheetView['timesheet']): 'Draft' | '
   return timesheet.finalized ? 'Finalized' : 'Draft';
 }
 
-/** One batch entry per selected date, in date order, each carrying the version the caller saw. */
+/** One batch entry per selected date, in date order, each carrying the version and the calendar default the caller saw. */
 export function batchEntries(days: readonly DayView[], selected: ReadonlySet<string>, category: DayCategory): DayBatchEntry[] {
   return days
     .filter((day) => selected.has(day.work_date))
-    .map((day) => ({ work_date: day.work_date, category, expected_version: day.entry?.version ?? null }));
+    .map((day) => ({
+      work_date: day.work_date,
+      category,
+      expected_version: day.entry?.version ?? null,
+      default_category: day.default_category,
+    }));
 }
 
 export interface ConflictDetail {
@@ -136,6 +141,14 @@ export function conflictDetails(conflicts: readonly BatchConflict[], days: reado
 export function staleDates(details: Record<string, unknown> | undefined): string[] {
   const dates = details?.work_dates;
   return Array.isArray(dates) ? dates.filter((item): item is string => typeof item === 'string') : [];
+}
+
+/**
+ * The dates of a preview that changed elsewhere (a newer entry version) or whose calendar default moved since the period was loaded
+ * (R-UX5I2-3). Closing such a review has nothing to commit, so the page offers "Reload period" for these dates.
+ */
+export function movedPreviewDates(preview: DayBatchPreview): string[] {
+  return preview.entries.filter((entry) => entry.status === 'stale' || entry.status === 'default_changed').map((entry) => entry.work_date);
 }
 
 export function staleReloadMessage(dates: readonly string[]): string {

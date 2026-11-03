@@ -1,0 +1,15 @@
+node v24.21.0
+PASS  cli migrate on a fresh database  {"database":"<tmp>\\timesheet.db","applied":[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15],"version":15}
+PASS  cli migrate again is a no-op  {"database":"<tmp>\\timesheet.db","applied":[],"version":15}
+PASS  cli seed creates synthetic users without printing supplied passwords  Created synthetic seed data: |   admin    admin@example.invalid |   employee employee@example.invalid |   employee employee2@example.invalid |   sample data for employee2@example.invalid: 3 sessions, 1 leave request, setup credit 600 minutes |   submission settings (recipients on example.invalid, automatic submission off) and a generated synthetic signature saved for employee2@example.invalid |   capture sender: set MAIL_FROM to an example.invalid address (OUTBOUND_MODE stays capture) so first attempts are captured
+PASS  cli seed lists employee2@example.invalid and its sample data
+PASS  built server starts  Timesheet listening on http://127.0.0.1:48784 (schema v15)
+PASS  GET /api/health has no personal data  {"status":"ok"}
+PASS  GET /api/ready returns 200 with the allowlisted keys only  {"status":"ready","schema":{"expected":15,"actual":15},"data_dir_writable":true}
+PASS  GET / serves the built React client with CSP
+PASS  SPA fallback serves index.html
+PASS  employee login sets an HttpOnly SameSite=Strict cookie
+PASS  GET /api/periods/current  today 2026-11-02, current payroll 2026-11-13, due 2026-11-11T01:00:00Z
+FAIL  unexpected error: No Monday found
+SMOKE FAILED (1)
+exit=1

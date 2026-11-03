@@ -1,0 +1,351 @@
+
+ RUN  v5.0.2 D:/.claude-tmp/claude/D--Dropbox-Work-CDSemi-timesheet/b5de56d1-fb31-4dc5-b74f-70e9473e1a0a/scratchpad/base
+
+ ❯ tests/integration/calendar-default-change.test.ts (18 tests | 17 failed) 4853ms
+   ❯ PUT /api/days/:date refuses a category recorded over a changed calendar default (11)
+     × I1: a day with no entry: 409 default_changed with both defaults, nothing written 273ms
+     × I2: a default-sourced entry: 409, and the entry, its version and its notes are unchanged 248ms
+     × I3: the acknowledgement (the current default) records the category as explicit, audited 248ms
+     × I4: an explicit entry is never checked, even with a stale default 251ms
+     × I5: no false notice for an import that moves another date, a rename, or an unchanged category; a kind change refuses 287ms
+     × I7: reason (422) and stale_version (409) are answered before default_changed 255ms
+     × I8: a null default means "none was shown": refused when the calendar has one; unknown values are 422 244ms
+     × I14: a category equal to the new default is not refused (both choices give the same category) 254ms
+     × I17: a date no calendar version covers has no default to protect: the calendar_missing refusal stands, not default_changed 246ms
+     × I16: an invalid leave is answered (422) before a changed default 253ms
+   ❯ POST /api/days/batch with a changed calendar default (5)
+     × I9: the preview marks the date default_changed, cannot commit, and writes nothing 242ms
+     × I10: a commit with one changed default is 409 with the dates and writes neither date; stale_version wins 239ms
+     × I11: the acknowledgement (the current default) commits every date 247ms
+     × I11b: an omitted default_category and an explicit entry are not checked in a batch 294ms
+     × I15: the commit order is stale, invalid, reason, default_changed, then conflicts 284ms
+   ❯ ownership and calendars (2)
+     × I12: the shared edit route checks the owner calendar, not the grantee calendar; a read-only grantee is still 403 379ms
+     × I13: another user on another calendar is unaffected by an import on the first calendar 350ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 17 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I1: a day with no entry: 409 default_changed with both defaults, nothing written
+AssertionError: {"error":{"code":"validation_error","message":"The request body is invalid","details":{"issues":[{"path":"","code":"unrecognized_keys","message":"Unrecognized key: \"default_category\""}]}}}: expected 422 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 422
+
+ ❯ tests/integration/calendar-default-change.test.ts:113:60
+    111|     const audits = auditCount();
+    112|     const response = await put(DAY_A, dayBody('Worked', { default_cate…
+    113|     expect(response.status, JSON.stringify(response.body)).toBe(409);
+       |                                                            ^
+    114|     expect(response.body.error).toMatchObject({
+    115|       code: 'default_changed',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/17]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I2: a default-sourced entry: 409, and the entry, its version and its notes are unchanged
+AssertionError: {"error":{"code":"validation_error","message":"The request body is invalid","details":{"issues":[{"path":"","code":"unrecognized_keys","message":"Unrecognized key: \"default_category\""}]}}}: expected 422 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 422
+
+ ❯ tests/integration/calendar-default-change.test.ts:132:60
+    130|     const audits = auditCount();
+    131|     const response = await put(DAY_A, dayBody('Worked', { notes: 'type…
+    132|     expect(response.status, JSON.stringify(response.body)).toBe(409);
+       |                                                            ^
+    133|     expect(response.body.error).toMatchObject({
+    134|       code: 'default_changed',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/17]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I3: the acknowledgement (the current default) records the category as explicit, audited
+AssertionError: {"error":{"code":"validation_error","message":"The request body is invalid","details":{"issues":[{"path":"","code":"unrecognized_keys","message":"Unrecognized key: \"default_category\""}]}}}: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ tests/integration/calendar-default-change.test.ts:148:54
+    146|     await importRow(DAY_A, 'Synthetic Holiday');
+    147|     const saved = await put(DAY_A, dayBody('Worked', { expected_versio…
+    148|     expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+       |                                                      ^
+    149|     expect(saved.body).toMatchObject({ category: 'Worked', category_so…
+    150|     expect(saved.body.entry).toMatchObject({ version: version + 1 });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/17]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I4: an explicit entry is never checked, even with a stale default
+AssertionError: {"error":{"code":"validation_error","message":"The request body is invalid","details":{"issues":[{"path":"","code":"unrecognized_keys","message":"Unrecognized key: \"default_category\""}]}}}: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ tests/integration/calendar-default-change.test.ts:169:54
+    167|     await importRow(DAY_A, 'Synthetic Holiday');
+    168|     const again = await put(DAY_A, dayBody('Worked', { notes: 'again',…
+    169|     expect(again.status, JSON.stringify(again.body)).toBe(200);
+       |                                                      ^
+    170|     expect(again.body).toMatchObject({ category: 'Worked', category_so…
+    171|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/17]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I5: no false notice for an import that moves another date, a rename, or an unchanged category; a kind change refuses
+AssertionError: {"error":{"code":"validation_error","message":"The request body is invalid","details":{"issues":[{"path":"","code":"unrecognized_keys","message":"Unrecognized key: \"default_category\""}]}}}: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ tests/integration/calendar-default-change.test.ts:178:54
+    176|     await importRow(DAY_B, 'Synthetic Other Holiday');
+    177|     const other = await put(DAY_A, dayBody('Off', { notes: 'a', expect…
+    178|     expect(other.status, JSON.stringify(other.body)).toBe(200);
+       |                                                      ^
+    179|
+    180|     await addSession(DAY_C);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/17]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I7: reason (422) and stale_version (409) are answered before default_changed
+AssertionError: expected 422 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 422
+
+ ❯ tests/integration/calendar-default-change.test.ts:207:26
+    205|     // The entry moved elsewhere and the default moved: the version gu…
+    206|     const moved = await put(DAY_A, dayBody('Worked', { expected_versio…
+    207|     expect(moved.status).toBe(409);
+       |                          ^
+    208|     expect(moved.body.error.code).toBe('stale_version');
+    209|     // An old period needs a reason first, whatever the default says.
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/17]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I8: a null default means "none was shown": refused when the calendar has one; unknown values are 422
+AssertionError: {"error":{"code":"validation_error","message":"The request body is invalid","details":{"issues":[{"path":"","code":"unrecognized_keys","message":"Unrecognized key: \"default_category\""}]}}}: expected 422 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 422
+
+ ❯ tests/integration/calendar-default-change.test.ts:220:60
+    218|   it('I8: a null default means "none was shown": refused when the cale…
+    219|     const mismatch = await put(DAY_A, dayBody('Off', { default_categor…
+    220|     expect(mismatch.status, JSON.stringify(mismatch.body)).toBe(409);
+       |                                                            ^
+    221|     expect(mismatch.body.error.message).toBe(
+    222|       `The calendar default for ${DAY_A} changed from none to Worked s…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/17]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I14: a category equal to the new default is not refused (both choices give the same category)
+AssertionError: {"error":{"code":"validation_error","message":"The request body is invalid","details":{"issues":[{"path":"","code":"unrecognized_keys","message":"Unrecognized key: \"default_category\""}]}}}: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ tests/integration/calendar-default-change.test.ts:243:54
+    241|     await importRow(DAY_A, 'Synthetic Holiday');
+    242|     const saved = await put(DAY_A, dayBody('Holiday', { expected_versi…
+    243|     expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+       |                                                      ^
+    244|     expect(saved.body).toMatchObject({ category: 'Holiday', category_s…
+    245|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/17]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I17: a date no calendar version covers has no default to protect: the calendar_missing refusal stands, not default_changed
+AssertionError: expected 'validation_error' to be 'calendar_missing' // Object.is equality
+
+Expected: "calendar_missing"
+Received: "validation_error"
+
+ ❯ tests/integration/calendar-default-change.test.ts:261:38
+    259|     const response = await put('2025-12-31', dayBody('Off', { default_…
+    260|     expect(response.status, JSON.stringify(response.body)).toBe(422);
+    261|     expect(response.body.error.code).toBe('calendar_missing');
+       |                                      ^
+    262|     expect(entryRows()).toEqual([]);
+    263|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/17]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I16: an invalid leave is answered (422) before a changed default
+AssertionError: expected 'validation_error' to be 'leave_exceeds_required' // Object.is equality
+
+Expected: "leave_exceeds_required"
+Received: "validation_error"
+
+ ❯ tests/integration/calendar-default-change.test.ts:269:38
+    267|     const response = await put(DAY_A, dayBody('Worked', { leave_minute…
+    268|     expect(response.status, JSON.stringify(response.body)).toBe(422);
+    269|     expect(response.body.error.code).toBe('leave_exceeds_required');
+       |                                      ^
+    270|   });
+    271| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/17]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I9: the preview marks the date default_changed, cannot commit, and writes nothing
+AssertionError: {"error":{"code":"validation_error","message":"The request body is invalid","details":{"issues":[{"path":"entries.0","code":"unrecognized_keys","message":"Unrecognized key: \"default_category\""},{"path":"entries.1","code":"unrecognized_keys","message":"Unrecognized key: \"default_category\""}]}}}: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ tests/integration/calendar-default-change.test.ts:285:60
+    283|       entries: [entry(DAY_A, 'Worked', { default_category: 'Worked' })…
+    284|     });
+    285|     expect(response.status, JSON.stringify(response.body)).toBe(200);
+       |                                                            ^
+    286|     expect(response.body.can_commit).toBe(false);
+    287|     expect(response.body.entries[0]).toMatchObject({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/17]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I10: a commit with one changed default is 409 with the dates and writes neither date; stale_version wins
+AssertionError: {"error":{"code":"validation_error","message":"The request body is invalid","details":{"issues":[{"path":"entries.0","code":"unrecognized_keys","message":"Unrecognized key: \"default_category\""},{"path":"entries.1","code":"unrecognized_keys","message":"Unrecognized key: \"default_category\""}]}}}: expected 422 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 422
+
+ ❯ tests/integration/calendar-default-change.test.ts:311:58
+    309|       entries: [entry(DAY_A, 'Worked', { default_category: 'Worked' })…
+    310|     });
+    311|     expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+       |                                                          ^
+    312|     expect(refused.body.error).toMatchObject({
+    313|       code: 'default_changed',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/17]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I11: the acknowledgement (the current default) commits every date
+AssertionError: {"error":{"code":"validation_error","message":"The request body is invalid","details":{"issues":[{"path":"entries.0","code":"unrecognized_keys","message":"Unrecognized key: \"default_category\""},{"path":"entries.1","code":"unrecognized_keys","message":"Unrecognized key: \"default_category\""}]}}}: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ tests/integration/calendar-default-change.test.ts:337:60
+    335|       entries: [entry(DAY_A, 'Worked', { default_category: 'Holiday' }…
+    336|     });
+    337|     expect(response.status, JSON.stringify(response.body)).toBe(200);
+       |                                                            ^
+    338|     expect(response.body.changed).toEqual([DAY_A, DAY_B]);
+    339|     expect(entryRows().map((row) => [row.work_date, row.category, row.…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/17]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I11b: an omitted default_category and an explicit entry are not checked in a batch
+AssertionError: {"error":{"code":"validation_error","message":"The request body is invalid","details":{"issues":[{"path":"entries.0","code":"unrecognized_keys","message":"Unrecognized key: \"default_category\""}]}}}: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ tests/integration/calendar-default-change.test.ts:356:54
+    354|       entries: [entry(DAY_C, 'Off', { expected_version: explicit.body.…
+    355|     });
+    356|     expect(again.status, JSON.stringify(again.body)).toBe(200);
+       |                                                      ^
+    357|   });
+    358|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/17]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I15: the commit order is stale, invalid, reason, default_changed, then conflicts
+AssertionError: {"error":{"code":"validation_error","message":"The request body is invalid","details":{"issues":[{"path":"entries.0","code":"unrecognized_keys","message":"Unrecognized key: \"default_category\""},{"path":"entries.1","code":"unrecognized_keys","message":"Unrecognized key: \"default_category\""}]}}}: expected 422 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 422
+
+ ❯ tests/integration/calendar-default-change.test.ts:373:58
+    371|     };
+    372|     const refused = await batch(body);
+    373|     expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+       |                                                          ^
+    374|     expect(refused.body.error.code).toBe('default_changed');
+    375|     const confirmedToo = await batch({ ...body, confirm_conflicts: tru…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/17]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > ownership and calendars > I12: the shared edit route checks the owner calendar, not the grantee calendar; a read-only grantee is still 403
+AssertionError: {"error":{"code":"validation_error","message":"The request body is invalid","details":{"issues":[{"path":"","code":"unrecognized_keys","message":"Unrecognized key: \"default_category\""}]}}}: expected 422 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 422
+
+ ❯ tests/integration/calendar-default-change.test.ts:424:58
+    422|     const rows = entryRows();
+    423|     const refused = await t.request('PUT', path(DAY_A), { cookie: gran…
+    424|     expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+       |                                                          ^
+    425|     expect(refused.body.error).toMatchObject({
+    426|       code: 'default_changed',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/17]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > ownership and calendars > I13: another user on another calendar is unaffected by an import on the first calendar
+AssertionError: {"error":{"code":"validation_error","message":"The request body is invalid","details":{"issues":[{"path":"","code":"unrecognized_keys","message":"Unrecognized key: \"default_category\""}]}}}: expected 422 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 422
+
+ ❯ tests/integration/calendar-default-change.test.ts:451:60
+    449|     await importRow(DAY_A, 'Synthetic Holiday');
+    450|     const response = await t.request('PUT', `/api/days/${DAY_A}`, { co…
+    451|     expect(response.status, JSON.stringify(response.body)).toBe(200);
+       |                                                            ^
+    452|     expect(response.body).toMatchObject({ category: 'Worked', category…
+    453|     // Importing into the second calendar changes only that user's def…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/17]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  17 failed | 1 passed (18)
+   Start at  23:07:43
+   Duration  5.75s (tests 86%, transform 9%, import 5%)
+
+exit=1

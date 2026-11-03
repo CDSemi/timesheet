@@ -1,0 +1,48 @@
+import { readFileSync } from 'node:fs';
+const load = (file) => {
+  const src = readFileSync(file, 'utf8');
+  const a = src.indexOf('function laDateParts');
+  const b = src.indexOf('const local = ');
+  return new Function(`${src.slice(a, b)}; return recentMonday;`);
+};
+const mk = (file) => {
+  const body = load(file)();
+  return (ms) => {
+    const RealNow = Date.now;
+    Date.now = () => ms;
+    try { return body(ms); } catch (e) { return `ERR:${e.message}`; } finally { Date.now = RealNow; }
+  };
+};
+const oldFn = mk(process.argv[2]);
+const newFn = mk(process.argv[3]);
+const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' });
+// independent oracle: LA date -> weekday via UTC -> days back to previous Monday (1..7)
+const oracle = (ms) => {
+  const [y, m, d] = fmt.format(new Date(ms)).split('-').map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const back = ((dow + 6) % 7) || 7;
+  return new Date(Date.UTC(y, m - 1, d - back)).toISOString().slice(0, 10);
+};
+const laMs = (s) => { // LA wall time -> instant, search offset
+  for (const off of [7, 8]) { const t = Date.parse(`${s}:00Z`) + off * 3600000; const p = new Intl.DateTimeFormat('en-CA',{timeZone:'America/Los_Angeles',hour12:false,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(t)).replace(',', ''); if (p.replace(' ','T').replace(/^(.{10}T)24/,'$100') === s.replace(' ','T')) return t; }
+  throw new Error('no instant ' + s);
+};
+console.log('named instants (LA wall time): old / new / oracle');
+for (const s of ['2026-11-02T23:49','2026-11-02T00:30','2026-11-01T23:30','2026-11-08T23:30','2026-11-09T00:10','2026-03-08T23:30','2026-03-09T23:49','2026-03-15T23:30','2026-03-16T00:10']) {
+  const ms = laMs(s); console.log(s, oldFn(ms), newFn(ms), oracle(ms));
+}
+let total = 0, oldBad = 0, newBad = 0;
+const oldBadList = [];
+for (const [from, to] of [['2026-03-07T00:00Z', '2026-03-24T00:00Z'], ['2026-10-30T00:00Z', '2026-11-17T00:00Z']]) {
+  let rowBad = 0, rowTotal = 0;
+  for (let t = Date.parse(from); t < Date.parse(to); t += 3600000) {
+    total++; rowTotal++;
+    const exp = oracle(t);
+    if (newFn(t) !== exp) newBad++;
+    if (oldFn(t) !== exp) { oldBad++; rowBad++; if (oldBadList.length < 12) oldBadList.push(new Date(t).toISOString()); }
+  }
+  console.log(`hourly ${from}..${to}: ${rowTotal} instants, old wrong/err ${rowBad}`);
+}
+console.log(`TOTAL ${total} hourly instants; old mismatches ${oldBad}; new mismatches ${newBad}`);
+console.log('sample old failing UTC instants', oldBadList.join(' '));
+process.exitCode = newBad === 0 ? 0 : 1;

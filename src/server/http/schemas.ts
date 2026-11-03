@@ -83,6 +83,13 @@ const dayCategory = z.enum(['Worked', 'Off', 'Vacation', 'Sick', 'Holiday', 'Shu
 /** What the day's leave minutes are; the kind never reserves or spends OT. */
 const leaveKind = z.enum(['vacation', 'sick', 'ot']);
 
+/**
+ * The calendar default the caller was shown for the date (null: none). For a date without an entry or with a
+ * default-sourced entry, a value different from today's default is refused (409 `default_changed`) unless the
+ * category equals today's default. Optional: an omitted field is not checked.
+ */
+const shownDefault = dayCategory.nullable().optional();
+
 export const dayEntryBody = z.strictObject({
   category: dayCategory,
   leave_minutes: z.number().int().min(0).max(1440),
@@ -92,6 +99,7 @@ export const dayEntryBody = z.strictObject({
   notes: z.string().max(2000),
   /** Required when the entry exists; omit or null to create it. */
   expected_version: z.number().int().positive().nullable().optional(),
+  default_category: shownDefault,
   reason,
 });
 export type DayEntryBody = z.infer<typeof dayEntryBody>;
@@ -112,6 +120,7 @@ export const dayBatchEntry = z.strictObject({
   notes: z.string().max(2000).optional(),
   /** The entry version the caller saw; omit or null for a date without an entry. */
   expected_version: z.number().int().positive().nullable().optional(),
+  default_category: shownDefault,
 });
 export type DayBatchEntry = z.infer<typeof dayBatchEntry>;
 

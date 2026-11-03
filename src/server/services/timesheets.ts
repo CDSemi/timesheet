@@ -245,13 +245,17 @@ export function sessionJson(session: StoredSession) {
  * calendar version effective on the date (so an import never has to write the row).
  */
 export function effectiveCategory(scope: Pick<UserScope, 'calendarVersions'>, entry: DayEntryRow): DayCategory {
-  let calendarDefault: DayCategory | null = null;
+  return resolveDayCategory(entry.category_source, entry.category, calendarDefaultOn(scope, entry.work_date));
+}
+
+/** The calendar default of a date in the scope's calendar; null when no calendar version classifies the date. */
+export function calendarDefaultOn(scope: Pick<UserScope, 'calendarVersions'>, workDate: CivilDate): DayCategory | null {
   try {
-    calendarDefault = defaultCategory(classifyDate(scope.calendarVersions, entry.work_date));
+    return defaultCategory(classifyDate(scope.calendarVersions, workDate));
   } catch (error) {
     if (!isDomainError(error)) throw error;
+    return null;
   }
-  return resolveDayCategory(entry.category_source, entry.category, calendarDefault);
 }
 
 export function dayEntryJson(entry: DayEntryRow, category: DayCategory = entry.category) {

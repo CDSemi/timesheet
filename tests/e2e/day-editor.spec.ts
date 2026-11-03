@@ -4933,7 +4933,7 @@ test('the label cell is a picker: a one-entry batch preview and its commit; reco
   await list.getByRole('option', { name: 'Vacation', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Saved 1 day.');
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  const entry = { work_date: plainDay, category: 'Vacation', expected_version: null };
+  const entry = { work_date: plainDay, category: 'Vacation', expected_version: null, default_category: 'Worked' };
   expect(batch).toEqual([
     { mode: 'preview', entries: [entry] },
     { mode: 'commit', entries: [entry] },
@@ -4950,7 +4950,7 @@ test('the label cell is a picker: a one-entry batch preview and its commit; reco
   await page.keyboard.press('End');
   await page.keyboard.press('Enter');
   await expect(page.locator(`[data-day="${plainDay}"]`)).toContainText('Work from home');
-  expect(batch.at(-1)).toEqual({ mode: 'commit', entries: [{ work_date: plainDay, category: 'Worked', wfh: true, expected_version: version }] });
+  expect(batch.at(-1)).toEqual({ mode: 'commit', entries: [{ work_date: plainDay, category: 'Worked', wfh: true, expected_version: version, default_category: 'Worked' }] });
   expect(await person.api.dayView(plainDay)).toMatchObject({ category: 'Worked', wfh: true, leave_minutes: 0 });
   await expect(picker).toBeFocused();
   batch.length = 0;

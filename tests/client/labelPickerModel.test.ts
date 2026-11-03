@@ -82,14 +82,35 @@ describe('in-cell label picker (E-3 a)', () => {
     expect(currentLabelChoice(day({ category: null }))).toBeNull();
   });
 
-  it('builds one batch entry with the version the page loaded; only Worked and Work from home touch WFH', () => {
-    expect(labelEntry(day(), 'Vacation')).toEqual({ work_date: '2026-11-30', category: 'Vacation', expected_version: null });
-    expect(labelEntry(day({ entry: entry(7) }), 'Off')).toEqual({ work_date: '2026-11-30', category: 'Off', expected_version: 7 });
-    expect(labelEntry(day({ entry: entry(2) }), 'Work from home')).toEqual({ work_date: '2026-11-30', category: 'Worked', wfh: true, expected_version: 2 });
-    expect(labelEntry(day({ wfh: true }), 'Worked')).toEqual({ work_date: '2026-11-30', category: 'Worked', wfh: false, expected_version: null });
+  it('builds one batch entry with the version and the calendar default the page loaded; only Worked and Work from home touch WFH', () => {
+    expect(labelEntry(day(), 'Vacation')).toEqual({ work_date: '2026-11-30', category: 'Vacation', expected_version: null, default_category: 'Worked' });
+    expect(labelEntry(day({ entry: entry(7) }), 'Off')).toEqual({ work_date: '2026-11-30', category: 'Off', expected_version: 7, default_category: 'Worked' });
+    expect(labelEntry(day({ entry: entry(2) }), 'Work from home')).toEqual({
+      work_date: '2026-11-30',
+      category: 'Worked',
+      wfh: true,
+      expected_version: 2,
+      default_category: 'Worked',
+    });
+    expect(labelEntry(day({ wfh: true }), 'Worked')).toEqual({
+      work_date: '2026-11-30',
+      category: 'Worked',
+      wfh: false,
+      expected_version: null,
+      default_category: 'Worked',
+    });
     // Leave and notes are never sent: the server keeps them as stored.
     const sent = labelEntry(day({ leave_minutes: 240, leave_kind: 'vacation' }), 'Sick');
-    expect(Object.keys(sent).sort()).toEqual(['category', 'expected_version', 'work_date']);
+    expect(Object.keys(sent).sort()).toEqual(['category', 'default_category', 'expected_version', 'work_date']);
+  });
+
+  it('names the default the day showed for every choice, a holiday and a day without a default (null) included (R-UX5I2-3)', () => {
+    for (const choice of LABEL_CHOICES) {
+      expect(labelEntry(day({ default_category: 'Holiday', category: 'Holiday' }), choice).default_category, choice).toBe('Holiday');
+      const none = labelEntry(day({ default_category: null, category: null }), choice);
+      expect(none.default_category, choice).toBeNull();
+      expect(Object.keys(none), choice).toContain('default_category');
+    }
   });
 
   it('commits straight away only when the preview needs neither a reason nor a conflict confirmation', () => {

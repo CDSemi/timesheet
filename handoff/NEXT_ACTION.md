@@ -78,8 +78,8 @@ Do not change billing or permission settings.
 ~~~
 
 Current route:
-0. **In progress (resumed 2026-10-26 after the 2026-10-23 usage pause): UI change rounds 4
-   and 5.**
+0. **Done: UI change rounds 4 and 5, and the owner's rule for documentation and workflow
+   tooling.** The steps, in order:
    - The last pushed commit is 94accda (digest 462a1cd7).
    - What happened since 5b8b718:
      - WP5-UX5-REGATE3 failed on test and harness defects and two npm audit advisories.
@@ -202,30 +202,24 @@ Current route:
      owner's 2026-10-29 rule for documentation.
    - The WP5-UX5-ACCEPT commit is 27567d1, pushed. **WP5 is re-accepted after rounds 4 and 5
      on a54061f / 690fd8fd.**
-   - Running now: WP5-GOV-DOCS, the owner's 2026-10-29 rule. Documentation needs no test,
-     gate or audit, only a review and fixes.
-     - The plan is done (WP5-GOV-DOCS-PLAN).
-     - The owner answered Q1 (a), Q2 (a) on 2026-11-02. Working rules in Markdown are
-       documentation too. This change gets the validator probes and a review, with no gate
-       or opus audit.
-     - The same day the owner decided that validators, agent profiles, skills and scripts
-       need no gate or audit either. They get the same review, and run their own checks.
-     - WP5-GOV-DOCS-VALIDATOR (141 probes), -RULES and -REVIEW (no drift) are done.
-     - Running now: the WP5-GOV-DOCS-COMMIT commit.
-   - Then the board goes back to `software_ready`, and the owner reviews the pilot packet
-     and decides R-UX5I2-3.
-   - To resume after an interruption, use the entry prompt above. The coordinator continues
-     at the board's `next_task_id`.
+   - WP5-GOV-DOCS, the owner's rule of 2026-10-29 and 2026-11-02, is done and pushed
+     (5b2f287).
+     - Documentation and workflow tooling need no gate or audit: one review-and-fix by a
+       fresh instance, and a tool runs its own checks (AGENTS rule 14; document 08,
+       "Documentation and workflow tooling").
+     - The validators keep the acceptance through the board record
+       `non_product_since_acceptance`.
    - Details: the [checkpoint](delivery/WORKFLOW_REVISION_CHECKPOINT.md), section
      "REGATE3 failed; two diagnoses run (2026-10-26)" and the sections after it.
-   - Until the accept commit, the pilot packet still names 8e55710 / 507de97c. Do not use
-     that identity for the pilot.
 1. **Done: WP5 accepted, then re-accepted after each UI change round.** The first
    acceptance record was committed at dd0c7d1. The re-acceptances are in the
    [WP5 handoff](delivery/WP5_HANDOFF.md):
    - 90b98ef / 57e2974c (WP5-UX-AUDIT-AB9);
    - a643794 / 229df806 (WP5-UX2-AUDIT2);
-   - 8e55710 / 507de97c (WP5-UX3-AUDIT-INT).
+   - 8e55710 / 507de97c (WP5-UX3-AUDIT-INT);
+   - **a54061f / 690fd8fd (WP5-UX5-RECHECK-RN), the current acceptance.** Commit 5b2f287
+     (digest 4ac52e6b) changes only documentation after it, so the application files are
+     identical.
 2. **Done: GOV-RECOVERY.** `check_recovery.py` no longer inherits the live mission
    status (fix frozen at 7f750e9, gate PASS,
    [GOV recovery review](delivery/GOV_RECOVERY_REVIEW.md) PASS). The board records the
@@ -234,11 +228,16 @@ Current route:
    - WP5-UX2: re-accepted on a643794 / 229df806.
    - WP5-UX3: re-accepted on 8e55710 / 507de97c (gate WP5-UX3-REGATE5, audit
      WP5-UX3-AUDIT-INT PASS). The pilot packet identity is refreshed.
-4. **Next, owner: review the pilot.** Read the
-   [pilot packet](delivery/WP5_PILOT_PACKET.md) and answer D-1..D-15.
-   - D-1, D-7, D-8 and D-13 are needed before activation.
-   - An answer that differs from the current default causes a fix round (fix, freeze,
-     gate, independent audit) before activation.
+4. **Running: fix round WP5-CALDEF for R-UX5I2-3 (owner answer 2026-11-02).** When a day's
+   calendar default changed since the Day editor loaded it, a notice lets the person choose
+   to save (overwrite) or to update to the new default.
+   - WP5-CALDEF-PLAN (planner, read-only) first; then the fix, its freeze, a gate and a fresh
+     independent audit; then the pilot packet and the WP5 handoff are refreshed.
+   - The accepted source stays a54061f / 690fd8fd until that audit passes.
+   - Resume at the board's `next_task_id`.
+5. **Next, owner: review the pilot.** Read the
+   [pilot packet](delivery/WP5_PILOT_PACKET.md). D-1..D-15 and R-UX5I2-3 are answered.
+   - Do the pilot device checks (packet section 10).
    - Run the owner NAS steps in docs/11 and the target restore form.
    - Real sending, deployment and activation happen only after the owner's explicit
      authorization. Then resume the coordinator with the entry prompt above.

@@ -1,0 +1,87 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/integration/calendar-default-change.test.ts (18 tests | 3 failed) 5281ms
+   ❯ POST /api/days/batch with a changed calendar default (5)
+     × I9: the preview marks the date default_changed, cannot commit, and writes nothing 297ms
+     × I10: a commit with one changed default is 409 with the dates and writes neither date; stale_version wins 286ms
+     × I15: the commit order is stale, invalid, reason, default_changed, then conflicts 241ms
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 15 passed (18)
+   Start at  23:10:54
+   Duration  6.21s (tests 86%, transform 8%, import 5%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I9: the preview marks the date default_changed, cannot commit, and writes nothing
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ tests/integration/calendar-default-change.test.ts:286:38
+    284|     });
+    285|     expect(response.status, JSON.stringify(response.body)).toBe(200);
+    286|     expect(response.body.can_commit).toBe(false);
+       |                                      ^
+    287|     expect(response.body.entries[0]).toMatchObject({
+    288|       work_date: DAY_A,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I10: a commit with one changed default is 409 with the dates and writes neither date; stale_version wins
+AssertionError: expected { code: 'default_changed', …(2) } to match object { code: 'default_changed', …(1) }
+(4 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+    "code": "default_changed",
+    "details": {
+-     "changes": [
+-       {
+      "current_default": "Holiday",
+      "expected_default": "Worked",
+      "work_date": "2026-09-21",
+-       },
+-     ],
+-     "work_dates": [
+-       "2026-09-21",
+-     ],
+    },
+  }
+
+ ❯ tests/integration/calendar-default-change.test.ts:312:32
+    310|     });
+    311|     expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+    312|     expect(refused.body.error).toMatchObject({
+       |                                ^
+    313|       code: 'default_changed',
+    314|       details: {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I15: the commit order is stale, invalid, reason, default_changed, then conflicts
+AssertionError: expected 'conflicts_require_confirmation' to be 'default_changed' // Object.is equality
+
+Expected: "default_changed"
+Received: "conflicts_require_confirmation"
+
+ ❯ tests/integration/calendar-default-change.test.ts:374:37
+    372|     const refused = await batch(body);
+    373|     expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+    374|     expect(refused.body.error.code).toBe('default_changed');
+       |                                     ^
+    375|     const confirmedToo = await batch({ ...body, confirm_conflicts: tru…
+    376|     expect(confirmedToo.status).toBe(409);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+exit=1

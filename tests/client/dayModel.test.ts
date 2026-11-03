@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { BatchConflict, Calculation, DayEntry, DayView, Session } from '../../src/client/api.ts';
+import type { BatchConflict, Calculation, DayBatchPreview, DayEntry, DayView, Session } from '../../src/client/api.ts';
 import {
   batchEntries,
   completenessOf,
   conflictDetails,
   isPendingOt,
+  movedPreviewDates,
   reviewStatus,
   staleDates,
   staleReloadMessage,
@@ -157,12 +158,55 @@ describe('toDayDisplay', () => {
 // The week grouping moved to sheetModel.ts (sheetWeeks); its cases live in sheetModel.test.ts.
 
 describe('batchEntries', () => {
-  it('builds date-ordered entries with the version each day was loaded at', () => {
+  it('builds date-ordered entries with the version and the calendar default each day was loaded at', () => {
     const days = [day('2026-09-29'), day('2026-09-30', { entry: entry('2026-09-30', 4) }), day('2026-10-01')];
     expect(batchEntries(days, new Set(['2026-10-01', '2026-09-30']), 'Vacation')).toEqual([
-      { work_date: '2026-09-30', category: 'Vacation', expected_version: 4 },
-      { work_date: '2026-10-01', category: 'Vacation', expected_version: null },
+      { work_date: '2026-09-30', category: 'Vacation', expected_version: 4, default_category: 'Worked' },
+      { work_date: '2026-10-01', category: 'Vacation', expected_version: null, default_category: 'Worked' },
     ]);
+  });
+
+  it('carries the default each day showed, a holiday and a day the calendar cannot classify (null) included', () => {
+    const days = [day('2026-09-29', { default_category: 'Holiday', category: 'Holiday' }), day('2026-09-30', { default_category: null, category: null })];
+    const entries = batchEntries(days, new Set(['2026-09-29', '2026-09-30']), 'Worked');
+    expect(entries.map((item) => item.default_category)).toEqual(['Holiday', null]);
+    // Present (null included), never omitted: an omitted field would not be checked by the server.
+    for (const item of entries) expect(Object.keys(item)).toContain('default_category');
+  });
+});
+
+describe('movedPreviewDates', () => {
+  const previewOf = (statuses: Array<[string, DayBatchPreview['entries'][number]['status']]>): DayBatchPreview => ({
+    mode: 'preview',
+    can_commit: false,
+    changed_count: 0,
+    reason_required: false,
+    reason_required_dates: [],
+    requires_conflict_confirmation: false,
+    conflicts: [],
+    entries: statuses.map(([work_date, status]) => ({
+      work_date,
+      status,
+      current_version: null,
+      period_relation: 'current',
+      reason_required: false,
+      conflict: false,
+      before: null,
+      after: { category: 'Worked', category_source: 'explicit', leave_minutes: 0, leave_kind: null, wfh: false, notes: '' },
+      error: null,
+    })),
+  });
+
+  it('names the stale dates and the dates whose calendar default changed, in order, and no other date', () => {
+    const moved = previewOf([
+      ['2026-09-29', 'create'],
+      ['2026-09-30', 'default_changed'],
+      ['2026-10-01', 'stale'],
+      ['2026-10-02', 'invalid'],
+      ['2026-10-03', 'unchanged'],
+    ]);
+    expect(movedPreviewDates(moved)).toEqual(['2026-09-30', '2026-10-01']);
+    expect(movedPreviewDates(previewOf([['2026-09-29', 'update']]))).toEqual([]);
   });
 });
 

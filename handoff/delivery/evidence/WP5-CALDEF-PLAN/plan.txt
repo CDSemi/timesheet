@@ -1,0 +1,343 @@
+WP5-CALDEF-PLAN - plan for the owner's answer to R-UX5I2-3 (2026-11-02)
+Planner: timesheet-planner (sonnet 5.5, high). Repository state read: HEAD 5b2f287 (product source = a54061f, docs-only after).
+Owner decision, verbatim: "R-UX5I2-3: nếu giá trị mặc định đã đổi thì hiện thông báo, để người dùng quyết định save (ghi đè) hay update theo giá trị mặc định mới"
+
+Observations are marked (obs, file:line). Assumptions are marked (assumption). No product file was changed and no server was started:
+the mechanism is fully readable from the code and the reproducer already exists as the INT3 probe
+(handoff/delivery/evidence/WP5-UX5-AUDIT-INT3/90-zz-int3-admin.spec.ts.txt with its observation 46-obs-int3-admin-target.txt).
+
+====================================================================
+1. MECHANISM (how the save works today and why a changed default is not seen)
+====================================================================
+What the client sends. DayFieldsForm.save (src/client/components/DayFieldsForm.tsx:81-102) calls buildDayEntryRequest
+(src/client/components/sessionModel.ts:458-473) and PUTs /days/:date with { category, leave_minutes, leave_kind, wfh, notes,
+expected_version = day.entry?.version ?? null, reason? }. It sends no category source and no default. The schema is strict
+(src/server/http/schemas.ts:86-96, dayEntryBody). The label picker and "Change several days" send one POST /days/batch entry per date
+{ work_date, category, expected_version = day.entry?.version ?? null, ... } (labelPickerModel.ts:44-49, dayModel.ts:115-119,
+TimesheetScreen.tsx:442-532).
+
+What the server checks. applyDayEntryChange (src/server/services/timesheetCommands.ts:328-420), shared by PUT /days/:date and the batch commit:
+reason rule (prepareEdit), leave rule (dayEntryIssue), then only the entry version:
+  - no entry for the date: expected_version must be null (line 341), then INSERT with category_source 'explicit' (350);
+  - an entry: expected_version must equal its version (380), then UPDATE with category_source = 'explicit' (393).
+The batch plans the same test in planBatch (src/server/services/dayEntries.ts:123).
+Nothing compares the category the person saw with the calendar default now.
+
+Why a changed default is invisible. A default-sourced entry stores a category but the shown category is derived from the calendar at read time
+(effectiveCategory, timesheets.ts:247-255; buildDayView :365-366; resolveDayCategory, domain/attendance.ts:49-55). The only runtime writer of
+a default is the administrator's holiday import: createCalendarVersion (calendars.ts:158-205) inserts a calendar_versions row and an audit event;
+it writes no day_entries row (by design: docs/10 E-4 and F-2 (b), docs/03 "Records" exception). So the entry version does not move, and a
+day with no entry has no version at all. The version guard therefore cannot see the change.
+
+The three cases:
+  A. Day with no entry. Client holds expected_version null and the shown default (say Worked). Import makes the default Holiday.
+     Save sends Worked, null. Server: no entry -> version null accepted -> INSERT explicit Worked. Silent overwrite. (INT2 E2)
+  B. Entry whose category_source is 'default' (created by a Check in or a session write). Client holds version v and the shown
+     default. Import changes the default. Save sends the old category with v. Server: v matches -> UPDATE explicit Worked. Silent
+     overwrite. (INT3 E3; observation 46-obs-int3-admin-target.txt: "after the import the server says Holiday/default entry v1 ...
+     Save day fields: ACCEPTED; server category Worked/explicit ... entry v2")
+  C. Entry whose category_source is 'explicit' (the person's choice). The import does not touch it and the form shows the person's
+     category; nothing is overwritten that the person did not choose. No problem, no notice needed.
+Consequence (obs, INT3): a holiday recorded as Worked makes the day owe required time (attendance_expected true, deficit). With nothing
+typed, FIX19's session-write path restarts the form on the new default (E4: shows Holiday), so E4 is already safe; the open risk is a
+typed edit (held branch, E3), the tab-return path, the phone sheet and the no-entry day (E2).
+
+====================================================================
+2. SCOPE: "the default changed"
+====================================================================
+Write paths that can record a category over a default (all must be covered, because they all reach one of two server functions):
+  P1 Day editor, desktop drawer: PUT /days/:date from DayFieldsForm. IN.
+  P2 Day editor, phone bottom sheet: the same component and route (foot Save button). IN, same code.
+  P3 Shared edit view (a grantee editing for an owner): the same DayEditor with request = the share's route set, same service
+     function, subject = owner. IN, by the server check; no extra client code.
+  P4 In-cell label picker: one-entry POST /days/batch (preview, then commit). IN.
+  P5 "Change several days": POST /days/batch with many entries. IN.
+  P6 Check in / Check out / session create, edit, delete: ensureDayEntry (timesheetCommands.ts:149-170) creates a default-sourced row; it
+     records the calendar default as a default, never a category over one. OUT.
+  P7 Workbook import (workbookImport.ts:681): the person's own deliberate import of finished periods, previewed, read-only history. OUT.
+  P8 Seed and bootstrap. OUT.
+Events that change a default:
+  E1 Holiday CSV import commit (admin): adds, removes or changes the kind of a holiday or closure (holidayImport.ts:353). IN. The only
+     runtime event; createCalendarVersion has three callers (holidayImport, bootstrap:213, seed:254).
+  E2 Calendar edit: no other route exists. Nothing more to cover.
+  E3 Calendar assignment: refused with 409 calendar_in_use once the account has data (users.ts:177-183). A reassignment of an account
+     with no data would also change a no-entry day's default; the server compares against the owner's current calendar, so it is covered
+     automatically by the same check.
+  E4 Work-policy change: defaultCategory depends only on the calendar classification (domain/attendance.ts:17-28); a policy change moves
+     figures but not the category default. OUT.
+The rule: "a write that would record a category over a calendar default, when that default is different from the one the person saw."
+It applies only where a default is at stake: no entry, or an entry with category_source 'default'. An explicit entry is the person's own and
+never follows the calendar (case C), so it is never checked.
+
+====================================================================
+3. DESIGN
+====================================================================
+3.1 Chosen design A: the client names the default it showed; the server refuses a mismatch; the Day editor offers two choices.
+  API contract (backwards compatible, no migration, nothing stored):
+    - PUT /api/days/:date body and each POST /api/days/batch entry gain  default_category?: Worked|Off|Vacation|Sick|Holiday|Shutdown|null
+      ("the calendar default the caller was shown"; null = the caller was shown none). Strict schema stays strict (schemas.ts:86-96, 106-115).
+    - Server rule, after the reason rule and the existing version check (so stale_version always wins), inside the same IMMEDIATE
+      transaction as the write:
+        current = calendar default of the date for the OWNER's calendar (null when the calendar cannot classify the date)
+        if (entry is absent OR entry.category_source === 'default')
+           AND body.default_category !== undefined AND current !== null AND body.default_category !== current
+        then refuse, write nothing.
+    - PUT answer: 409, code "default_changed", message
+        "The calendar default for {date} changed from {expected} to {current} since it was loaded. Nothing was saved."
+      details { work_date, expected_default, current_default }.
+    - Batch: preview marks the entry status 'default_changed' (new value beside create/update/unchanged/stale/invalid) and can_commit is
+      false (like stale); commit answers 409 "default_changed" with details { work_dates: [...], changes: [{work_date, expected_default,
+      current_default}] }, all or nothing, and stale_version for any date still wins.
+    - Acknowledgement is the same call repeated with default_category = current_default; no new flag. A second change in between
+      refuses again.
+    - Audit: unchanged. The update event already records before = effective category (Holiday) and after = the person's category, so an
+      acknowledged overwrite stays traceable.
+  Client:
+    - DayFieldsForm captures the default it was seeded with when it mounts (state shownDefault = day.default_category) and sends it on every
+      save. It must not read the live prop: the FIX19 held branch (withHeldDayFields, DayEditor.tsx:49-59) keeps the old category and entry
+      under an answer whose default_category is already new; a live read would send the new default under the old category and silently
+      pass. (This is mutant C1.)
+    - On 409 default_changed (validated shape; otherwise fall back to the existing generic error) the form shows the notice and keeps
+      every typed field.
+    - The notice, English UI, placed inside the "Category and leave" form directly under the heading and above the OT-mismatch box and
+      the fields (same slot on the 400px drawer and on the phone's sheet body; the fields it concerns are right below it):
+        [warn-box, role="alert", tabIndex -1, focus moves to it; scrollIntoView({block:'nearest'}) so the phone's foot Save does not hide it]
+        "Notice. The calendar default for this day changed from Worked to Holiday since it was loaded. Nothing was saved."
+        "Use the new default, or save your category over it."
+        Buttons in this Tab order (the safe, non-writing one first):
+          "Use Holiday"            (secondary)
+          "Save Worked anyway"     (primary; Worked = the category typed in the form now)
+      Styling: the existing .warn-box tokens (--warn text, --elev-1, --radius) and the existing .button-row; no new custom property, so no
+      new dark-set value. The state is carried by the words "Notice." and the names of the categories, not by colour. Below 768px and with a
+      coarse pointer both buttons are the existing 44px targets with the shared focus ring. If the worker needs a rule it goes through a
+      custom property in the light set and both dark sets (AGENTS UI standard 1) and cssThemeParity.test.ts / styleTokens.test.ts cover it.
+    - "Save Worked anyway": sets shownDefault = current_default, repeats the save with exactly the typed fields and
+      default_category = current_default. On success the usual onSaved ("Day fields saved.") runs and the notice goes. A refusal again
+      (another change) shows the new notice; a stale_version goes to the existing stale notice.
+    - "Use Holiday": nothing is sent. The Category select takes the new default; the notes, WFH, partial leave and kind keep what was
+      typed (decision: the owner's "update" refers to the default value, so only the category follows it). shownDefault = current_default;
+      the form's baseline is rebased so that taking the default alone is not an unsaved edit (a note typed before still is); the notice
+      closes; a polite status line "Category set to Holiday, the new calendar default. Not saved yet." is added to the form; focus goes to
+      the Category select. The existing hint "Calendar default. Saving records it as your choice." stays true and visible.
+      DayEditor is told (onDefaultTaken) and reads the day once: if it differs from the held day only in the default-derived category
+      (same source 'default', same leave, kind, WFH and notes) it takes the answer without a new generation, so chips, banner and figures show
+      the Holiday day; otherwise it raises the existing stale notice ("Reload day"). A failed read changes nothing. The read uses the dayStamp
+      guard of the follow effect.
+    - Batch and label picker (P4, P5): the model functions add default_category: day.default_category to each entry. A preview with
+      'default_changed' opens the existing review dialog, which already says "Some dates changed elsewhere or are not valid. Close this
+      window and reload the period." (STATUS_TEXT gets 'calendar default changed'); a commit refusal 409 default_changed is handled as
+      stale_version is (TimesheetScreen.tsx:482-484): the page shows staleReloadMessage(dates), "{dates} changed since this period was
+      loaded. Nothing was saved. Reload the period, review the new categories and try again." The two choices exist there as the page's
+      own flow: reload (= use the new default, the cell now shows it) or pick again on the reloaded sheet (= save over it, now seen). No
+      new dialog. This is a scope reading, see the Question list item 1.
+  Fit with existing rules:
+    - Stale notice: version mismatch is answered first (stale_version -> "Reload day"), so the two notices never compete; a default
+      notice is cleared whenever the form remounts (Reload day, a restart after a session write, a label or batch reload).
+    - U4-05 unsaved-changes guard: unchanged. A refusal changes no draft, so the form stays dirty and Close, Escape, another day and
+      Next period still ask "Discard your changes?". After "Use", dirtiness reflects only what the person typed.
+    - FIX18 follow: sameDayFields (DayEditor.tsx:33-42) already differs on the category of a default-sourced entry, so a tab-return read
+      is not taken (the held day stays) and the later Save is now refused with the notice instead of overwriting (INT3 E3). No change to
+      the follow effect.
+    - FIX19 held branch (withHeldDayFields): unchanged in code; it is the reason the form captures its own default (above). The
+      restart branch (nothing typed) re-seeds the form from the answer including its new default, so E4 shows Holiday and Save raises
+      no notice. Correct: the person saw the new default.
+    - Phone sheet: Save lives in the foot; the notice sits at the top of the scrolling body and is scrolled into view and focused on
+      appearance; pressing Save again while it is open simply raises it again.
+    - Shared edit view: identical component and server path.
+3.2 Alternatives compared.
+  B. A calendar revision token (send day.classification.calendar_version_id and compare). Rejected: classifyDate returns the id of the
+     version effective on the date (domain/calendar.ts:63-79); every import creates a new version, so every date from its effective_from on
+     gets a new id and every open default day would be refused although its category did not change (a false notice on each import).
+  C. Proactive detection only on the client (the tab-return/follow read compares the category and raises the notice before any save).
+     Rejected as the only mechanism: it needs a read to happen (never on the phone sheet, never without a tab event) and cannot cover
+     label picker/batch; the server must refuse anyway. It can be added later on top of A without contract change.
+  D. Option (b) of the review (send the category only when changed) or plain refusal (c). The owner chose a notice with two choices, which A
+     implements; (b) alone would still need a rule for a typed note on a changed default.
+  A is the smallest design that is complete: one optional field, one check in the two shared server functions, one notice.
+
+====================================================================
+4. SERVER-SIDE SAFETY
+====================================================================
+  - The check lives in applyDayEntryChange and planBatch, inside the IMMEDIATE write transaction, against the owner's scope
+    (loadScope(ctx.user), where user = the subject), so a concurrent holiday import (also a write transaction) is serialised with it.
+    Ownership is unchanged; the 409 details hold only the caller's own date and two category names.
+  - Shared helper (new, one place): calendarDefaultOn(scope, date): DayCategory | null in timesheets.ts, which effectiveCategory and
+    dayEntries.currentCategoryOf (dayEntries.ts:90-98) also use (removes two copies of the try/classify/catch block).
+  - No check when current is null (the calendar cannot classify the date: nothing to protect). No check for explicit entries.
+  - A stale client that does not send the field (an old tab still holding the previous bundle after a deploy, or a script): not checked,
+    exactly as today. DECISION AND REASON: the field stays optional. Making it required fails closed but would break every caller that
+    creates an entry without a default (77 PUT call sites in tests/ across 22 files, helper bodies in each file, plus tests/e2e/fixtures.ts
+    and the share/auth matrices) for a risk with three conditions at once: a deployed bundle change while a tab is open, an
+    administrator's default change on that very date in the same window, and a save by that tab. The client ships in the same image as
+    the server, the overwrite is visible on the sheet, recorded by the audit event (before = Holiday, after = Worked) and corrected by
+    one more edit. A strict variant is costed in the Questions list, item 2, for the coordinator to veto. The contract text (docs/03)
+    says "an omitted field is not checked".
+  - No migration: nothing is stored. dist/server changes (schemas.ts, timesheets.ts, timesheetCommands.ts, dayEntries.ts), so the gate
+    reruns the container drill (--wp3, every stage) and "npm audit --omit=dev"; package.json and the lockfile do not change.
+
+====================================================================
+5. TESTS AND MUTANTS
+====================================================================
+Integration (new file tests/integration/calendar-default-change.test.ts; the patterns: createTestContext, createCalendarVersion as in
+day-entries-batch.test.ts:130-150, the real admin route as in holiday-import.test.ts, the share helper of sharing.test.ts):
+  I1  PUT, no entry, default_category 'Worked', holiday imported through POST /api/admin/calendar/import/commit -> 409 default_changed,
+      details {work_date, expected_default 'Worked', current_default 'Holiday'}; no day_entries row, no audit event, timesheet version same.
+  I2  Same with a default-sourced entry (created by a session): 409; entry version, category_source and notes unchanged.
+  I3  Acknowledgement: same body with default_category 'Holiday' -> 200, explicit Worked, version +1, audit before.category 'Holiday',
+      after 'Worked' (a no-entry day: create event).
+  I4  Explicit entry, default changed, stale default sent -> 200 (explicit entries are never checked).
+  I5  No false notice: an import that changes another date, and an import that leaves this date's category unchanged -> 200. A kind
+      change Holiday -> closure (Holiday -> Shutdown) -> 409.
+  I6  Field omitted -> 200 (documented contract: not checked).
+  I7  Precedence: entry version moved elsewhere AND default changed -> 409 stale_version; reason rule first for an old period (422).
+  I8  default_category null sent while current is Worked -> 409; an unknown value or a number -> 422; unknown extra key still 422.
+  I9  Batch preview: entry status 'default_changed', can_commit false, nothing written, no audit event.
+  I10 Batch commit with two dates, one changed default -> 409 default_changed with work_dates and changes; neither date written
+      (all or nothing); with one stale_version date and one default_changed date -> stale_version.
+  I11 Batch acknowledgement (current default sent) -> 200; label-pick shape (one entry) covered by I9/I10.
+  I12 Share route: a grantee with edit rights PUT /api/shared/:owner/days/:date with the old default -> 409; a read-only grantee still 403
+      (nothing new leaks); the 409 holds only that date's two category names.
+  I13 Another user's calendar is not consulted: employee B with another calendar is unaffected by the import on A's calendar.
+Client unit (tests/client): sessionModel.test.ts (buildDayEntryRequest carries default_category, null included, and the old shape is
+  kept), labelPickerModel.test.ts (labelEntry carries the day's default_category for all choices incl. Work from home), dayModel.test.ts
+  (batchEntries; staleDates reads work_dates of default_changed), a new parse helper test for defaultChangeOf(caught) (valid, wrong
+  status, wrong code, missing or ill-typed details, null current).
+End-to-end (new tests/e2e/calendar-default.spec.ts, own private server as the INT3 probe did, both projects, synthetic people only;
+  importHoliday/newPerson/privateServer from fixtures.ts; the existing FIX18/FIX19 describe blocks and "a day changed elsewhere reports a
+  stale version and reloads" stay unmodified and must pass):
+  W1  Default-sourced entry, note typed, import, Save -> notice (role alert, focused, names Worked and Holiday, "Nothing was saved"), no
+      PUT accepted; "Save Worked anyway" -> "Day fields saved.", server Worked/explicit with the note.
+  W2  Same, "Use Holiday" -> select shows Holiday, the typed note is still there, no request was sent, status line announced, focus on the
+      select; then Save -> server Holiday/explicit with the note. Figures follow the Holiday day after "Use".
+  W3  Day with no entry (E2 shape: tab return, no Check in), both choices.
+  W4  FIX19 held branch: note typed, the session deleted in the editor, then Save -> notice (not silent). E4: nothing typed, the delete
+      restarts the form on Holiday, Save -> saved, no notice.
+  W5  FIX18 follow: typed note, the tab comes back after the import, held day kept, Save -> notice.
+  W6  Explicit entry: no notice. No-change import: no notice.
+  W7  U4-05: after "Use" with nothing else typed, Escape closes without "Discard your changes?"; with a note typed it asks.
+  W8  Phone (mobile project): the notice is inside the sheet body, in view and focused, both buttons >= 44px, the foot Save still visible;
+      "Save anyway" works.
+  W9  Label picker: sheet loaded, import, pick Worked -> the review dialog says the date changed elsewhere, nothing written; after
+      reload the cell shows Holiday and a pick of Worked saves. "Change several days": same, with the page's reload message on a commit
+      refusal (race between preview and commit simulated by importing after the preview).
+  W10 Shared edit view: the grantee sees the same notice; both choices.
+  W11 Theme/contrast: the notice and its buttons meet 4.5:1 text and 3:1 boundary in light and both dark sets (existing contrast.ts helper).
+Mutants the fix must kill (each named with the first test expected to fail):
+  M1  server: remove the check from applyDayEntryChange (I1, I2, W1).
+  M2  server: check only the no-entry branch / only the default-sourced branch (I1 vs I2).
+  M3  server: check explicit entries too (I4, W6).
+  M4  server: compare calendarVersionId instead of the category (I5).
+  M5  server: raise when current is null or when field omitted (I6).
+  M6  server: check before the version check (I7).
+  M7  server: ignore the acknowledgement (always refuse) or accept any value as acknowledgement (I3, I1).
+  M8  server: skip the check in planBatch / commit (I9, I10); partial write of the batch (I10).
+  M9  server: details missing current_default / work_dates (I1, I10, unit parse helper).
+  M10 client C1: send the live prop day.default_category instead of the mount-captured value (W4).
+  M11 client: "Use" drops the typed note, or resends the old default, or leaves the baseline un-rebased (W2, W7).
+  M12 client: "Save anyway" sends the old default (loop) or drops typed fields (W1).
+  M13 client: labelEntry/batchEntries omit the field (labelPickerModel and dayModel unit tests, W9).
+  M14 client: TimesheetScreen treats default_changed as a generic error (W9).
+  M15 client: notice not focused / not an alert / buttons under 44px / reversed Tab order (W1, W8).
+Existing tests that must keep passing unmodified: tests/integration/day-entries-batch.test.ts, holiday-import.test.ts, sharing*.test.ts,
+  tests/e2e/day-editor.spec.ts (all FIX18, FIX19 and U4-05 tests), tests/e2e/sharing.spec.ts.
+
+====================================================================
+6. DOCUMENTS (canonical lines; each with its .vi.md pair; behaviour change, so they ship with the code task)
+====================================================================
+  D1 docs/02_TIME_AND_OT_RULES.md, "R-03", after "Personal leave/Off labels do not change calendar eligibility.": add
+     "A day's label is the calendar default (Worked on scheduled weekdays, Holiday on company holidays, Shutdown on closures, Off
+      otherwise) until the person saves a label; a saved label is the person's own and a calendar change never replaces it. A write that
+      would record a label over a calendar default that differs from the one the person saw is not written until the person decides
+      between saving over the new default and using it (owner decision 2026-11-02, document 04)."   + docs/02 ...vi.md R-03.
+  D2 docs/03_ARCHITECTURE_AND_DATA.md, table row "timesheets/day_entries": append "category source (`default` follows the calendar, `explicit` is the
+     person's choice)". + vi row.
+  D3 docs/03, "API and hosting boundary" (the paragraph that says "Distinguish validation, auth, ownership, stale version and delivery
+     errors"): add the contract sentence: PUT /api/days/:date and each POST /api/days/batch entry may carry `default_category`; for a date
+     with no entry or an entry whose source is `default`, a value different from the calendar default now is 409 `default_changed`
+     (details `work_date` or `work_dates`, `expected_default`, `current_default`; batch also `changes`), after the version check and
+     before any write; repeating the call with `current_default` records the person's category; an omitted field is not checked; explicit
+     entries are never checked. + vi paragraph.
+  D4 docs/04_UX_AND_SETTINGS.md, "Day editor": new bullet after "Order": the notice (placement, text, the two buttons "Use {default}" and
+     "Save {category} anyway", focus, announcement, what "Use" keeps, 44px, no colour-only state, the hint "Calendar default. Saving
+     records it as your choice." stays). + vi bullet.
+  D5 docs/04, bullet "Switching and unselecting" (the paragraph that ends "...Reload day reads it"): one clause "a default that changed
+     elsewhere is refused at the save and answered by the notice below"; and the picker bullet ("Category in the cell") plus the batch
+     sentence of "Period bar, check in/out and batch mode": one clause "a date whose calendar default changed since the sheet loaded is
+     refused like a changed day (the page asks to reload the period)". + vi.
+  D6 docs/10_DECISIONS_AND_SOURCES.md: new section "Owner decisions - 2026-11-02 (R-UX5I2-3, a calendar default that changed under an open
+     editor)" with the owner's sentence verbatim and its translation, the rule (notice with two choices), the scope reading (Day editor has
+     the two buttons; label picker and Change several days use the reload flow), the optional-field decision, and "reversible by a new
+     owner decision". + vi section. The pilot packet section 8 and the WP5 handoff are NOT edited by the fix: the coordinator's accept step does.
+  docs/05: no change (submission and notifications; its "default labels" lines concern automatic finalization, which does not go through
+  these writes). docs/06: no new AC row proposed (the tests above are the evidence); the coordinator may add one. docs/12 release notes:
+  coordinator's accept step. Documentation needs no gate or audit (AGENTS rule 14) but gets one review-and-fix by a fresh instance.
+
+====================================================================
+7. DELIVERY
+====================================================================
+Prefer one code fix task; it stays bounded (4 server files + 1 new test, about 9 client files + 3 unit tests + 1 new e2e spec).
+  T1 WP5-CALDEF-FIX  kind fix, package WP5, depends on WP5-CALDEF-PLAN (done) and the owner decision on the board.
+     Profile timesheet-worker-high (effort high), requested model sonnet, no override. Routing size M, risk H, novelty no (the version
+     guard and its stale notice are the in-repo pattern; docs/08 row "High-risk fix/slice with an existing pattern"). TDD order: server
+     contract tests I1..I13 red, then green; client unit tests; the e2e spec. Reproduce first with the INT3 probe shape.
+     Owned paths (exact):
+       src/server/http/schemas.ts
+       src/server/services/timesheets.ts
+       src/server/services/timesheetCommands.ts
+       src/server/services/dayEntries.ts
+       src/client/api.ts
+       src/client/DayEditor.tsx
+       src/client/components/DayFieldsForm.tsx
+       src/client/components/sessionModel.ts
+       src/client/components/dayModel.ts
+       src/client/components/labelPickerModel.ts
+       src/client/components/errors.ts
+       src/client/components/BatchDialog.tsx
+       src/client/TimesheetScreen.tsx
+       tests/integration/calendar-default-change.test.ts            (new)
+       tests/client/sessionModel.test.ts, tests/client/labelPickerModel.test.ts, tests/client/dayModel.test.ts
+       tests/e2e/calendar-default.spec.ts                            (new)
+       src/client/styles.css and tests/client/cssThemeParity.test.ts / styleTokens.test.ts ONLY if a custom property proves necessary
+       evidence: handoff/delivery/evidence/WP5-CALDEF-FIX/ and handoff/delivery/tasks/WP5-CALDEF-FIX.md (Results)
+     Not owned: package.json, lockfile, migrations, tests/e2e/fixtures.ts (use its exports; if a helper is missing put it in the new spec).
+  T2 WP5-CALDEF-DOCS  kind docs (documentation), package WP5, may run beside T1 (disjoint paths; only T1 writes source),
+     profile timesheet-worker (medium), sonnet, no override; size S, risk L-M, novelty no.
+     Paths: docs/02_TIME_AND_OT_RULES.md/.vi.md, docs/03_ARCHITECTURE_AND_DATA.md/.vi.md, docs/04_UX_AND_SETTINGS.md/.vi.md,
+     docs/10_DECISIONS_AND_SOURCES.md/.vi.md (lines D1-D6). Then one review-and-fix by a fresh timesheet-worker (medium, sonnet): against
+     the final code of T1, EN/VI parity, links, headings cited from src/tests, no private data. No gate, no audit.
+  Gate (T3 WP5-CALDEF-GATE, timesheet-verifier medium, sonnet) on the freeze commit of T1 (+T2 if committed together; paths of docs are
+  non-product and listed by name):
+     1 identity: digest in three forms before and after; git diff --name-status a54061f..TARGET -- . ':!handoff' must list exactly the owned
+       paths (and the docs); no package or lockfile change; clean builds of a54061f and TARGET after their own npm ci: dist/server CHANGES
+       (expected: schemas, timesheets, timesheetCommands, dayEntries chunks), dist/domain identical, dist/client changes only in the
+       chunks that import the touched modules; flag anything else.
+     2 container drill --wp3 every stage + npm audit --omit=dev exit 0 (required because dist/server changes).
+     3 core in an export: npm ci, lint, typecheck, build (no chunk advisory, no deprecation warning), verify, npm test three times (new
+       counts), validators (check_recovery.py, validate_package.py --preflight, validate_orchestration.py).
+     4 real-clock FULL e2e on both projects, 0 failed (counts updated for the new spec).
+     5 simulated-clock sweep as REGATE9 items 5 (the Day editor and form changed).
+     6 stress --repeat-each=20 --workers=10 on the real clock, desktop and mobile: calendar-default.spec.ts, and the FIX18/FIX19/U4-05
+       tests of day-editor.spec.ts that touch the form.
+     7 the E2/E3/E4 probe shape (the INT3 admin spec) rerun on the target: E2 and E3 now show the notice and no write; E4 unchanged.
+  Audit (T4 WP5-CALDEF-AUDIT, timesheet-auditor xhigh, opus, never below the strongest author model, fresh instance; one audit, size M):
+     1 server contract: trace PUT and batch through applyDayEntryChange/planBatch; probe the stale client (field omitted) and the ordering
+       with stale_version, reason rule and the transaction; explicit entries; shared route; audit events; no cross-user leak in details.
+     2 client: the notice (focus, announcement, 44px, both themes, phone sheet), "Use" keeps typed fields and rebases dirtiness, the
+       held and follow branches, U4-05, picker and batch flows; the probe of FIX19/FIX18 cases rerun.
+     3 run the mutants M1-M15 independently; run the INT3 E2/E3/E4 probes on the target.
+     4 docs (T2) are cross-read for consistency but are not a gate criterion.
+  Then the coordinator's accept step updates STATE, NEXT_ACTION, the pilot packet section 8 and the WP5 handoff, and the release notes.
+
+====================================================================
+8. QUESTIONS (no blocking contradiction was found; two items for the coordinator, each with a recommendation)
+====================================================================
+  There is no contradiction with a canonical rule: docs/10 E-4 ("holiday import preserves explicit labels") is kept (the import still never
+  writes a person's row and explicit labels are never checked), and the documents do not today define the stale handling of a calendar
+  default, so D1-D6 add rather than reverse a rule.
+  1. Scope reading (assumption, not blocking): the owner's two-choice notice is built in the Day editor (desktop, phone, shared view). For
+     the label picker and "Change several days" the server refuses and the page's existing reload flow answers (reload = use the new
+     default; pick again = save over it, now seen). Recommended: accept; a two-button dialog per date for a many-date batch would be a
+     new dialog for little gain. If the owner wants the same dialog on the sheet, it is a follow-up task.
+  2. Optional versus required field (assumption): the recommended answer is OPTIONAL (section 4). The strict variant (field required when
+     the entry is absent or default-sourced, fail closed with 422) costs about 22 test files and every helper body, and protects only an
+     old tab after a deploy within the same window as an admin default change. Recommended: optional.

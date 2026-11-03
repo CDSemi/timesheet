@@ -1,0 +1,60 @@
+
+ RUN  v5.0.2 D:/Dropbox/Work.CDSemi/timesheet
+
+ ❯ tests/client/labelPickerModel.test.ts (7 tests | 2 failed) 6ms
+   ❯ in-cell label picker (E-3 a) (7)
+     × builds one batch entry with the version and the calendar default the page loaded; only Worked and Work from home touch WFH 3ms
+     × names the default the day showed for every choice, a holiday and a day without a default (null) included (R-UX5I2-3) 0ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 5 passed (7)
+   Start at  23:11:44
+   Duration  186ms (transform 65%, import 26%, tests 7%, worker 3%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/labelPickerModel.test.ts > in-cell label picker (E-3 a) > builds one batch entry with the version and the calendar default the page loaded; only Worked and Work from home touch WFH
+AssertionError: expected { work_date: '2026-11-30', …(2) } to deeply equal { work_date: '2026-11-30', …(3) }
+
+- Expected
++ Received
+
+  {
+    "category": "Vacation",
+-   "default_category": "Worked",
+    "expected_version": null,
+    "work_date": "2026-11-30",
+  }
+
+ ❯ tests/client/labelPickerModel.test.ts:86:43
+     84|
+     85|   it('builds one batch entry with the version and the calendar default…
+     86|     expect(labelEntry(day(), 'Vacation')).toEqual({ work_date: '2026-1…
+       |                                           ^
+     87|     expect(labelEntry(day({ entry: entry(7) }), 'Off')).toEqual({ work…
+     88|     expect(labelEntry(day({ entry: entry(2) }), 'Work from home')).toE…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/client/labelPickerModel.test.ts > in-cell label picker (E-3 a) > names the default the day showed for every choice, a holiday and a day without a default (null) included (R-UX5I2-3)
+AssertionError: Worked: expected undefined to be 'Holiday' // Object.is equality
+
+- Expected:
+"Holiday"
+
++ Received:
+undefined
+
+ ❯ tests/client/labelPickerModel.test.ts:109:118
+    107|   it('names the default the day showed for every choice, a holiday and…
+    108|     for (const choice of LABEL_CHOICES) {
+    109|       expect(labelEntry(day({ default_category: 'Holiday', category: '…
+       |                                                                                                                      ^
+    110|       const none = labelEntry(day({ default_category: null, category: …
+    111|       expect(none.default_category, choice).toBeNull();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+exit=1

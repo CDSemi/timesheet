@@ -1,0 +1,23 @@
+WP5-CALDEF-PLAN-REVIEW - shell commands run (Git Bash, cwd D:/Dropbox/Work.CDSemi/timesheet; outputs went to the session scratchpad,
+not to the repository). Read/Grep/Glob tool calls are not listed (read-only file reads of src/, tests/, docs/, handoff/).
+
+1. git rev-parse HEAD && git status --short > scratch/status.txt; wc -l <16 source files>          exit 0 (HEAD 5b2f28793e1d...)
+2. ls docs/ > scratch/docs.txt                                                                        exit 0
+   grep -n -i "default..." GLOSSARY.md > scratch/glossary.txt                                         exit 2 (no GLOSSARY.md at the root)
+   grep -n "R-UX5I2-3" -r docs handoff/delivery/WP5_PILOT_PACKET.md handoff/delivery/ORCHESTRATION.json  exit 0
+3. ls 46-obs-int3-admin* 90-zz-int3-admin.spec.ts.txt (INT3 evidence folder); wc -l the two files    exit 0, exit 0
+4. grep -rlE "PUT.../days/|'/api/days/|/api/days/\$" tests > scratch/putfiles.txt; wc -l              exit 0 (33 files)
+   ls tests/client | grep ...; ls tests/e2e | grep ...                                               exit 0
+5. ls tests/client; ls tests/integration | grep ...; grep staleVersion src/server/http/errors.ts      exit 0, exit 0, exit 0
+6. grep -rn "postDataJSON\|postData()" tests/e2e > scratch/postdata.txt                               exit 0 (20 lines)
+7. sed -n (five line ranges) tests/e2e/day-editor.spec.ts > scratch/bodychecks.txt                    exit 0
+8. grep -nE "expect((puts|batch|bodies)...).(toEqual|toStrictEqual)(" day-editor/sharing specs        exit 0
+9. grep -rn "entries: \[..." tests/e2e tests/client; grep -rln "buildDayEntryRequest|labelEntry|batchEntries" tests   exit 0, exit 0
+10. git status --short > scratch/status2.txt; diff status.txt status2.txt                             exit 0, diff exit 0 (tree unchanged)
+    ls handoff/delivery/evidence/WP5-CALDEF-PLAN-REVIEW 2>&1 | head -5 > scratch/evdir.txt             exit 0 (folder absent then)
+    SLIP: this one command piped ls into head, against the runtime rule (redirect, never pipe into head/tail). Read-only, no effect.
+
+11. git status --short > scratch/status3.txt; diff status.txt status3.txt                            exit 0, diff exit 1
+    (the only new entry: ?? handoff/delivery/evidence/WP5-CALDEF-PLAN-REVIEW/; the brief was already untracked and only its Results changed)
+
+No server, build, test, probe or port was used; no process was started.

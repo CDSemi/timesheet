@@ -3374,8 +3374,21 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
   - WP5-GOV-DOCS-VALIDATOR đã sửa (Addendum 2). Số probe giờ là 141.
   - WP5-GOV-DOCS-REVIEW đã đọc lại bản sửa và chạy cả hai validator trên board thật: exit 0.
   - Digest vẫn là 4ac52e6b.
-- **Đang chạy:** WP5-GOV-DOCS-COMMIT, chạy một mình, làm tiếp. Sau bước này board chuyển sang
-  `software_ready`.
+- **WP5-GOV-DOCS-COMMIT đã xong.**
+  - Commit 5b2f28793e1def408e7a2c57df5054917450a1f2 trên main, push dạng fast-forward từ
+    27567d1.
+  - 65 đường dẫn được stage. D_PRE bằng cả hai digest của HEAD: 4ac52e6b. Mọi kiểm tra đều trả
+    về 0, gồm `check_recovery` (141 probe) và `--non-product-range a54061f..HEAD`.
+- **Mission trở về `software_ready` (2026-11-02).**
+  - Mã nguồn đã nghiệm thu: a54061f / 690fd8fd (WP5-UX5-RECHECK-RN).
+  - Commit chỉ sửa tài liệu mới nhất: 5b2f287 / 4ac52e6b.
+  - Các sửa đổi board sau commit này (COMMIT xong, `software_ready`) chưa được commit, chờ lần
+    commit sau, giống sau các lần nghiệm thu trước.
+- **Tiếp theo, chủ dự án:**
+  - duyệt gói pilot;
+  - quyết định R-UX5I2-3;
+  - làm các kiểm tra trên thiết bị thật;
+  - chạy các bước NAS.
 - **Việc sửa luật** làm sau commit WP5-UX5-ACCEPT, dưới tên WP5-GOV-DOCS.
   - Trước tiên một planner xác định:
     - những file nào được tính là tài liệu;
@@ -3386,6 +3399,83 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - **Sau đó:**
   - ACCEPT-DOCS;
   - WP5-UX5-ACCEPT.
+
+### Chủ dự án trả lời R-UX5I2-3; vòng sửa WP5-CALDEF (2026-11-02)
+
+- **Câu trả lời của chủ dự án (nguyên văn trên board, mục `owner_decisions`).** Nếu loại ngày
+  mặc định theo lịch đã đổi kể từ lúc editor tải ngày đó, hiện thông báo để người dùng chọn lưu
+  (ghi đè) hay cập nhật theo giá trị mặc định mới. Đây là một biến thể của phương án (c) do chủ
+  dự án chọn.
+- **Thay đổi này đổi hành vi sản phẩm,** nên chạy một vòng sửa: lập kế hoạch, sửa, đóng băng,
+  gate và một audit độc lập mới. Tài liệu chuẩn và docs/10 được sửa cùng task code.
+- **Board.** Nhiệm vụ ở trạng thái `running`, phase `wp5-caldef-fix-round`, `next_task_id` là
+  WP5-CALDEF-PLAN.
+  - Mã nguồn đã nghiệm thu vẫn là a54061f / 690fd8fd cho đến khi audit của vòng này đạt.
+  - `non_product_since_acceptance` (5b2f287 / 4ac52e6b) giữ nguyên cho đến khi lần nghiệm
+    thu đó thay thế.
+- **WP5-CALDEF-PLAN** (planner, sonnet, chỉ đọc) đã được giao. Brief:
+  `handoff/delivery/tasks/WP5-CALDEF-PLAN.md`.
+- **WP5-CALDEF-PLAN xong** (planner, tự báo claude-sonnet-5-5; chỉ đọc).
+  - Cơ chế: lệnh lưu không gửi gì về loại ngày mặc định theo lịch, và server chỉ kiểm phiên bản
+    của entry, nên không thấy được việc mặc định đã đổi (INT3 E3).
+  - Thiết kế A: thêm trường tùy chọn `default_category` vào lệnh lưu ngày và vào từng mục của
+    batch; nếu mặc định hiện tại khác thì trả 409 `default_changed`; Day editor hiện thông báo
+    với hai nút "Dùng mặc định mới" và "Vẫn lưu".
+  - Kế hoạch: `handoff/delivery/evidence/WP5-CALDEF-PLAN/plan.txt`.
+- **Quyết định của coordinator (board, 2026-11-02).**
+  - Thông báo hai nút nằm trong Day editor; label picker và "Change several days" giữ luồng
+    tải lại hiện có.
+  - `default_category` là trường tùy chọn.
+  - Task tài liệu chạy sau task sửa, không chạy song song (chỉ một người ghi mã nguồn).
+- **WP5-CALDEF-PLAN-REVIEW** (planner mới, opus, chỉ đọc) đã được giao để phản biện kế hoạch
+  trước khi viết code. Nếu bị gián đoạn: lần 2 trên cùng brief, thư mục task
+  WP5-CALDEF-PLAN-REVIEW-a2.
+- **WP5-CALDEF-PLAN-REVIEW xong** (planner mới, tự báo claude-opus-5-5; chỉ đọc): kế hoạch
+  đúng nhưng cần sửa. Coordinator chấp nhận tất cả các điểm sửa.
+  - MF1: chỉ từ chối khi loại ngày đang lưu khác loại mặc định hiện tại.
+  - MF2: khi đóng hộp xem trước có mục đã cũ hoặc mặc định đã đổi, trang hiện thông báo cũ để
+    người dùng bấm được "Reload period".
+  - MF3: task sửa cập nhật hai assertion về nội dung batch của label picker trong
+    `day-editor.spec.ts`.
+  - MF4: task tài liệu chạy sau task sửa và có thêm mục release notes trong docs/12.
+  - S1-S14 và các mutant M16-M23; kế hoạch đã sửa nằm ở mục 6 của `review.txt`.
+- **WP5-CALDEF-FIX** (worker-high, sonnet) đã được giao, là người ghi mã nguồn duy nhất. Brief:
+  `handoff/delivery/tasks/WP5-CALDEF-FIX.md`. Nếu bị gián đoạn: kiểm `git status` ngoài
+  `handoff/` so với các đường dẫn của task, rồi lần 2 tiếp tục trong thư mục task
+  WP5-CALDEF-FIX-a2.
+- **WP5-CALDEF-FIX xong** (worker-high, tự báo claude-sonnet-5-5). Chưa commit.
+  - 21 đường dẫn ngoài `handoff/`, đều thuộc quyền của task; digest 1b40bf8a (885 file).
+  - Đã tái hiện lỗi trên a54061f trước (các test mới đều thất bại ở đó).
+  - 36 mutant, bị bắt hết. `npm test` 2.425; toàn bộ e2e với đồng hồ thật trên cả hai project
+    0 lỗi; axe khi thông báo đang mở 0 vi phạm.
+  - `npm run verify` thất bại một lần, chỉ ở bước smoke: lỗi DST có từ trước trong
+    `scripts/smoke-built-server.mjs` (a54061f cũng hỏng y như vậy). Chạy lại sau nửa đêm thì
+    đạt.
+  - Kiểm tra tiến trình còn sót: không còn tiến trình nào của worker.
+- **Quyết định của coordinator (2026-11-03):** WP5-CALDEF-SMOKE sửa script smoke trong vòng
+  này, sau task tài liệu và trước khi đóng băng.
+- **WP5-CALDEF-DOCS xong** (worker, tự báo claude-sonnet-5-5). Chưa commit.
+  - docs/02, 03, 04, 06, 10 và 12, mỗi file kèm bản VI (12 file), viết theo code đã làm;
+    không có chỗ nào lệch với Results của task sửa.
+  - Preflight exit 0 (142 cặp, 2538 liên kết) khi dùng một bộ dữ liệu múi giờ tạm: Python trên
+    máy không có sẵn.
+  - Digest 81f9cc3b (885 file).
+- **WP5-CALDEF-SMOKE** (worker, sonnet) đã được giao, là người ghi mã nguồn duy nhất. Nếu bị
+  gián đoạn: lần 2 tiếp tục trong thư mục task WP5-CALDEF-SMOKE-a2.
+- **WP5-CALDEF-EVID xong** (light, sonnet; chỉ trong `handoff/`, chạy song song với SMOKE).
+  Task này đổi tên 80 file evidence không phải `.txt` của task sửa thành `name-ext.txt`, vì
+  bước đóng băng chỉ commit evidence dạng `.txt`. Danh sách evidence trên board đã dùng tên mới.
+- **WP5-CALDEF-SMOKE xong** (worker, tự báo claude-sonnet-5-5). Chưa commit.
+  - Tái hiện lỗi ở các thời điểm cố định mà không đổi đồng hồ máy: code cũ hỏng lúc 23:49 ngày
+    2026-11-02 giờ Los Angeles.
+  - Code mới lùi theo ngày lịch; khớp hoàn toàn với một cách tính độc lập ở 840 thời điểm theo
+    từng giờ trong cả hai tuần đổi giờ của năm 2026.
+  - `npm run verify` exit 0, có SMOKE PASSED. Digest e24274b9 (885 file), digest cuối cùng
+    trước khi đóng băng của vòng này.
+- **WP5-CALDEF-PATHS** (light, haiku, chỉ đọc) liệt kê mọi đường dẫn trước khi đóng băng, để
+  không phải mở rộng phạm vi commit sau khi đã giao việc.
+- **Tiếp theo:** WP5-CALDEF-FREEZE (đã đăng ký, đã có brief; D_PRE e24274b9, 34 đường dẫn ngoài
+  `handoff/`), rồi gate và một audit opus mới.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 
