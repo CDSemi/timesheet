@@ -1,0 +1,185 @@
+
+ RUN  v5.0.2 <task>/export-mut
+
+ ❯ tests/integration/calendar-default-change.test.ts (18 tests | 7 failed) 4805ms
+   ❯ PUT /api/days/:date refuses a category recorded over a changed calendar default (11)
+     × I3: the acknowledgement (the current default) records the category as explicit, audited 260ms
+     × I5: no false notice for an import that moves another date, a rename, or an unchanged category; a kind change refuses 309ms
+   ❯ POST /api/days/batch with a changed calendar default (5)
+     × I9: the preview marks the date default_changed, cannot commit, and writes nothing 251ms
+     × I10: a commit with one changed default is 409 with the dates and writes neither date; stale_version wins 243ms
+     × I11: the acknowledgement (the current default) commits every date 245ms
+     × I15: the commit order is stale, invalid, reason, default_changed, then conflicts 245ms
+   ❯ ownership and calendars (2)
+     × I12: the shared edit route checks the owner calendar, not the grantee calendar; a read-only grantee is still 403 344ms
+
+ Test Files  1 failed (1)
+      Tests  7 failed | 11 passed (18)
+   Start at  02:30:12
+   Duration  5.65s (tests 86%, transform 9%, import 5%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I3: the acknowledgement (the current default) records the category as explicit, audited
+AssertionError: {"error":{"code":"default_changed","message":"The calendar default for 2026-09-21 changed from Holiday to Holiday since it was loaded. Nothing was saved.","details":{"work_date":"2026-09-21","expected_default":"Holiday","current_default":"Holiday"}}}: expected 409 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 409
+
+ ❯ tests/integration/calendar-default-change.test.ts:148:54
+    146|     await importRow(DAY_A, 'Synthetic Holiday');
+    147|     const saved = await put(DAY_A, dayBody('Worked', { expected_versio…
+    148|     expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+       |                                                      ^
+    149|     expect(saved.body).toMatchObject({ category: 'Worked', category_so…
+    150|     expect(saved.body.entry).toMatchObject({ version: version + 1 });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I5: no false notice for an import that moves another date, a rename, or an unchanged category; a kind change refuses
+AssertionError: {"error":{"code":"default_changed","message":"The calendar default for 2026-09-21 changed from Worked to Worked since it was loaded. Nothing was saved.","details":{"work_date":"2026-09-21","expected_default":"Worked","current_default":"Worked"}}}: expected 409 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 409
+
+ ❯ tests/integration/calendar-default-change.test.ts:178:54
+    176|     await importRow(DAY_B, 'Synthetic Other Holiday');
+    177|     const other = await put(DAY_A, dayBody('Off', { notes: 'a', expect…
+    178|     expect(other.status, JSON.stringify(other.body)).toBe(200);
+       |                                                      ^
+    179|
+    180|     await addSession(DAY_C);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I9: the preview marks the date default_changed, cannot commit, and writes nothing
+AssertionError: expected { work_date: '2026-09-22', …(8) } to match object { work_date: '2026-09-22', …(2) }
+(12 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "error": null,
+-   "status": "create",
++   "error": {
++     "code": "default_changed",
++     "details": {
++       "current_default": "Worked",
++       "expected_default": "Worked",
++     },
++     "message": "The calendar default is now Worked (was Worked)",
++   },
++   "status": "default_changed",
+    "work_date": "2026-09-22",
+  }
+
+ ❯ tests/integration/calendar-default-change.test.ts:296:38
+    294|       },
+    295|     });
+    296|     expect(response.body.entries[1]).toMatchObject({ work_date: DAY_B,…
+       |                                      ^
+    297|     expect(response.body.changed_count).toBe(1);
+    298|     expect(entryRows()).toEqual(rows);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I10: a commit with one changed default is 409 with the dates and writes neither date; stale_version wins
+AssertionError: expected { code: 'default_changed', …(2) } to match object { code: 'default_changed', …(1) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+@@ -5,11 +5,17 @@
+        {
+          "current_default": "Holiday",
+          "expected_default": "Worked",
+          "work_date": "2026-09-21",
+        },
++       {
++         "current_default": "Worked",
++         "expected_default": "Worked",
++         "work_date": "2026-09-22",
++       },
+      ],
+      "work_dates": [
+        "2026-09-21",
++       "2026-09-22",
+      ],
+    },
+  }
+
+ ❯ tests/integration/calendar-default-change.test.ts:312:32
+    310|     });
+    311|     expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+    312|     expect(refused.body.error).toMatchObject({
+       |                                ^
+    313|       code: 'default_changed',
+    314|       details: {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/7]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I11: the acknowledgement (the current default) commits every date
+AssertionError: {"error":{"code":"default_changed","message":"The calendar default changed for 2026-09-21, 2026-09-22 since it was loaded. Nothing was saved.","details":{"work_dates":["2026-09-21","2026-09-22"],"changes":[{"work_date":"2026-09-21","expected_default":"Holiday","current_default":"Holiday"},{"work_date":"2026-09-22","expected_default":"Worked","current_default":"Worked"}]}}}: expected 409 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 409
+
+ ❯ tests/integration/calendar-default-change.test.ts:337:60
+    335|       entries: [entry(DAY_A, 'Worked', { default_category: 'Holiday' }…
+    336|     });
+    337|     expect(response.status, JSON.stringify(response.body)).toBe(200);
+       |                                                            ^
+    338|     expect(response.body.changed).toEqual([DAY_A, DAY_B]);
+    339|     expect(entryRows().map((row) => [row.work_date, row.category, row.…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/7]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I15: the commit order is stale, invalid, reason, default_changed, then conflicts
+AssertionError: expected 'default_changed' to be 'conflicts_require_confirmation' // Object.is equality
+
+Expected: "conflicts_require_confirmation"
+Received: "default_changed"
+
+ ❯ tests/integration/calendar-default-change.test.ts:381:38
+    379|     const conflict = await batch({ mode: 'commit', entries: [body.entr…
+    380|     expect(conflict.status).toBe(409);
+    381|     expect(conflict.body.error.code).toBe('conflicts_require_confirmat…
+       |                                      ^
+    382|     // An invalid entry is answered before the default.
+    383|     const invalid = await batch({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/7]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > ownership and calendars > I12: the shared edit route checks the owner calendar, not the grantee calendar; a read-only grantee is still 403
+AssertionError: {"error":{"code":"default_changed","message":"The calendar default for 2026-09-21 changed from Holiday to Holiday since it was loaded. Nothing was saved.","details":{"work_date":"2026-09-21","expected_default":"Holiday","current_default":"Holiday"}}}: expected 409 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 409
+
+ ❯ tests/integration/calendar-default-change.test.ts:433:68
+    431|     // The grantee's own calendar has no holiday: a check against the …
+    432|     const acknowledged = await t.request('PUT', path(DAY_A), { cookie:…
+    433|     expect(acknowledged.status, JSON.stringify(acknowledged.body)).toB…
+       |                                                                    ^
+    434|     expect(entryRows()).toHaveLength(1);
+    435|     const audit = dayEntryAudits().at(-1);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/7]⎯
+
+
+exit=1

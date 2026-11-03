@@ -1,0 +1,12 @@
+# FULL suite, both projects, --workers=6, patched export, simulated working-hours instants on the likely regate and audit dates.
+. <task>/env.sh
+mkdir -p $T/logs
+run_full() {
+  L=$1; I=$2
+  bash $T/run-shift.sh full-$L $I --project=desktop --project=mobile --workers=6 > $T/logs/full-$L.txt 2>&1
+  echo "$L $I exit $?" >> $T/out/full-exits.txt
+}
+for D in $FULL_DATES; do
+  run_full d$D ${D}T18:00:00Z
+done
+echo finished >> $T/out/full-exits.txt

@@ -1,0 +1,11 @@
+# Stress of the patched test: classic-scrollbar.spec.ts:143, desktop, --repeat-each=20 --workers=6, at a right-dock instant and a left-dock instant,
+# then the whole spec file once at the real clock (all three tests).
+. <task>/env.sh
+mkdir -p $T/logs
+bash $T/run-shift.sh st-right 2026-11-04T18:00:00Z tests/e2e/classic-scrollbar.spec.ts:143 --project=desktop --repeat-each=20 --workers=6 > $T/logs/st-right.txt 2>&1
+echo "st-right exit $?" >> $T/out/stress-exits.txt
+bash $T/run-shift.sh st-left 2026-11-06T18:00:00Z tests/e2e/classic-scrollbar.spec.ts:143 --project=desktop --repeat-each=20 --workers=6 > $T/logs/st-left.txt 2>&1
+echo "st-left exit $?" >> $T/out/stress-exits.txt
+bash $T/run-shift.sh st-real real tests/e2e/classic-scrollbar.spec.ts --workers=2 > $T/logs/st-real.txt 2>&1
+echo "st-real exit $?" >> $T/out/stress-exits.txt
+echo finished >> $T/out/stress-exits.txt

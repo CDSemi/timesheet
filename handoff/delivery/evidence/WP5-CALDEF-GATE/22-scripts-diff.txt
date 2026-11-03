@@ -1,0 +1,20 @@
+diff --git a/scripts/smoke-built-server.mjs b/scripts/smoke-built-server.mjs
+index 8b211968..d52c3986 100644
+--- a/scripts/smoke-built-server.mjs
++++ b/scripts/smoke-built-server.mjs
+@@ -102,10 +102,12 @@ function laDateParts(date = new Date()) {
+ }
+ 
+ /** Latest Monday strictly before today (LA): always in the current or in-progress period. */
+-function recentMonday() {
++function recentMonday(now = Date.now()) {
++  // Step whole calendar dates from today's LA date; a day is not always 24 hours across DST.
++  const [year, month, day] = laDateParts(new Date(now)).date.split('-').map(Number);
+   for (let back = 1; back <= 7; back += 1) {
+-    const candidate = laDateParts(new Date(Date.now() - back * 86_400_000));
+-    if (candidate.weekday === 'Mon') return candidate.date;
++    const candidate = new Date(Date.UTC(year, month - 1, day - back));
++    if (candidate.getUTCDay() === 1) return candidate.toISOString().slice(0, 10);
+   }
+   throw new Error('No Monday found');
+ }

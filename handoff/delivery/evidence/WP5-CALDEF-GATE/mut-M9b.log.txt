@@ -1,0 +1,46 @@
+
+ RUN  v5.0.2 <task>/export-mut
+
+ ❯ tests/integration/calendar-default-change.test.ts (18 tests | 1 failed) 4747ms
+   ❯ POST /api/days/batch with a changed calendar default (5)
+     × I10: a commit with one changed default is 409 with the dates and writes neither date; stale_version wins 254ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 17 passed (18)
+   Start at  02:30:50
+   Duration  5.61s (tests 86%, transform 9%, import 5%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I10: a commit with one changed default is 409 with the dates and writes neither date; stale_version wins
+AssertionError: expected { code: 'default_changed', …(2) } to match object { code: 'default_changed', …(1) }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+@@ -6,10 +6,7 @@
+          "current_default": "Holiday",
+          "expected_default": "Worked",
+          "work_date": "2026-09-21",
+        },
+      ],
+-     "work_dates": [
+-       "2026-09-21",
+-     ],
+    },
+  }
+
+ ❯ tests/integration/calendar-default-change.test.ts:312:32
+    310|     });
+    311|     expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+    312|     expect(refused.body.error).toMatchObject({
+       |                                ^
+    313|       code: 'default_changed',
+    314|       details: {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit=1

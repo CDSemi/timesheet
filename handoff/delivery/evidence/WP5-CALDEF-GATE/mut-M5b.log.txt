@@ -1,0 +1,36 @@
+
+ RUN  v5.0.2 <task>/export-mut
+
+ ❯ tests/integration/calendar-default-change.test.ts (18 tests | 1 failed) 4910ms
+   ❯ PUT /api/days/:date refuses a category recorded over a changed calendar default (11)
+     × I17: a date no calendar version covers has no default to protect: the calendar_missing refusal stands, not default_changed 241ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 17 passed (18)
+   Start at  02:30:00
+   Duration  5.77s (tests 86%, transform 8%, import 5%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I17: a date no calendar version covers has no default to protect: the calendar_missing refusal stands, not default_changed
+AssertionError: {"error":{"code":"default_changed","message":"The calendar default for 2025-12-31 changed from Worked to null since it was loaded. Nothing was saved.","details":{"work_date":"2025-12-31","expected_default":"Worked","current_default":null}}}: expected 409 to be 422 // Object.is equality
+
+- Expected
++ Received
+
+- 422
++ 409
+
+ ❯ tests/integration/calendar-default-change.test.ts:260:60
+    258|   it('I17: a date no calendar version covers has no default to protect…
+    259|     const response = await put('2025-12-31', dayBody('Off', { default_…
+    260|     expect(response.status, JSON.stringify(response.body)).toBe(422);
+       |                                                            ^
+    261|     expect(response.body.error.code).toBe('calendar_missing');
+    262|     expect(entryRows()).toEqual([]);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit=1

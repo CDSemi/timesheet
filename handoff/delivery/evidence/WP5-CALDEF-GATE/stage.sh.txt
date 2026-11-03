@@ -1,0 +1,11 @@
+# Usage: bash stage.sh <label> <instant|real> [playwright args...]
+# One Playwright run in the foreground (a slice that ends well inside the tool's 10 minutes): run-shift, per-project counts, census.
+. <task>/env.sh
+cd $T
+L=$1; shift
+bash run-shift.sh "$L" "$@" > "logs/run-$L.txt" 2>&1
+echo "$L finished $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> logs/stage-progress.txt
+node counts.mjs "logs/run-$L.txt" >> out/17-run-counts.txt 2>&1
+bash cens.sh "c-$L" > "logs/cens-c-$L.log" 2>&1
+tail -n 1 out/17-run-counts.txt
+cat out/10-census-c-$L.txt

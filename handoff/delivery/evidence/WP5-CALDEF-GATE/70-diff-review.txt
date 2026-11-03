@@ -1,0 +1,11 @@
+WP5-CALDEF-GATE item 7 (diff of the round, 5b2f287..300d61f outside handoff/), read by the verifier
+
+Method: git diff of tests/ and src/ saved as 22-tests-diff.txt and 22-src-diff.txt; removed lines listed in 70-tests-removed-lines.txt; added lines matching a sleep, a fixed wait, a skip or a timeout listed in 70-tests-added-suspect.txt; added lines matching waitForTimeout, setTimeout( or a deprecated call in src listed in 70-src-added-suspect.txt (empty).
+
+Removed test lines (13 in total, all rewritten with the new field added, nothing dropped):
+  tests/client/dayModel.test.ts: the title of one test and its two entries now also carry default_category: 'Worked' (expected_version unchanged).
+  tests/client/labelPickerModel.test.ts: four labelEntry expectations and the exact-key assertion now include default_category.
+  tests/client/sessionModel.test.ts: the exact key list of the request now includes default_category.
+  tests/e2e/day-editor.spec.ts: exactly two changed lines (entry body and batch commit expectation) that only add default_category: 'Worked'; no assertion loosened, no check dropped.
+Added lines that look like timeouts: only test.setTimeout(90_000 or 120_000) inside the new calendar-default.spec.ts tests (a new file; no existing timeout raised) and new test.skip lines that select the project (desktop drawer or phone sheet) as the existing specs do. No waitForTimeout, no sleep, no setTimeout() call, no deprecated API in the added lines of src/ (70-src-added-suspect.txt is empty); npm run lint (typescript-eslint no-deprecated) exited 0.
+Result: no loosened assertion, no dropped check, no raised existing timeout, no sleep, no deprecated API found in the diff.

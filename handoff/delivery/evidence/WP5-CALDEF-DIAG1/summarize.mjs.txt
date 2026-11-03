@@ -1,0 +1,38 @@
+// Usage: node summarize.mjs <task folder> <log prefix> <out file> label1 label2 ...
+// Reads out/probe-<label>.jsonl and logs/<prefix>-<label>.txt and writes one table row per label.
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [, , folder, prefix, outFile, ...labels] = process.argv;
+const rows = ['label | simulated instant | today_local | opened day (weekday) | dock side | drawer x range | first card scrollWidth/clientWidth | drag start (x,y) | element at drag start | scrolled after drag | original test:143'];
+for (const label of labels) {
+  const probePath = join(folder, 'out', `probe-${label}.jsonl`);
+  const logPath = join(folder, 'logs', `${prefix}-${label}.txt`);
+  const log = existsSync(logPath) ? readFileSync(logPath, 'utf8') : '';
+  const original = /^\s+(ok|x)\s+\d+ \[desktop\] › tests\\e2e\\classic-scrollbar\.spec\.ts:143/m.exec(log)?.[1] ?? 'n/a';
+  const patched = /classic-scrollbar\.spec\.ts:\d+:\d+ › a press on a scrollbar/.test(log);
+  const verdict = original === 'ok' ? 'pass' : original === 'x' ? 'FAIL' : 'n/a';
+  if (!existsSync(probePath)) {
+    rows.push(`${label} | - | - | - | - | - | - | - | - | - | ${verdict}${patched ? '' : ''}`);
+    continue;
+  }
+  const f = JSON.parse(readFileSync(probePath, 'utf8').trim().split('\n').at(-1));
+  const card = f.measured.weeks[f.bar ? f.bar.index : 0];
+  const drawer = f.drawer_box ? `${Math.round(f.drawer_box.x)}-${Math.round(f.drawer_box.x + f.drawer_box.width)}` : 'n/a';
+  rows.push(
+    [
+      label,
+      f.simulatedNow,
+      f.today_local,
+      `${f.day} (${f.day_weekday})`,
+      f.editor_side,
+      drawer,
+      card ? `${card.scrollWidth}/${card.clientWidth}` : 'n/a',
+      f.bar ? `${Math.round(f.bar.x)},${Math.round(f.bar.y)}` : 'none',
+      f.element_at_drag_start ?? 'n/a',
+      f.scrolled_after_drag ?? 'n/a',
+      verdict,
+    ].join(' | '),
+  );
+}
+writeFileSync(outFile, `${rows.join('\n')}\n`);

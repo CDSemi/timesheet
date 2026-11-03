@@ -1,0 +1,82 @@
+
+Running 2 tests using 1 worker
+
+  x  1 [desktop] › tests\e2e\calendar-default.spec.ts:610:3 › R-UX5I2-3: the label picker and "Change several days" answer through "Reload period" › W9a: a pick on a stale cell is refused in the review, nothing is written, "Reload period" is offered and shows the new default, and a new pick saves over it (8.2s)
+  x  2 [desktop] › tests\e2e\calendar-default.spec.ts:641:3 › R-UX5I2-3: the label picker and "Change several days" answer through "Reload period" › W9b: "Change several days": the preview refuses a stale date, "Reload period" is offered, and after it the batch commits (8.2s)
+
+
+  1) [desktop] › tests\e2e\calendar-default.spec.ts:610:3 › R-UX5I2-3: the label picker and "Change several days" answer through "Reload period" › W9a: a pick on a stale cell is refused in the review, nothing is written, "Reload period" is offered and shows the new default, and a new pick saves over it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('alert').filter({ hasText: '2026-11-02 changed since this period was loaded. Nothing was saved.' })
+    Expected: visible
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('alert').filter({ hasText: '2026-11-02 changed since this period was loaded. Nothing was saved.' }) with timeout 7000ms
+      - waiting for getByRole('alert').filter({ hasText: '2026-11-02 changed since this period was loaded. Nothing was saved.' })
+
+
+      625 |     await review.getByRole('button', { name: 'Cancel' }).click();
+      626 |     await expect(review).toHaveCount(0);
+    > 627 |     await expect(page.getByRole('alert').filter({ hasText: `${date} changed since this period was loaded. Nothing was saved.` })).toBeVisible();
+          |                                                                                                                                   ^
+      628 |     await expect(reloadButton(page)).toBeVisible();
+      629 |     await reloadButton(page).click();
+      630 |     await expect(page.locator(`[data-day="${date}"]`)).toContainText('Holiday');
+        at <task>\export-mut\tests\e2e\calendar-default.spec.ts:627:131
+
+    Error Context: ..\pw-mut-M18\calendar-default-R-UX5I2-3-667d5-nd-a-new-pick-saves-over-it-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-M18\calendar-default-R-UX5I2-3-667d5-nd-a-new-pick-saves-over-it-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-M18\calendar-default-R-UX5I2-3-667d5-nd-a-new-pick-saves-over-it-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) [desktop] › tests\e2e\calendar-default.spec.ts:641:3 › R-UX5I2-3: the label picker and "Change several days" answer through "Reload period" › W9b: "Change several days": the preview refuses a stale date, "Reload period" is offered, and after it the batch commits 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('button', { name: 'Reload period', exact: true })
+    Expected: visible
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('button', { name: 'Reload period', exact: true }) with timeout 7000ms
+      - waiting for getByRole('button', { name: 'Reload period', exact: true })
+
+
+      651 |     expect(batch.map((body) => body.mode)).toEqual(['preview']);
+      652 |     await review.getByRole('button', { name: 'Cancel' }).click();
+    > 653 |     await expect(reloadButton(page)).toBeVisible();
+          |                                      ^
+      654 |     await reloadButton(page).click();
+      655 |     await expect(page.locator(`[data-day="${date}"]`)).toContainText('Holiday');
+      656 |     await page.getByRole('checkbox', { name: `Select ${date}`, exact: true }).check();
+        at <task>\export-mut\tests\e2e\calendar-default.spec.ts:653:38
+
+    Error Context: ..\pw-mut-M18\calendar-default-R-UX5I2-3-69369--after-it-the-batch-commits-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-M18\calendar-default-R-UX5I2-3-69369--after-it-the-batch-commits-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-M18\calendar-default-R-UX5I2-3-69369--after-it-the-batch-commits-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    [desktop] › tests\e2e\calendar-default.spec.ts:610:3 › R-UX5I2-3: the label picker and "Change several days" answer through "Reload period" › W9a: a pick on a stale cell is refused in the review, nothing is written, "Reload period" is offered and shows the new default, and a new pick saves over it 
+    [desktop] › tests\e2e\calendar-default.spec.ts:641:3 › R-UX5I2-3: the label picker and "Change several days" answer through "Reload period" › W9b: "Change several days": the preview refuses a stale date, "Reload period" is offered, and after it the batch commits 
+(node:23628) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:37848) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+exit=1

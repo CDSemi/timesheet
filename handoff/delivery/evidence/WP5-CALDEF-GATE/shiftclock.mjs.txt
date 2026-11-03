@@ -1,0 +1,21 @@
+// WP5-UX-AUDIT-AB8 (copied unchanged for WP5-UX-FIX10): simulated wall clock for a whole e2e run, without any source change.
+// Loaded through NODE_OPTIONS=--import into the Playwright runner, its workers, the CLI and the built server
+// (the fixtures spawn them with ...process.env). Every process shifts Date by the SAME constant AB8_SHIFT_MS,
+// computed once by the wrapper, so elapsed time is real and all processes agree on "now".
+// The browser is not shifted; the client code never reads the browser clock (no Date.now / new Date( in src/client).
+const shift = Number(process.env.AB8_SHIFT_MS ?? '0');
+if (!Number.isFinite(shift)) throw new Error('AB8_SHIFT_MS must be a number');
+const RealDate = globalThis.Date;
+const shifted = new Proxy(RealDate, {
+  construct(target, args, newTarget) {
+    return Reflect.construct(target, args.length === 0 ? [RealDate.now() + shift] : args, newTarget);
+  },
+  apply() {
+    return new RealDate(RealDate.now() + shift).toString();
+  },
+  get(target, prop, receiver) {
+    if (prop === 'now') return () => RealDate.now() + shift;
+    return Reflect.get(target, prop, receiver);
+  },
+});
+globalThis.Date = shifted;

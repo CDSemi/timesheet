@@ -3384,8 +3384,77 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
     final pre-freeze digest.
 - **WP5-CALDEF-PATHS** (light, haiku, read-only) lists every path before the freeze, so the
   commit scope needs no change after dispatch.
-- **Next:** WP5-CALDEF-FREEZE (registered, brief written; D_PRE e24274b9, 34 paths outside
-  `handoff/`), then the gate and a fresh opus audit.
+- **WP5-CALDEF-PATHS done:** exactly the 34 expected paths outside `handoff/`, the expected
+  record and evidence groups, no commit blocker.
+- **WP5-CALDEF-FREEZE done.** Commit 300d61f055a859857aa8eb3845ed21f4560e82fa on main, pushed
+  as a fast-forward from 5b2f287.
+  - D_PRE = the HEAD digest = e24274b9 (885 files). 162 paths staged.
+  - One allowed edit: CRLF to LF in `evidence/WP5-CALDEF-DOCS/03-preflight.txt`.
+  - Every check exited 0.
+- **WP5-CALDEF-GATE** (verifier, sonnet) is dispatched alone on 300d61f / e24274b9. Because
+  `dist/server` changed, it reruns the container drill and `npm audit`.
+- **WP5-CALDEF-AUDIT** (fresh opus auditor) is registered with its brief. Its review pair is
+  `WP5_CALDEF_REVIEW`. Its PASS re-accepts WP5 and supersedes WP5-UX5-RECHECK-RN.
+- **If interrupted:** a fresh verifier (attempt 2) on the same brief, in task folder
+  WP5-CALDEF-GATE-a2, after checking that no gate process still runs.
+- **WP5-CALDEF-GATE done, FAIL on one item only** (2026-11-03).
+  - In the real-clock FULL run, desktop `classic-scrollbar.spec.ts:143` failed: the
+    press-drag on a week card's own scrollbar read `scrolled()` = 0. The host was not loaded
+    (2.06 busy cores).
+  - The test fails 20 of 20 on the target and 3 of 3 on a54061f on that date. It passed on
+    2026-11-02 and at the three simulated FULL instants, and its spec is not in the round.
+    So the condition is pre-existing and depends on the date, but a gate item is not met.
+  - One stress shard had a sign-in 401; a port race is inferred, and the repeat passed.
+  - Everything else passed: drill 209/0, `npm audit` 0, `npm test` x3 2,425, six sweeps 0
+    failed, 36/36 mutants, INT3 E3 refused with the notice, smoke DST proof 0 mismatches,
+    axe 21 scans 0, docs parity.
+- **WP5-CALDEF-DIAG1** (planner, sonnet, read-only) is dispatched alone. It finds the cause
+  by date, decides test or product, proposes the smallest fix with proof, runs a
+  completeness census at 2026-11-04, 11-05 and 11-09, and assesses the 401 from the code.
+  Then a fix, its freeze, a regate and the audit.
+- **If interrupted:** a fresh planner (attempt 2) on the same brief, in task folder
+  WP5-CALDEF-DIAG1-a2, after checking that no probe process still runs.
+- **WP5-CALDEF-DIAG1 done: a test assumption, not a product defect.**
+  - The week card overflows on every date. The test presses at x = 793 without looking at
+    where the floating Day editor is. The drawer docks away from the edited column
+    (docs/04). When the opened day is a Monday to Wednesday, the drawer docks right and covers
+    that point, so the press lands on its note field.
+  - The original test fails at exactly 4 of 25 instants: 11-03, 11-04, 11-05 and the real
+    clock.
+  - A 14-line tests-only patch presses at the card end that the drawer does not cover and
+    asserts that the press lands on the card. It passes 25 of 25. Mutants M1 and M2 are
+    caught. With it, the FULL suite on both projects had 0 failures at 2026-11-04, 11-05 and
+    11-09.
+  - The 401 is a harness port race in `fixtures.ts`, seen twice and never reproduced. It goes
+    to the backlog.
+- **Coordinator decision 2026-11-03:** accept the verdict and the patch. The regate is scoped.
+  It keeps a `dist/` comparison and `npm audit`; the drill, the 36 mutants, the INT3 probe,
+  the smoke proof, axe and the documents carry forward.
+- **WP5-CALDEF-FIX2** (worker, sonnet) is dispatched alone on the one spec. Then a path
+  lookup, WP5-CALDEF-FIX2-FREEZE, the scoped WP5-CALDEF-REGATE and the audit, retargeted to
+  the new commit.
+- **If interrupted:** check `git status` of `tests/e2e/classic-scrollbar.spec.ts`, then a
+  fresh worker (attempt 2) on the same brief, in task folder WP5-CALDEF-FIX2-a2.
+- **Drafted while FIX2 runs:** the brief `tasks/WP5-CALDEF-REGATE.md` (scoped; ports
+  52290-52329), and the audit brief retargeted to the regate's freeze commit, with the FIX2
+  review and the F2 backlog added. FIX2-FREEZE and REGATE go on the board after FIX2's result
+  and a path lookup.
+- **WP5-CALDEF-FIX2 done** (uncommitted). Only `tests/e2e/classic-scrollbar.spec.ts`
+  changed (+11/-3). Digest 59e2ec3f (885 files).
+  - It reproduced the failure first. The patched test passes with the drawer on either side
+    and on the real clock, and stress ran 20/20 at both sides.
+  - Mutants M1 and M2 are caught. Lint, typecheck and `git diff --check` exit 0.
+- **WP5-CALDEF-PATHS2** (light, haiku, read-only) runs before the freeze. If interrupted,
+  rerun it.
+- **WP5-CALDEF-PATHS2 done.** One path is outside `handoff/`, and the `handoff/` groups are
+  as expected (the gate evidence has 327 files). Two evidence files end in a blank line;
+  removing it is an allowed whitespace edit. The freeze must read 48 process files.
+- **WP5-CALDEF-FIX2-FREEZE** (committer, sonnet) is dispatched alone, with D_PRE 59e2ec3f.
+  The coordinator writes nothing while it runs. WP5-CALDEF-REGATE (scoped) and
+  WP5-CALDEF-AUDIT are registered; the audit now depends on the regate.
+- **If interrupted:** check `git log`, `git status` and origin/main first. If the commit
+  exists, record it. Otherwise give the same brief to a fresh committer (attempt 2), in task
+  folder WP5-CALDEF-FIX2-FREEZE-a2.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

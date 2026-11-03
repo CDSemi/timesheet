@@ -1,0 +1,12 @@
+7:-import type { BatchConflict, Calculation, DayEntry, DayView, Session } from '../../src/client/api.ts';
+22:-  it('builds date-ordered entries with the version each day was loaded at', () => {
+26:-      { work_date: '2026-09-30', category: 'Vacation', expected_version: 4 },
+27:-      { work_date: '2026-10-01', category: 'Vacation', expected_version: null },
+145:-  it('builds one batch entry with the version the page loaded; only Worked and Work from home touch WFH', () => {
+146:-    expect(labelEntry(day(), 'Vacation')).toEqual({ work_date: '2026-11-30', category: 'Vacation', expected_version: null });
+147:-    expect(labelEntry(day({ entry: entry(7) }), 'Off')).toEqual({ work_date: '2026-11-30', category: 'Off', expected_version: 7 });
+148:-    expect(labelEntry(day({ entry: entry(2) }), 'Work from home')).toEqual({ work_date: '2026-11-30', category: 'Worked', wfh: true, expected_version: 2 });
+149:-    expect(labelEntry(day({ wfh: true }), 'Worked')).toEqual({ work_date: '2026-11-30', category: 'Worked', wfh: false, expected_version: null });
+169:-    expect(Object.keys(sent).sort()).toEqual(['category', 'expected_version', 'work_date']);
+932:-  const entry = { work_date: plainDay, category: 'Vacation', expected_version: null };
+941:-  expect(batch.at(-1)).toEqual({ mode: 'commit', entries: [{ work_date: plainDay, category: 'Worked', wfh: true, expected_version: version }] });

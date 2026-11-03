@@ -1,0 +1,53 @@
+== int3-original: real start 2026-11-03T10:28:01Z, simulated start real, AB8_SHIFT_MS=0
+process clock 2026-11-03T10:28:01.297Z (Date.now 1793701681307); America/Los_Angeles Tue, 2026-11-03, 02:28; shift ms 0; instanceof true
+$ node node_modules/@playwright/test/cli.js test tests/e2e/zz-int3-admin.spec.ts --project=desktop --workers=1 --output=<task>\pw-int3-original
+
+Running 2 tests using 1 worker
+
+(node:111036) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  x  1 [desktop] › tests\e2e\zz-int3-admin.spec.ts:30:3 › int3-E3 admin holiday on a day whose entry keeps its calendar default, then a delete in the open editor with a typed note (10.0s)
+(node:22788) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ok 2 [desktop] › tests\e2e\zz-int3-admin.spec.ts:30:3 › int3-E4 admin holiday on a day whose entry keeps its calendar default, then a delete in the open editor, nothing typed (2.9s)
+
+
+  1) [desktop] › tests\e2e\zz-int3-admin.spec.ts:30:3 › int3-E3 admin holiday on a day whose entry keeps its calendar default, then a delete in the open editor with a typed note 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: /Day editor/ }).getByRole('alert').filter({ hasText: 'This day changed since it was loaded' }).or(getByRole('dialog', { name: /Day editor/ }).getByRole('status').filter({ hasText: 'Day fields saved.' }))
+    Expected: visible
+    Timeout: 7000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" getByRole('dialog', { name: /Day editor/ }).getByRole('alert').filter({ hasText: 'This day changed since it was loaded' }).or(getByRole('dialog', { name: /Day editor/ }).getByRole('status').filter({ hasText: 'Day fields saved.' })) with timeout 7000ms
+      - waiting for getByRole('dialog', { name: /Day editor/ }).getByRole('alert').filter({ hasText: 'This day changed since it was loaded' }).or(getByRole('dialog', { name: /Day editor/ }).getByRole('status').filter({ hasText: 'Day fields saved.' }))
+
+
+      69 |     const stale = editor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' });
+      70 |     const saved = editor.getByRole('status').filter({ hasText: 'Day fields saved.' });
+    > 71 |     await expect(stale.or(saved)).toBeVisible();
+         |                                   ^
+      72 |     const server = await person.api.dayView(workDate);
+      73 |     log(tag, `Save day fields: ${(await stale.count()) === 1 ? 'REFUSED (stale)' : 'ACCEPTED'}; server category ${server.category}/${server.category_source}, notes "${server.entry?.notes ?? ''}" entry v${server.entry?.version}`);
+      74 |   });
+        at <task>\export-mut\tests\e2e\zz-int3-admin.spec.ts:71:35
+
+    Error Context: ..\pw-int3-original\zz-int3-admin-int3-E3-admi-cc59c-en-editor-with-a-typed-note-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-int3-original\zz-int3-admin-int3-E3-admi-cc59c-en-editor-with-a-typed-note-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-int3-original\zz-int3-admin-int3-E3-admi-cc59c-en-editor-with-a-typed-note-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\zz-int3-admin.spec.ts:30:3 › int3-E3 admin holiday on a day whose entry keeps its calendar default, then a delete in the open editor with a typed note 
+  1 passed (19.8s)
+exit=1
+process clock 2026-11-03T10:28:21.528Z (Date.now 1793701701538); America/Los_Angeles Tue, 2026-11-03, 02:28; shift ms 0; instanceof true
+== int3-original real end 2026-11-03T10:28:21Z

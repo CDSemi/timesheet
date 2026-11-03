@@ -1,0 +1,75 @@
+// WP5-UX5-AUDIT-INT3 probe (the auditor's own, never part of the repository): R-UX5I2-3 on the session-write path. A day whose entry keeps
+// its calendar default (category source "default", created by a clock session) shows the calendar's category, so an administrator's
+// holiday import changes the day's category without a new entry version. The person's open editor then deletes the session (a session
+// write): E3 with a typed note, E4 with nothing typed. Observation only (the item is in the backlog). A private server, so the shared
+// worker server's calendar is not touched. Synthetic data only; observations go to INT3_OUT.
+import { appendFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { expect, newPerson, type Person, SeedClient, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh' });
+
+const OUT = process.env.INT3_OUT ?? '';
+function log(tag: string, line: string): void {
+  if (OUT !== '') appendFileSync(OUT, `[${tag}] ${line}\n`);
+}
+const frames = (page: Page) => page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+const TYPED = 'Synthetic note typed here and not saved';
+
+async function importHoliday(admin: SeedClient, person: Person, date: string): Promise<void> {
+  const periods = await person.api.call<{ in_progress: { period_start: string } }>('GET', '/api/periods/current');
+  const calendar = await admin.call<{ id: string }>('GET', '/api/calendar');
+  const csv = ['date,name,kind', `${date},Synthetic Admin Holiday,holiday`].join('\n');
+  const body = { calendar_id: calendar.id, year: Number(date.slice(0, 4)), effective_from: periods.in_progress.period_start, csv, remove_dates: [] };
+  const preview = await admin.call<{ preview_hash: string }>('POST', '/api/admin/calendar/import/preview', body);
+  const done = await admin.call<{ committed: boolean }>('POST', '/api/admin/calendar/import/commit', { ...body, preview_hash: preview.preview_hash }, 201);
+  expect(done.committed).toBe(true);
+}
+
+for (const typed of [true, false]) {
+  test(`int3-E${typed ? '3' : '4'} admin holiday on a day whose entry keeps its calendar default, then a delete in the open editor${typed ? ' with a typed note' : ', nothing typed'}`, async ({
+    page,
+    privateServer,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'desktop', 'the desktop drawer');
+    const tag = `E${typed ? '3' : '4'} admin default change, delete${typed ? ', typed' : ''}`;
+    const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+    const person = await newPerson(admin, privateServer, { displayName: `Synthetic Int3 Calendar ${typed ? 'E3' : 'E4'}`, signature: 'none' });
+    const { workDate } = await person.api.seedClockSessionToday();
+    const seeded = await person.api.dayView(workDate);
+    await page.setViewportSize({ width: 1440, height: 800 });
+    await page.goto(`${privateServer.origin}/#/timesheet`);
+    await page.getByLabel('Email').fill(person.account.email);
+    await page.getByLabel('Password').fill(person.account.password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await expect(page.locator('[data-day]')).toHaveCount(14);
+    if ((await page.locator(`[data-day="${workDate}"]`).count()) === 0) {
+      await page.locator('.period-bar').getByRole('button', { name: 'Today', exact: true }).click();
+      await expect(page.locator(`[data-day="${workDate}"]`)).toHaveCount(1);
+    }
+    await page.getByLabel('Open a day').fill(workDate);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor).toBeVisible();
+    await expect(editor.getByRole('heading', { name: 'Times', exact: true })).toBeVisible();
+    const form = editor.getByRole('form', { name: 'Day fields' });
+    const notes = form.getByLabel('Notes');
+    const category = form.getByLabel('Category');
+    if (typed) await notes.fill(TYPED);
+    const shown = await category.inputValue();
+    await importHoliday(admin, person, workDate);
+    const afterImport = await person.api.dayView(workDate);
+    await editor.getByRole('button', { name: /^Delete session/ }).first().click();
+    const confirm = page.getByRole('alertdialog', { name: 'Delete this session?' });
+    await confirm.getByRole('button', { name: 'Delete session' }).click();
+    await expect(editor.getByRole('status').filter({ hasText: 'Session deleted.' })).toBeVisible();
+    await frames(page);
+    log(tag, `${workDate}: seeded ${seeded.category}/${seeded.category_source} entry v${seeded.entry?.version}; shown ${shown}; after the import the server says ${afterImport.category}/${afterImport.category_source} entry v${afterImport.entry?.version}; after the delete the form shows category ${await category.inputValue()} note "${await notes.inputValue()}" hint ${await editor.getByText('Calendar default. Saving records it as your choice.').count()}`);
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    const stale = editor.getByRole('alert').filter({ hasText: 'This day changed since it was loaded' });
+    const saved = editor.getByRole('status').filter({ hasText: 'Day fields saved.' });
+    await expect(stale.or(saved)).toBeVisible();
+    const server = await person.api.dayView(workDate);
+    log(tag, `Save day fields: ${(await stale.count()) === 1 ? 'REFUSED (stale)' : 'ACCEPTED'}; server category ${server.category}/${server.category_source}, notes "${server.entry?.notes ?? ''}" entry v${server.entry?.version}`);
+  });
+}

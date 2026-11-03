@@ -1,0 +1,33 @@
+// WP5-CALDEF-GATE item 1 (second pass): for the lazy chunks whose identifiers differ, rename every short identifier (at most 2 characters, the
+// minifier's local names) to its first-appearance number on both sides and compare. Equal canonical text = only the minifier's local names
+// (import aliases included) differ; any other difference remains and is printed.
+// Usage: node chunkcanon.mjs <base assets dir> <target assets dir> <ChunkName>...
+import { readdirSync, readFileSync } from 'node:fs';
+
+const [a, b, ...names] = process.argv.slice(2);
+const find = (dir, name) => readdirSync(dir).find((file) => file.startsWith(`${name}-`) && file.endsWith('.js'));
+const norm = (text) => text.replace(/(index|AdminScreen|ImportScreen|ReviewScreen|SettingsTransfer|SettingsTransferFile|jsx-runtime)-[A-Za-z0-9_-]{8}\.js/g, '$1-H.js');
+const canon = (text) => {
+  const ids = new Map();
+  return norm(text)
+    .split(/([^A-Za-z0-9_$]+)/)
+    .map((t) => {
+      if (!/^[A-Za-z_$][A-Za-z0-9_$]?$/.test(t)) return t;
+      if (!ids.has(t)) ids.set(t, `#${ids.size}`);
+      return ids.get(t);
+    })
+    .join('');
+};
+for (const name of names) {
+  const x = canon(readFileSync(`${a}/${find(a, name)}`, 'utf8'));
+  const y = canon(readFileSync(`${b}/${find(b, name)}`, 'utf8'));
+  if (x === y) {
+    console.log(`${name}: canonical text identical (${x.length} chars): only the minifier's short local names differ`);
+    continue;
+  }
+  let i = 0;
+  while (i < x.length && i < y.length && x[i] === y[i]) i += 1;
+  console.log(`${name}: CANONICAL TEXT DIFFERS at char ${i} (${x.length} vs ${y.length} chars)`);
+  console.log(`  base  : ${x.slice(Math.max(0, i - 80), i + 200)}`);
+  console.log(`  target: ${y.slice(Math.max(0, i - 80), i + 200)}`);
+}

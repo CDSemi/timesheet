@@ -1,0 +1,21 @@
+WP5-CALDEF-GATE failures, their classification and the decision
+
+F1. Real-clock FULL e2e, desktop, shard 2 of 2 (log-run-full-desktop-s2.txt, run at 2026-11-03T08:50Z-08:55Z, census right after 2.06 busy cores, 10-census-c-full-desktop-s2.txt)
+  Test: tests/e2e/classic-scrollbar.spec.ts:143 "a press on a scrollbar with the Day editor open: a press-drag on a week card's own scrollbar scrolls the card ...".
+  Trace: assertion `expect(await scrolled(), 'the press-drag moved the scrollbar thumb').toBeGreaterThan(0)` received 0 (no timeout, no network error).
+  Class by the load rule: an assertion failure, not host starvation and not a network or buffer error => "every other failure fails the gate"; not rerun to turn it into a pass.
+  Diagnostics (not gate runs, not used to change the result; census after: 3.66 and 3.84 busy cores):
+    - the same spec, desktop, real clock, on the target, --repeat-each=20: that test failed 20 of 20, the other two tests of the spec passed (run-diag-scrollbar-target.txt);
+    - the same spec on the previously accepted build a54061f (export-prev), real clock, --repeat-each=3: that test failed 3 of 3 (run-diag-scrollbar-prev.txt);
+    - at the three simulated clocks of the full sweeps (2026-10-26T16:00Z, 2026-11-01T08:45Z, 2027-03-14T10:30Z) the whole desktop project passed, this test included.
+  So the failure is not caused by this round (the spec is untouched by the 34 paths and the same test fails identically on the pre-round build); it is a host- or date-dependent condition of that test on the real clock of 2026-11-03 (a Tuesday; the drag point is chosen from the first week card that scrolls sideways in the displayed period). Its cause was not investigated further.
+
+F2. Stress, calendar-default.spec.ts, desktop, real clock, --repeat-each=20 --workers=6 --fully-parallel, shard 1 of 2 (log-run-st-cal-real-desktop-s1.txt, census right after 1.98 busy cores)
+  Test: W3 repeat 7, `seed sign-in` expected 200, received 401 at fixtures.ts:379 (SeedClient.signIn of the administrator of that test's private server, right after the health check).
+  Class: a harness-level sign-in answered by a server that did not know that test's random administrator password. The fixture picks a free port with a probe that is closed before the server starts (fixtures.ts freePort and waitUntilHealthy), so under six workers a second server can answer on the same port; this is inferred, not proven. Treated as a network-class error: repeated once.
+  Repeat of the same shard (log-run-st-cal-real-desktop-s1-repeat.txt): 240 passed, 10 skipped, 0 failed. Both runs are recorded; the repeat passed.
+
+Decision for the gate: FAIL.
+  - Item 4 (the real-clock FULL e2e on both projects: 0 failed) is not met: desktop 507 passed, 37 skipped, 1 failed (classic-scrollbar, F1); mobile 429 passed, 116 skipped, 0 failed.
+  - Everything else passed: identity and scope, dist comparison, drill and audit, core and validators, six sweeps, stress (with the one repeat of F2), 36 of 36 mutants killed and restored, INT3 probe, smoke proof, axe, documents.
+  - F1 reproduces identically on a54061f, so it is outside the R-UX5I2-3 round; the coordinator decides whether a date-dependent pre-existing test failure blocks the round or is recorded and fixed separately. NAS items stay NOT VERIFIED.

@@ -1,0 +1,136 @@
+import { appendFileSync, readFileSync } from 'node:fs';
+import type { Page } from '@playwright/test';
+import { expect, newPerson, SeedClient, test } from './fixtures.ts';
+
+/*
+ * WP5-CALDEF-GATE probe (the verifier's own, never part of the repository): axe-core 4.14.0 (loaded from the task folder; no dependency added) on
+ *  (A) the Day editor with the "calendar default changed" notice open at 1440 (drawer beside), 1024 (floating) and 390 px (phone sheet),
+ *  (B) the label-picker review dialog with a "calendar default changed" row (1440 and 390 px),
+ *  (C) the page notice with "Reload period" after closing that dialog (1440 and 390 px),
+ * each in light, dark by system setting and dark chosen. Primary rule set: WCAG 2.0 to 2.2 A and AA; the best-practice rules are scanned
+ * separately and reported as information. Synthetic data only, a private server per test.
+ */
+const AXE_SRC = readFileSync(process.env.AXE_PATH ?? '', 'utf8');
+const OUT = process.env.AXE_OUT ?? '';
+const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+const BEST = ['best-practice'];
+const note = (line: string): void => {
+  if (OUT !== '') appendFileSync(OUT, `${line}\n`);
+};
+const frames = (page: Page) => page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))');
+
+interface Summary {
+  version: string;
+  violations: Array<{ id: string; impact: string | null; nodes: string[] }>;
+  incomplete: string[];
+}
+
+async function run(page: Page, tags: string[]): Promise<Summary> {
+  if (!(await page.evaluate<boolean>(`typeof window.axe !== 'undefined'`))) await page.evaluate(AXE_SRC);
+  return page.evaluate<Summary, string[]>(async (values) => {
+    const axe = (window as unknown as { axe: { run: (c: unknown, o: unknown) => Promise<Record<string, unknown>>; version: string } }).axe;
+    const r = (await axe.run(document, { runOnly: { type: 'tag', values }, resultTypes: ['violations', 'incomplete'] })) as {
+      violations: Array<{ id: string; impact: string | null; nodes: Array<{ target: unknown }> }>;
+      incomplete: Array<{ id: string }>;
+    };
+    return { version: axe.version, violations: r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.map((n) => JSON.stringify(n.target)) })), incomplete: [...new Set(r.incomplete.map((i) => i.id))] };
+  }, tags);
+}
+
+/** Scans the open state in the three themes; returns the WCAG violation count. */
+async function scanThemes(page: Page, label: string): Promise<number> {
+  let total = 0;
+  for (const [theme, apply] of [
+    ['light', async () => page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' })],
+    ['dark (system)', async () => page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' })],
+    [
+      'dark (chosen)',
+      async () => {
+        await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+        await page.evaluate("document.documentElement.setAttribute('data-theme', 'dark')");
+      },
+    ],
+  ] as const) {
+    await page.evaluate("document.documentElement.removeAttribute('data-theme')");
+    await apply();
+    await frames(page);
+    const wcag = await run(page, WCAG);
+    const best = await run(page, BEST);
+    note(
+      `${label} ${theme}: axe ${wcag.version} WCAG violations=${wcag.violations.length} [${wcag.violations.map((v) => `${v.id}(${v.impact}) ${v.nodes.join(' ')}`).join('; ')}] incomplete=[${wcag.incomplete.join(',') || 'none'}]; best-practice violations=${best.violations.length} [${best.violations.map((v) => `${v.id}(${v.impact}) ${v.nodes.join(' ')}`).join('; ')}] incomplete=[${best.incomplete.join(',') || 'none'}]`,
+    );
+    total += wcag.violations.length;
+  }
+  return total;
+}
+
+async function importHoliday(admin: SeedClient, date: string): Promise<void> {
+  const calendar = await admin.call<{ id: string }>('GET', '/api/calendar');
+  const csv = ['date,name,kind', `${date},Synthetic Admin Holiday,holiday`].join('\n');
+  const base = { calendar_id: calendar.id, year: Number(date.slice(0, 4)), csv, remove_dates: [] };
+  const first = await admin.call<{ earliest_effective_from: string }>('POST', '/api/admin/calendar/import/preview', { ...base, effective_from: '2099-01-01' });
+  const body = { ...base, effective_from: first.earliest_effective_from };
+  const preview = await admin.call<{ preview_hash: string | null; can_commit: boolean }>('POST', '/api/admin/calendar/import/preview', body);
+  expect(preview.can_commit).toBe(true);
+  await admin.call('POST', '/api/admin/calendar/import/commit', { ...body, preview_hash: preview.preview_hash }, 201);
+}
+
+async function signIn(page: Page, origin: string, who: { email: string; password: string }): Promise<void> {
+  await page.goto(`${origin}/#/timesheet`);
+  await page.getByLabel('Email').fill(who.email);
+  await page.getByLabel('Password').fill(who.password);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+}
+
+for (const width of [1440, 1024, 390]) {
+  test(`axe A: Day editor with the changed-default notice open at ${width}px`, async ({ page, privateServer }) => {
+    test.setTimeout(180_000);
+    const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+    const person = await newPerson(admin, privateServer, { displayName: `Synthetic Axe A ${width}`, signature: 'none' });
+    const [date = ''] = await person.api.displayedPeriodFreeWorkdays();
+    expect(date).not.toBe('');
+    await person.api.seedCompleteDay(date);
+    await page.setViewportSize({ width, height: 800 });
+    await signIn(page, privateServer.origin, person.account);
+    await page.getByLabel('Open a day').fill(date);
+    await page.getByRole('button', { name: 'Open day', exact: true }).click();
+    const editor = page.getByRole('dialog', { name: /Day editor/ });
+    await expect(editor.getByRole('form', { name: 'Day fields' })).toBeVisible();
+    await editor.getByLabel('Notes').fill('Synthetic note typed and not saved');
+    await importHoliday(admin, date);
+    await editor.getByRole('button', { name: 'Save day fields' }).click();
+    const notice = editor.getByRole('alert').filter({ hasText: 'The calendar default for this day changed' });
+    await expect(notice).toBeVisible();
+    await expect(notice).toBeFocused();
+    await expect(notice.getByRole('button')).toHaveText(['Use Holiday', 'Save Worked anyway']);
+    expect(await scanThemes(page, `[A Day editor notice ${width}px]`)).toBe(0);
+  });
+}
+
+for (const width of [1440, 390]) {
+  test(`axe B and C: review dialog with a "calendar default changed" row, then the page notice with "Reload period" at ${width}px`, async ({ page, privateServer }) => {
+    test.setTimeout(180_000);
+    const admin = await new SeedClient(privateServer.origin).signIn(privateServer.credentials.admin.email, privateServer.credentials.admin.password);
+    const person = await newPerson(admin, privateServer, { displayName: `Synthetic Axe BC ${width}`, signature: 'none' });
+    const [date = ''] = await person.api.displayedPeriodFreeWorkdays();
+    expect(date).not.toBe('');
+    await page.setViewportSize({ width, height: 800 });
+    await signIn(page, privateServer.origin, person.account);
+    await importHoliday(admin, date);
+    await page.getByRole('button', { name: new RegExp(`^Category for ${date}`) }).click();
+    await page.getByRole('listbox', { name: `Category for ${date}` }).getByRole('option', { name: 'Worked', exact: true }).click();
+    const review = page.getByRole('dialog', { name: `Review category change for ${date}` });
+    await expect(review).toBeVisible();
+    await expect(review).toContainText('calendar default changed: The calendar default is now Holiday (was Worked)');
+    let total = await scanThemes(page, `[B review dialog ${width}px]`);
+    await page.evaluate("document.documentElement.removeAttribute('data-theme')");
+    await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+    await review.getByRole('button', { name: 'Cancel' }).click();
+    await expect(review).toHaveCount(0);
+    await expect(page.getByRole('alert').filter({ hasText: `${date} changed since this period was loaded. Nothing was saved.` })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Reload period', exact: true })).toBeVisible();
+    total += await scanThemes(page, `[C page notice with Reload period ${width}px]`);
+    expect(total).toBe(0);
+  });
+}

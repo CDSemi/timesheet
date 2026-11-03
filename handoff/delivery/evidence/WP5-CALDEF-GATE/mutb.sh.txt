@@ -1,0 +1,9 @@
+# Usage: bash mutb.sh <ids...>   (foreground batch of the fix's mutation tool in the scratch copy export-mut)
+. <task>/env.sh
+export GIT_CONFIG_VALUE_0=$T/export-mut
+cd $T/export-mut
+for id in "$@"; do
+  node.exe $T/caldef-mutate.mjs $id >> $T/logs/muts-stdout.txt 2>&1
+  echo "$id exit $? $(date -u +%H:%M:%SZ)" >> $T/logs/muts-progress.txt
+done
+tail -n $# $T/mutants/00-summary.tsv | cut -c1-210

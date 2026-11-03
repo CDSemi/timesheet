@@ -1,0 +1,33 @@
+
+ RUN  v5.0.2 <task>/export-mut
+
+ ❯ tests/integration/calendar-default-change.test.ts (18 tests | 1 failed) 4806ms
+   ❯ POST /api/days/batch with a changed calendar default (5)
+     × I15: the commit order is stale, invalid, reason, default_changed, then conflicts 250ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 17 passed (18)
+   Start at  02:31:08
+   Duration  5.65s (tests 86%, transform 8%, import 5%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I15: the commit order is stale, invalid, reason, default_changed, then conflicts
+AssertionError: expected 'conflicts_require_confirmation' to be 'default_changed' // Object.is equality
+
+Expected: "default_changed"
+Received: "conflicts_require_confirmation"
+
+ ❯ tests/integration/calendar-default-change.test.ts:374:37
+    372|     const refused = await batch(body);
+    373|     expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+    374|     expect(refused.body.error.code).toBe('default_changed');
+       |                                     ^
+    375|     const confirmedToo = await batch({ ...body, confirm_conflicts: tru…
+    376|     expect(confirmedToo.status).toBe(409);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit=1

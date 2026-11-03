@@ -1,0 +1,46 @@
+// WP5-CALDEF-GATE item 1: classify the lazy chunks that differ between two builds. Names with content hashes are normalised; the two files are
+// then compared token by token. Equal token counts with a consistent one-to-one identifier mapping = identifier (import-alias) renames only.
+// Usage: node chunkdiff.mjs <base assets dir> <target assets dir>
+import { readdirSync, readFileSync } from 'node:fs';
+
+const [a, b] = process.argv.slice(2);
+const key = (name) => name.replace(/-[A-Za-z0-9_-]{8}\.js$/, '');
+const norm = (text) => text.replace(/(index|AdminScreen|ImportScreen|ReviewScreen|SettingsTransfer|SettingsTransferFile|jsx-runtime)-[A-Za-z0-9_-]{8}\.js/g, '$1-H.js');
+const list = (dir) => readdirSync(dir).filter((name) => name.endsWith('.js'));
+const old = new Map(list(a).map((name) => [key(name), name]));
+const tok = (text) => text.split(/([^A-Za-z0-9_$]+)/).filter((t) => t !== '');
+for (const name of list(b)) {
+  const other = old.get(key(name));
+  const ta = tok(norm(readFileSync(`${a}/${other}`, 'utf8')));
+  const tb = tok(norm(readFileSync(`${b}/${name}`, 'utf8')));
+  const label = key(name);
+  if (ta.length !== tb.length) {
+    // index and others: report the first and last differing token windows
+    let i = 0;
+    while (i < ta.length && i < tb.length && ta[i] === tb[i]) i += 1;
+    let j = 0;
+    while (j < ta.length - i && j < tb.length - i && ta[ta.length - 1 - j] === tb[tb.length - 1 - j]) j += 1;
+    console.log(`${label}: TOKEN COUNT DIFFERS (${ta.length} -> ${tb.length}); changed region base ${ta.slice(i, ta.length - j).length} tokens, target ${tb.slice(i, tb.length - j).length} tokens`);
+    console.log(`  base  : ${ta.slice(i, Math.min(ta.length - j, i + 120)).join('').slice(0, 600)}`);
+    console.log(`  target: ${tb.slice(i, Math.min(tb.length - j, i + 120)).join('').slice(0, 600)}`);
+    continue;
+  }
+  const map = new Map();
+  const rev = new Map();
+  let nonIdentifier = 0;
+  let conflicts = 0;
+  let diffs = 0;
+  for (let i = 0; i < ta.length; i += 1) {
+    if (ta[i] === tb[i]) continue;
+    diffs += 1;
+    if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(ta[i]) || !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(tb[i])) {
+      nonIdentifier += 1;
+      continue;
+    }
+    if ((map.has(ta[i]) && map.get(ta[i]) !== tb[i]) || (rev.has(tb[i]) && rev.get(tb[i]) !== ta[i])) conflicts += 1;
+    map.set(ta[i], tb[i]);
+    rev.set(tb[i], ta[i]);
+  }
+  const verdict = diffs === 0 ? 'identical after normalising chunk names' : nonIdentifier === 0 && conflicts === 0 ? 'IMPORT-ALIAS/IDENTIFIER RENAMES ONLY' : 'REAL CODE DIFFERENCE';
+  console.log(`${label}: ${verdict}; ${diffs} differing tokens, ${nonIdentifier} non-identifier, ${conflicts} mapping conflicts; renames ${[...map].map(([x, y]) => `${x}->${y}`).join(' ')}`);
+}

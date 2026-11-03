@@ -1,0 +1,20 @@
+  new ApiError(409, 'stale_version', 'This record changed since it was loaded; reload and review it again');
+
+/** A calendar default that changed under a caller who showed the old one (R-UX5I2-3); nothing was written. */
+export interface DefaultChange {
+  work_date: string;
+  expected_default: string | null;
+  current_default: string;
+}
+
+export const defaultChanged = (change: DefaultChange): ApiError =>
+  new ApiError(
+    409,
+    'default_changed',
+    `The calendar default for ${change.work_date} changed from ${change.expected_default ?? 'none'} to ${change.current_default} since it was loaded. Nothing was saved.`,
+    { work_date: change.work_date, expected_default: change.expected_default, current_default: change.current_default },
+  );
+
+export function errorBody(code: string, message: string, details?: Record<string, unknown>) {
+  return { error: details === undefined ? { code, message } : { code, message, details } };
+}

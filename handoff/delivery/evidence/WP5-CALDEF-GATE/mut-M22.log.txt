@@ -1,0 +1,47 @@
+
+Running 1 test using 1 worker
+
+  x  1 [desktop] › tests\e2e\calendar-default.spec.ts:158:3 › R-UX5I2-3: a calendar default that changed under an open Day editor › W2: "Use Holiday" sends nothing, keeps the typed note, rebases the form, refreshes the sheet and the figures, and Save records the new default (8.3s)
+
+
+  1) [desktop] › tests\e2e\calendar-default.spec.ts:158:3 › R-UX5I2-3: a calendar default that changed under an open Day editor › W2: "Use Holiday" sends nothing, keeps the typed note, rebases the form, refreshes the sheet and the figures, and Save records the new default 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: locator('[data-day="2026-11-02"]')
+    Expected substring: "Holiday"
+    Received string:    "Mon11/02WorkedTime: 09:00 - 18:003 breaksOT: 0:00Status: Complete"
+    Timeout: 7000ms
+
+    Call log:
+      - Expect "toContainText" locator('[data-day="2026-11-02"]') with timeout 7000ms
+      - waiting for locator('[data-day="2026-11-02"]')
+        18 × locator resolved to <div role="group" data-lift="single" data-editing="true" data-day="2026-11-02" class="sheet-day editing" aria-label="Mon 2026-11-02">…</div>
+           - unexpected value "Mon11/02WorkedTime: 09:00 - 18:003 breaksOT: 0:00Status: Complete"
+
+
+      179 |     await expect(editor.getByText('Calendar default. Saving records it as your choice.')).toBeVisible();
+      180 |     // The sheet behind shows the new default at once (the page was refreshed), and the figures follow the holiday.
+    > 181 |     await expect(page.locator(`[data-day="${date}"]`)).toContainText('Holiday');
+          |                                                        ^
+      182 |     if (desktop) {
+      183 |       await expect.poll(async () => [await regular.innerText(), await offCalendar.innerText()]).not.toEqual(figuresBefore);
+      184 |     }
+        at <task>\export-mut\tests\e2e\calendar-default.spec.ts:181:56
+
+    Error Context: ..\pw-mut-M22\calendar-default-R-UX5I2-3-718a3-ave-records-the-new-default-desktop\error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ..\pw-mut-M22\calendar-default-R-UX5I2-3-718a3-ave-records-the-new-default-desktop\trace.zip
+    Usage:
+
+        npx playwright show-trace ..\pw-mut-M22\calendar-default-R-UX5I2-3-718a3-ave-records-the-new-default-desktop\trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [desktop] › tests\e2e\calendar-default.spec.ts:158:3 › R-UX5I2-3: a calendar default that changed under an open Day editor › W2: "Use Holiday" sends nothing, keeps the typed note, rebases the form, refreshes the sheet and the figures, and Save records the new default 
+(node:80520) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+exit=1

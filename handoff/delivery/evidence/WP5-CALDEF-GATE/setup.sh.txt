@@ -1,0 +1,22 @@
+. <task>/env.sh
+cd $REPO
+git rev-parse HEAD > $T/out/00-head.txt 2>&1
+git rev-parse origin/main >> $T/out/00-head.txt 2>&1
+git branch --show-current >> $T/out/00-head.txt 2>&1
+git log -1 --format='%H %s' >> $T/out/00-head.txt 2>&1
+git status --short -- . ':!handoff' > $T/out/00-nonhandoff-status-before.txt 2>&1
+git diff --name-status $PREV_DOC..$TARGET -- . ':!handoff' > $T/out/20-namestatus-5b2f287-target.txt 2>&1
+git diff --name-status $PREV..$TARGET -- . ':!handoff' > $T/out/20-namestatus-a54061f-target.txt 2>&1
+git diff --stat $PREV_DOC..$TARGET -- . ':!handoff' > $T/out/20-diffstat-nonhandoff.txt 2>&1
+git diff --stat $PREV_DOC..$TARGET -- package.json package-lock.json > $T/out/25-lock-and-scope.txt 2>&1
+echo "package/lockfile diff lines: $(wc -l < $T/out/25-lock-and-scope.txt)" >> $T/out/25-lock-and-scope.txt
+git diff --name-only $PREV_DOC..$TARGET -- . ':!handoff' | grep -E 'migrations|package|lock' > $T/out/25-migration-grep.txt 2>&1; echo "migration/package/lock path grep exit $? (1 = none)" >> $T/out/25-migration-grep.txt
+git diff $PREV_DOC..$TARGET -- src > $T/out/22-src-diff.txt 2>&1
+git diff $PREV_DOC..$TARGET -- tests > $T/out/22-tests-diff.txt 2>&1
+git diff $PREV_DOC..$TARGET -- docs > $T/out/22-docs-diff.txt 2>&1
+git diff $PREV_DOC..$TARGET -- scripts > $T/out/22-scripts-diff.txt 2>&1
+git diff --check $PREV_DOC..$TARGET > $T/out/21-diff-check.txt 2>&1; echo "diff --check exit $?" >> $T/out/21-diff-check.txt
+git archive $TARGET | tar -x -C $T/export
+git archive $PREV | tar -x -C $T/export-prev
+git cat-file -t 49651c8bb91d56bf6c6966405257537ec7ca474b >> $T/out/00-head.txt 2>&1
+ls $T/export

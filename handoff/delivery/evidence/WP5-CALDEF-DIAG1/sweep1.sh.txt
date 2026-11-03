@@ -1,0 +1,18 @@
+# Reproduction sweep: the probe spec and the original test (:143), desktop, one run per instant, one after another.
+. <task>/env.sh
+mkdir -p $T/logs
+SPEC="tests/e2e/zz-probe.spec.ts tests/e2e/classic-scrollbar.spec.ts:143"
+run_one() {
+  L=$1; I=$2
+  export PROBE_OUT="$TW\\out\\probe-$L.jsonl"
+  bash $T/run-shift.sh s1-$L $I $SPEC --project=desktop --workers=1 > $T/logs/s1-$L.txt 2>&1
+  echo "$L $I exit $?" >> $T/out/sweep1-exits.txt
+}
+for D in 2026-10-26 2026-10-27 2026-10-28 2026-10-29 2026-10-30 2026-10-31 2026-11-01 2026-11-02 2026-11-03 2026-11-04 2026-11-05 2026-11-06 2026-11-07 2026-11-08 2026-11-09 2026-11-10 2026-11-11 2026-11-12 2026-11-13 2026-11-14 2026-11-15; do
+  run_one d$D ${D}T18:00:00Z
+done
+run_one f1026 2026-10-26T16:00:00Z
+run_one f1101 2026-11-01T08:45:00Z
+run_one f0314 2027-03-14T10:30:00Z
+run_one real real
+echo finished >> $T/out/sweep1-exits.txt

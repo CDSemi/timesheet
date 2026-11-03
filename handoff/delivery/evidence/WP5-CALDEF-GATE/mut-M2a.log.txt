@@ -1,0 +1,36 @@
+
+ RUN  v5.0.2 <task>/export-mut
+
+ ❯ tests/integration/calendar-default-change.test.ts (18 tests | 1 failed) 5155ms
+   ❯ PUT /api/days/:date refuses a category recorded over a changed calendar default (11)
+     × I2: a default-sourced entry: 409, and the entry, its version and its notes are unchanged 259ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 17 passed (18)
+   Start at  02:29:28
+   Duration  6.03s (tests 87%, transform 8%, import 5%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I2: a default-sourced entry: 409, and the entry, its version and its notes are unchanged
+AssertionError: {"work_date":"2026-09-21","classification":{"day_class":"nonworking","reason":"holiday","name":"Synthetic Holiday","calendar_version_id":"e765602f-f67b-404a-82ee-a86be65bf8f0"},"default_category":"Holiday","category":"Worked","category_source":"explicit","attendance_expected":false,"leave_minutes":0,"leave_kind":null,"wfh":false,"ot_leave":{"kind_minutes":0,"consumed_minutes":0,"reversed_minutes":0,"mismatch":false},"entry":{"id":"1f6c0fe0-9726-4646-95e0-7a81b80f2cf1","work_date":"2026-09-21","category":"Worked","category_source":"explicit","leave_minutes":0,"leave_kind":null,"wfh":false,"notes":"typed","version":2},"sessions":[{"id":"ed53fff6-5bf8-4d09-a811-13b7f2409218","work_date":"2026-09-21","start_utc":"2026-09-21T16:00:00Z","end_utc":"2026-09-21T19:00:00Z","input_zone":"America/Los_Angeles","source":"manual","breaks_confirmed":true,"version":1,"breaks":[]}],"calculation":{"status":"complete","provisional":true,"policy_version_id":"d77c2bc6-a0d8-42c5-868c-b327010c7242","gross_seconds":10800,"excluded_break_seconds":0,"regular_seconds":0,"nonworking_seconds":10800,"regular_minutes":0,"nonworking_minutes":180,"normal_excess_minutes":0,"eligible_minutes":180,"credited_minutes":180,"segments":[{"local_date":"2026-09-21","day_class":"nonworking","reason":"holiday","calendar_version_id":"e765602f-f67b-404a-82ee-a86be65bf8f0","seconds":10800}]},"calculation_error":null,"deficit_minutes":0,"edit":{"period_relation":"current","reason_required":false}}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/integration/calendar-default-change.test.ts:132:60
+    130|     const audits = auditCount();
+    131|     const response = await put(DAY_A, dayBody('Worked', { notes: 'type…
+    132|     expect(response.status, JSON.stringify(response.body)).toBe(409);
+       |                                                            ^
+    133|     expect(response.body.error).toMatchObject({
+    134|       code: 'default_changed',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit=1

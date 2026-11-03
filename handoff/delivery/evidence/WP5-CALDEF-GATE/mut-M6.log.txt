@@ -1,0 +1,33 @@
+
+ RUN  v5.0.2 <task>/export-mut
+
+ ❯ tests/integration/calendar-default-change.test.ts (18 tests | 1 failed) 4883ms
+   ❯ PUT /api/days/:date refuses a category recorded over a changed calendar default (11)
+     × I7: reason (422) and stale_version (409) are answered before default_changed 238ms
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 17 passed (18)
+   Start at  02:30:06
+   Duration  5.78s (tests 86%, transform 9%, import 5%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > PUT /api/days/:date refuses a category recorded over a changed calendar default > I7: reason (422) and stale_version (409) are answered before default_changed
+AssertionError: expected 'default_changed' to be 'stale_version' // Object.is equality
+
+Expected: "stale_version"
+Received: "default_changed"
+
+ ❯ tests/integration/calendar-default-change.test.ts:208:35
+    206|     const moved = await put(DAY_A, dayBody('Worked', { expected_versio…
+    207|     expect(moved.status).toBe(409);
+    208|     expect(moved.body.error.code).toBe('stale_version');
+       |                                   ^
+    209|     // An old period needs a reason first, whatever the default says.
+    210|     const noReason = await put(OLD, dayBody('Off', { default_category:…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+exit=1

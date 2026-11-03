@@ -1,0 +1,72 @@
+
+ RUN  v5.0.2 <task>/export-mut
+
+ ❯ tests/client/dayModel.test.ts (19 tests | 2 failed) 10ms
+   ❯ batchEntries (2)
+     × builds date-ordered entries with the version and the calendar default each day was loaded at 4ms
+     × carries the default each day showed, a holiday and a day the calendar cannot classify (null) included 1ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 17 passed (19)
+   Start at  02:31:14
+   Duration  141ms (transform 57%, import 20%, tests 19%, worker 5%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/client/dayModel.test.ts > batchEntries > builds date-ordered entries with the version and the calendar default each day was loaded at
+AssertionError: expected [ …(2) ] to deeply equal [ …(2) ]
+
+- Expected
++ Received
+
+  [
+    {
+      "category": "Vacation",
+-     "default_category": "Worked",
+      "expected_version": 4,
+      "work_date": "2026-09-30",
+    },
+    {
+      "category": "Vacation",
+-     "default_category": "Worked",
+      "expected_version": null,
+      "work_date": "2026-10-01",
+    },
+  ]
+
+ ❯ tests/client/dayModel.test.ts:163:83
+    161|   it('builds date-ordered entries with the version and the calendar de…
+    162|     const days = [day('2026-09-29'), day('2026-09-30', { entry: entry(…
+    163|     expect(batchEntries(days, new Set(['2026-10-01', '2026-09-30']), '…
+       |                                                                                   ^
+    164|       { work_date: '2026-09-30', category: 'Vacation', expected_versio…
+    165|       { work_date: '2026-10-01', category: 'Vacation', expected_versio…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/client/dayModel.test.ts > batchEntries > carries the default each day showed, a holiday and a day the calendar cannot classify (null) included
+AssertionError: expected [ undefined, undefined ] to deeply equal [ 'Holiday', null ]
+
+- Expected
++ Received
+
+  [
+-   "Holiday",
+-   null,
++   undefined,
++   undefined,
+  ]
+
+ ❯ tests/client/dayModel.test.ts:172:58
+    170|     const days = [day('2026-09-29', { default_category: 'Holiday', cat…
+    171|     const entries = batchEntries(days, new Set(['2026-09-29', '2026-09…
+    172|     expect(entries.map((item) => item.default_category)).toEqual(['Hol…
+       |                                                          ^
+    173|     // Present (null included), never omitted: an omitted field would …
+    174|     for (const item of entries) expect(Object.keys(item)).toContain('d…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+exit=1

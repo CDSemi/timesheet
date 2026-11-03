@@ -153,18 +153,26 @@ test.describe('a press on a scrollbar with the Day editor open', () => {
     await expect(page.locator('[data-day]')).toHaveCount(14);
     await openDay(page, days[0] ?? '');
     const editor = page.getByRole('dialog', { name: /Day editor/ });
+    // The floating drawer docks away from the edited column (docs/04), so for a Monday to Wednesday it lies over the right end of the card
+    // and for a Thursday or Friday over the left end. The press goes to the other end, which no date puts under the drawer; at scroll 0
+    // the thumb spans the track but for its arrows, so a point 60px in from either end is on the thumb.
+    const pressNearLeft = (await editor.getAttribute('data-side')) === 'right';
     // The scrollbar of the first week card that scrolls sideways and has its track in view.
-    const bar = await page.evaluate<{ x: number; y: number } | null>(`(() => {
+    const bar = await page.evaluate<{ x: number; y: number } | null>(`((nearLeft) => {
       for (const week of document.querySelectorAll('.sheet-week')) {
         const box = week.getBoundingClientRect();
         const track = week.offsetHeight - week.clientHeight;
         const y = box.top + week.clientTop + week.clientHeight + Math.max(1, track / 2);
-        if (week.scrollWidth > week.clientWidth && track > 0 && box.top > 0 && y < window.innerHeight) return { x: box.right - 60, y };
+        if (week.scrollWidth > week.clientWidth && track > 0 && box.top > 0 && y < window.innerHeight) return { x: nearLeft ? box.left + 60 : box.right - 60, y };
       }
       return null;
-    })()`);
+    })(${pressNearLeft})`);
     expect(bar, 'a week card with a sideways scrollbar in view').not.toBeNull();
     const at = bar ?? { x: 0, y: 0 };
+    expect(
+      await page.evaluate<boolean>(`document.elementFromPoint(${at.x}, ${at.y})?.closest('.sheet-week') != null`),
+      'the press lands on the week card, not under the drawer',
+    ).toBe(true);
     const scrolled = () => page.evaluate<number>(`[...document.querySelectorAll('.sheet-week')].reduce((sum, week) => sum + week.scrollLeft, 0)`);
     expect(await scrolled()).toBe(0);
     await page.mouse.move(at.x, at.y);

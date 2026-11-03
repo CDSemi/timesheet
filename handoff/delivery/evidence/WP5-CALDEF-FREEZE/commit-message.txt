@@ -1,0 +1,29 @@
+Ask before a day save overwrites a changed calendar default (R-UX5I2-3)
+
+- feat(server): the day PUT and each batch entry accept an optional `default_category`, the
+  calendar default the caller showed. Inside the write transaction, a day with no entry or a
+  default-sourced entry answers 409 `default_changed` when that default changed and the saved
+  category also differs from the new one. Explicit entries and an omitted field are not
+  checked. The batch preview marks such entries; the commit stays all or nothing.
+- feat(day-editor): on that answer the Day editor (drawer, phone sheet, shared edit view)
+  shows a notice with "Use {new default}" (takes the new default, keeps other typed fields,
+  sends nothing) and "Save {category} anyway" (saves over it). The form sends the default it
+  was loaded with.
+- fix(timesheet): closing a label-picker or "Change several days" review that holds changed
+  or stale entries offers "Reload period".
+- fix(scripts): the smoke script steps calendar dates, so `npm run verify` no longer fails near
+  midnight in a daylight-saving week.
+- test: integration, client unit and e2e tests for both choices on every path; two label-pick
+  body assertions in `day-editor.spec.ts` carry the new field.
+- docs: docs/02, 03, 04, 06, 10 and 12 (+ vi): the rule, the API contract, the notice, the
+  owner decision and a release-notes entry.
+- docs(handoff): the plan, its review, the fix, docs, smoke, evidence-rename and path-lookup
+  records, the GOV-DOCS commit results, the board, STATE, the checkpoint (+ vi) and
+  NEXT_ACTION (+ vi).
+
+Task: WP5-CALDEF-FIX, WP5-CALDEF-DOCS, WP5-CALDEF-SMOKE (owner decision R-UX5I2-3, 2026-11-02)
+Gate: WP5-CALDEF-GATE pending
+Audit: WP5-CALDEF-AUDIT pending
+Digest: e24274b98ceaef10d83b3a9538680c6ed703657eb014211fc015ce9eb9d251a7
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>

@@ -1,0 +1,8 @@
+// Usage: node combine.mjs <out file> <file> <file> ...
+// Writes the files one after another, each under a "##### <base name>" header line (inputs are read as UTF-8).
+import { readFileSync, writeFileSync } from 'node:fs';
+import { basename } from 'node:path';
+
+const [out, ...files] = process.argv.slice(2);
+const parts = files.map((file) => `##### ${basename(file)}\n${readFileSync(file, 'utf8').replace(/\s+$/, '')}\n`);
+writeFileSync(out, `${parts.join('\n')}`);

@@ -1,0 +1,149 @@
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+// WP5-CALDEF-FIX mutation runner (evidence tool, never part of the repository). One mutant at a time: apply the edit, optionally rebuild,
+// run the named tests, restore the file(s), verify the restore by SHA-256, and append one line to the summary.
+const REPO = '<task>/export-mut';
+const OUT = '<task>/mutants';
+mkdirSync(OUT, { recursive: true });
+const NPM_CLI = join(process.env.APPDATA ?? '', 'npm/node_modules/npm/bin/npm-cli.js');
+
+const S = 'src/server/';
+const C = 'src/client/';
+const TC = `${S}services/timesheetCommands.ts`;
+const DE = `${S}services/dayEntries.ts`;
+const ER = `${S}http/errors.ts`;
+const DF = `${C}components/DayFieldsForm.tsx`;
+const DED = `${C}DayEditor.tsx`;
+const TS = `${C}TimesheetScreen.tsx`;
+
+const CHECK_NOENTRY = `    const change = defaultChangeOf(scope, workDate, existing, input);
+    if (change !== null) throw defaultChanged(change);
+    classifyDate`;
+const CHECK_UPDATE = `  if (input.expected_version !== existing.version) throw staleVersion();
+  const change = defaultChangeOf(scope, workDate, existing, input);
+  if (change !== null) throw defaultChanged(change);
+  const updated`;
+const INT = ['vitest', 'tests/integration/calendar-default-change.test.ts'];
+const unit = (...files) => ['vitest', ...files];
+const e2e = (grep, project = 'desktop') => ['playwright', grep, project];
+
+/** id -> { what, edits: [[file, find, replace]], run } ; `build` is implied for a playwright run. */
+const M = {
+  M1: { what: 'server: no default check in applyDayEntryChange (PUT)', edits: [[TC, CHECK_NOENTRY, '    classifyDate'], [TC, CHECK_UPDATE, '  if (input.expected_version !== existing.version) throw staleVersion();\n  const updated']], run: INT },
+  M2a: { what: 'server: only the no-entry branch is checked', edits: [[TC, CHECK_UPDATE, '  if (input.expected_version !== existing.version) throw staleVersion();\n  const updated']], run: INT },
+  M2b: { what: 'server: only the entry (default-sourced) branch is checked', edits: [[TC, CHECK_NOENTRY, '    classifyDate']], run: INT },
+  M3: { what: 'server: explicit entries are checked too', edits: [[TC, "  if (existing !== undefined && existing.category_source !== 'default') return null;\n", '']], run: INT },
+  M4: { what: 'server: a revision-style check (any newer calendar version refuses) instead of comparing the category', edits: [[TC, 'input.default_category === current ||', '(scope.calendarVersions.length === 1 && input.default_category === current) ||']], run: INT },
+  M5a: { what: 'server: an omitted default_category is checked', edits: [[TC, '  if (input.default_category === undefined) return null;\n', '']], run: INT },
+  M5b: { what: 'server: a date with no calendar default is checked', edits: [[TC, 'current === null || input.default_category', 'input.default_category']], run: INT },
+  M6: { what: 'server: default check before the version check (entry branch)', edits: [[TC, CHECK_UPDATE, `  const change = defaultChangeOf(scope, workDate, existing, input);
+  if (change !== null) throw defaultChanged(change);
+  if (input.expected_version !== existing.version) throw staleVersion();
+  const updated`]], run: INT },
+  M7a: { what: 'server: the acknowledgement is ignored (always refuse)', edits: [[TC, 'input.default_category === current ||', '']], run: INT },
+  M7b: { what: 'server: any non-null value acknowledges', edits: [[TC, 'input.default_category === current ||', 'input.default_category !== null ||']], run: INT },
+  M8a: { what: 'server: planBatch skips the default check', edits: [[DE, 'const defaultChange = defaultChangeOf(scope, workDate, existing, input);', 'const defaultChange = null as ReturnType<typeof defaultChangeOf>;']], run: INT },
+  M8b: { what: 'server: batch commit does not refuse (partial write of the other dates)', edits: [[DE, 'if (moved.length > 0) {', 'if (moved.length < 0) {']], run: INT },
+  M9a: { what: 'server: details miss current_default', edits: [[ER, '{ work_date: change.work_date, expected_default: change.expected_default, current_default: change.current_default },', '{ work_date: change.work_date, expected_default: change.expected_default },']], run: INT },
+  M9b: { what: 'server: batch commit details miss work_dates', edits: [[DE, '{ work_dates: moved.map((change) => change.work_date), changes: moved },', '{ changes: moved },']], run: INT },
+  M16: { what: 'server: refuse although the category equals the new default', edits: [[TC, ' || input.category === current', '']], run: INT },
+  M17: { what: 'server: the check reads the actor calendar, not the owner', edits: [[TC, '  writeTransaction(ctx.db, () => {\n    const scope = loadScope(ctx.db, ctx.user);\n    applyDayEntryChange(', '  writeTransaction(ctx.db, () => {\n    const scope = loadScope(ctx.db, ctx.actor ?? ctx.user);\n    applyDayEntryChange(']], run: INT },
+  M19: {
+    what: 'server: conflicts_require_confirmation before default_changed (commit)',
+    transform: (files) => {
+      const f = files[DE];
+      const a = f.indexOf('    const moved = plan.flatMap');
+      const b = f.indexOf('    const conflicts = changes.flatMap((item) => (item.conflict === null');
+      const c = f.indexOf('    for (const item of changes) applyDayEntryChange');
+      if (a < 0 || b < 0 || c < 0) throw new Error('M19 markers');
+      files[DE] = f.slice(0, a) + f.slice(b, c) + f.slice(a, b) + f.slice(c);
+    },
+    files: [DE],
+    run: INT,
+  },
+  M13a: { what: 'client: labelEntry omits default_category', edits: [[`${C}components/labelPickerModel.ts`, ', default_category: day.default_category };', ' };']], run: unit('tests/client/labelPickerModel.test.ts') },
+  M13b: { what: 'client: batchEntries omits default_category', edits: [[`${C}components/dayModel.ts`, '      default_category: day.default_category,\n', '']], run: unit('tests/client/dayModel.test.ts') },
+  M9c: { what: 'client: defaultChangeOf accepts a missing current_default', edits: [[`${C}components/errors.ts`, '|| !isCategory(current)) return null;', '|| false) return null;']], run: unit('tests/client/errors.test.ts') },
+  M24: { what: 'client: buildDayEntryRequest drops default_category', edits: [[`${C}components/sessionModel.ts`, '  if (shownDefault !== undefined) request.default_category = shownDefault;\n', '']], run: unit('tests/client/sessionModel.test.ts') },
+  M10: { what: 'client: the form sends the live prop default instead of the mount-time default', edits: [[DF, 'void write(shownDefault, false);', 'void write(day.default_category, false);']], run: e2e('W4a') },
+  M11a: { what: 'client: "Use" drops the typed fields', edits: [[DF, 'const next = { ...draft, category: change.current };', 'const next = { ...dayFieldsDraft(day), category: change.current };']], run: e2e('W2:') },
+  M11b: { what: 'client: "Use" leaves the baseline as it was', edits: [[DF, '    setBaseline(rebased);\n', '']], run: e2e('W7a') },
+  M11c: { what: 'client: "Use" keeps the old shown default', edits: [[DF, '    setDraft(next);\n    setShownDefault(change.current);\n', '    setDraft(next);\n']], run: e2e('W2c') },
+  M12a: { what: 'client: "Save anyway" resends the old default', edits: [[DF, 'void write(change.current, true);', 'void write(shownDefault, true);']], run: e2e('W1:') },
+  M14: { what: 'client: a commit 409 default_changed is a generic error', edits: [[TS, " || caught.code === 'default_changed')", ')']], run: e2e('W9c') },
+  M15a: { what: 'client: the notice is not focused', edits: [[DF, '    noticeBox.current?.focus();\n', '']], run: e2e('W1:') },
+  M15b: { what: 'client: the notice is not an alert', edits: [[DF, '<div className="stale" role="alert" tabIndex={-1} ref={noticeBox}', '<div className="stale" tabIndex={-1} ref={noticeBox}']], run: e2e('W1:') },
+  M15c: {
+    what: 'client: the buttons are in the reverse Tab order',
+    edits: [[DF, `              <button type="button" className="secondary" disabled={busy} onClick={() => useDefault(defaultNotice)}>
+                Use {defaultNotice.current}
+              </button>
+              <button type="button" disabled={busy || reasonMissing} onClick={() => saveAnyway(defaultNotice)}>
+                Save {draft.category} anyway
+              </button>`, `              <button type="button" disabled={busy || reasonMissing} onClick={() => saveAnyway(defaultNotice)}>
+                Save {draft.category} anyway
+              </button>
+              <button type="button" className="secondary" disabled={busy} onClick={() => useDefault(defaultNotice)}>
+                Use {defaultNotice.current}
+              </button>`]],
+    run: e2e('W1:'),
+  },
+  M15d: { what: 'client: the buttons use the 36px sub-button class', edits: [[DF, '<div className="button-row">\n              <button type="button" className="secondary" disabled={busy} onClick={() => useDefault', '<div className="button-row editor-actions">\n              <button type="button" className="secondary" disabled={busy} onClick={() => useDefault']], run: e2e('W8', 'mobile') },
+  M18: { what: 'client: closing a default_changed review offers no reload', edits: [[TS, '    if (moved.length > 0) setStaleNotice(staleReloadMessage(moved));\n', '']], run: e2e('W9a|W9b') },
+  M20: { what: 'client: "Use" takes a fresh day whose other fields differ', edits: [[DED, 'fresh.category === category && sameDayFields({ ...held, category }, fresh)', 'fresh.category === category']], run: e2e('W14') },
+  M21: { what: 'client: the default notice stays beside the stale notice', edits: [[DF, '      if (isStaleVersion(caught)) {\n        setDefaultNotice(null);\n        onStale();', '      if (isStaleVersion(caught)) {\n        onStale();']], run: e2e('W15') },
+  M22: { what: 'client: "Use" does not refresh the period', edits: [[DED, '  function defaultTaken(category: DayCategory) {\n    onChanged();\n', '  function defaultTaken(category: DayCategory) {\n']], run: e2e('W2:') },
+  M23: { what: 'client: "Save anyway" is enabled while the reason is missing', edits: [[DF, 'disabled={busy || reasonMissing} onClick={() => saveAnyway(defaultNotice)}', 'disabled={busy} onClick={() => saveAnyway(defaultNotice)}']], run: e2e('W16') },
+};
+
+const sha = (text) => createHash('sha256').update(text).digest('hex').slice(0, 16);
+const run = (args, log) => {
+  const result = spawnSync(process.execPath, args, { cwd: REPO, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
+  writeFileSync(log, `${result.stdout ?? ''}${result.stderr ?? ''}\nexit=${result.status}\n`);
+  return result;
+};
+
+for (const id of process.argv.slice(2)) {
+  const mutant = M[id];
+  if (mutant === undefined) throw new Error(`unknown mutant ${id}`);
+  const paths = mutant.files ?? [...new Set(mutant.edits.map(([file]) => file))];
+  const original = Object.fromEntries(paths.map((file) => [file, readFileSync(`${REPO}/${file}`, 'utf8')]));
+  const before = Object.fromEntries(paths.map((file) => [file, sha(original[file])]));
+  const files = { ...original };
+  if (mutant.transform !== undefined) mutant.transform(files);
+  else {
+    for (const [file, find, replace] of mutant.edits) {
+      if (files[file].split(find).length !== 2) throw new Error(`${id}: the edit target is not unique or missing in ${file}: ${find.slice(0, 60)}`);
+      files[file] = files[file].replace(find, () => replace);
+    }
+  }
+  let summary;
+  try {
+    for (const file of paths) writeFileSync(`${REPO}/${file}`, files[file]);
+    const log = `${OUT}/${id}.log`;
+    const [kind, ...rest] = mutant.run;
+    let result;
+    if (kind === 'vitest') {
+      result = run(['node_modules/vitest/vitest.mjs', 'run', ...rest], log);
+    } else {
+      const build = run([NPM_CLI, 'run', 'build'], `${OUT}/${id}.build.log`);
+      if (build.status !== 0) throw new Error(`${id}: the mutant does not build`);
+      const [grep, project] = rest;
+      result = run(['node_modules/@playwright/test/cli.js', 'test', 'tests/e2e/calendar-default.spec.ts', `--project=${project}`, `--output=<task>/pw-mut-${id}`, '--workers=2', '-g', grep], log);
+    }
+    const text = readFileSync(log, 'utf8');
+    const failed = [...text.matchAll(/^\s+(?:×|x)\s+(?:\d+ \[\w+\] › )?(.*?)(?: \(?\d[\d.]*m?s\)?)?$/gm)].map((match) => match[1].replace(/^tests\\e2e\\calendar-default\.spec\.ts:\d+:\d+ › /, '').slice(0, 110));
+    const counts = /(\d+) failed/.exec(text)?.[0] ?? (/Tests\s+(\d+) failed/.exec(text)?.[0] ?? '0 failed');
+    summary = { exit: result.status, counts, failed: [...new Set(failed)].slice(0, 6) };
+  } finally {
+    for (const file of paths) writeFileSync(`${REPO}/${file}`, original[file]);
+  }
+  const after = Object.fromEntries(paths.map((file) => [file, sha(readFileSync(`${REPO}/${file}`, 'utf8'))]));
+  const restored = paths.every((file) => before[file] === after[file]);
+  const line = `${id}\t${summary.exit === 0 ? 'SURVIVED' : 'killed'}\texit=${summary.exit}\t${summary.counts}\trestore=${restored ? 'ok' : 'FAILED'}\t${mutant.what}\t=> ${summary.failed.join(' | ')}\n`;
+  appendFileSync(`${OUT}/00-summary.tsv`, line);
+  process.stdout.write(line);
+}

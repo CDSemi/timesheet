@@ -1,0 +1,16 @@
+WP5-CALDEF-GATE item 8: INT3 administrator probe against the target build, next to the INT3 observation (WP5-UX5-AUDIT-INT3/46-obs-int3-admin-target.txt, on the build before this round)
+
+Probe: WP5-UX5-AUDIT-INT3/90-zz-int3-admin.spec.ts.txt, copied unchanged (it imports ./fixtures.ts, so no harness path needed adapting), run from export-mut against the target build, desktop project, real clock (host date 2026-11-03).
+Run 1 (original, obs-int3-original.txt, log-int3-original.txt): E3 failed at the probe's own wait `stale.or(saved)` (Timeout 7000ms, element(s) not found): after Save day fields neither "This day changed since it was loaded" nor "Day fields saved." appears, because the target shows the new default_changed notice instead. E4 passed (Save accepted).
+Run 2 (additive variant of the same probe, zz-int3-admin2.spec.ts: the wait also accepts the "The calendar default for this day changed" alert, and it then reads the notice and presses "Use Holiday"; obs-int3-variant.txt, log-int3-variant.txt): both cases passed.
+
+Case E3 (administrator imports a holiday on the day while the person's open editor holds a typed note; the person then deletes the session; then Save day fields)
+  INT3 observation (previous build): form showed Worked + typed note; Save day fields ACCEPTED; server Worked/explicit, note kept, entry v2  => category recorded over the new holiday default silently.
+  Target: form showed Worked + typed note (hint present); Save day fields REFUSED with the default_changed notice ("Notice. The calendar default for this day changed from Worked to Holiday since it was loaded. Nothing was saved. Use the new default, or save your category over it." with the buttons "Use Holiday" and "Save Worked anyway"); server unchanged Holiday/default, notes "", entry v1. "Use Holiday" wrote nothing (server still Holiday/default entry v1).
+  Result: no silent record; the person has to choose.
+Case E4 (same, nothing typed)
+  INT3 observation (previous build): after the delete the form shows Holiday (it follows the answer when nothing is typed); Save ACCEPTED; server Holiday/explicit entry v2.
+  Target: identical observation: form shows Holiday, Save ACCEPTED, server Holiday/explicit entry v2.
+  Result: the category recorded is the new default itself, which is what the form showed; by the contract (a category equal to the new default is not refused, both choices record the same category) this is not a category recorded over a changed default. Recorded as an observation, not a failure.
+
+Pass criterion (in no case does a save record a category over a changed calendar default without the person's choice): met in both cases, with E3 the case that changed behaviour.

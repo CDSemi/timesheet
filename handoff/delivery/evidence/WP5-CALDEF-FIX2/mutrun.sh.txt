@@ -1,0 +1,10 @@
+. /d/.claude-tmp/timesheet/WP5-CALDEF-FIX2/env.sh
+M=$1
+cd $T/export && npm run build:client > $T/out/build-$M.txt 2>&1
+echo "build $M exit $?" >> $T/out/mut-exits.txt
+for pair in right:2026-11-04T18:00:00Z left:2026-11-06T18:00:00Z; do
+  SIDE=${pair%%:*}; INST=${pair#*:}
+  bash $T/run-shift.sh mut-$M-$SIDE $INST tests/e2e/classic-scrollbar.spec.ts:143 --project=desktop --workers=1 > $T/logs/mut-$M-$SIDE.txt 2>&1
+  echo "$M $SIDE $INST exit $?" >> $T/out/mut-exits.txt
+done
+echo "done $M" >> $T/out/mut-exits.txt

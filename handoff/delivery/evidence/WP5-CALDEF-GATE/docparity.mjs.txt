@@ -1,0 +1,38 @@
+// WP5-CALDEF-GATE item 11: EN/VI parity of the six changed document pairs (headings, bullets, table rows, code spans). Read-only.
+// Usage: node docparity.mjs <root>
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const ROOT = process.argv[2];
+const names = ['02_TIME_AND_OT_RULES', '03_ARCHITECTURE_AND_DATA', '04_UX_AND_SETTINGS', '06_TEST_AND_ACCEPTANCE', '10_DECISIONS_AND_SOURCES', '12_RELEASE_NOTES'];
+const read = (p) => readFileSync(join(ROOT, p), 'utf8').replace(/\r\n/g, '\n');
+const fences = (t) => t.replace(/```[\s\S]*?```/g, (m) => m.replace(/[^\n]/g, ''));
+const multiset = (a) => {
+  const m = new Map();
+  for (const x of a) m.set(x, (m.get(x) ?? 0) + 1);
+  return m;
+};
+let fail = 0;
+for (const n of names) {
+  const en = fences(read(`docs/${n}.md`));
+  const vi = fences(read(`docs/${n}.vi.md`));
+  const lines = (t) => t.split('\n');
+  const heads = (t) => lines(t).filter((l) => /^#{1,6} /.test(l)).map((l) => /^(#+)/.exec(l)[1].length).join('');
+  const bullets = (t) => lines(t).filter((l) => /^\s*(?:[-*+]|\d+\.)\s+/.test(l)).length;
+  const rows = (t) => lines(t).filter((l) => /^\s*\|/.test(l)).length;
+  const codes = (t) => [...t.matchAll(/`([^`\n]+)`/g)].map((m) => m[1]).filter((c) => /^[a-z]+(?:_[a-z0-9]+)+$|^[0-9]{3}$|^(?:PUT|POST|GET) /.test(c));
+  const he = heads(en);
+  const hv = heads(vi);
+  const be = bullets(en);
+  const bv = bullets(vi);
+  const re = rows(en);
+  const rv = rows(vi);
+  const ce = multiset(codes(en));
+  const cv = multiset(codes(vi));
+  const codeDiff = [];
+  for (const k of new Set([...ce.keys(), ...cv.keys()])) if ((ce.get(k) ?? 0) !== (cv.get(k) ?? 0)) codeDiff.push(`${k} en=${ce.get(k) ?? 0} vi=${cv.get(k) ?? 0}`);
+  const ok = he === hv && be === bv && re === rv && codeDiff.length === 0;
+  if (!ok) fail += 1;
+  console.log(`${n}: headings en ${he.length} vi ${hv.length} ${he === hv ? 'same sequence' : 'DIFFERENT'}; bullets en ${be} vi ${bv} ${be === bv ? 'same' : 'DIFFERENT'}; table rows en ${re} vi ${rv} ${re === rv ? 'same' : 'DIFFERENT'}; snake_case/status/route code spans ${codeDiff.length === 0 ? 'same multiset' : `DIFFERENT: ${codeDiff.join(', ')}`}`);
+}
+console.log(fail === 0 ? 'DOCPARITY RESULT: PASS' : `DOCPARITY RESULT: ${fail} pair(s) differ`);

@@ -1,0 +1,27 @@
+. <task>/env.sh
+cd $T
+# INT3 administrator probe (original, harness paths unchanged: it imports ./fixtures.ts) and the additive variant that also observes the default_changed notice
+mkdir -p $T/obs
+cp zz-int3-admin.spec.ts export-mut/tests/e2e/zz-int3-admin.spec.ts
+cp zz-int3-admin2.spec.ts export-mut/tests/e2e/zz-int3-admin2.spec.ts
+export INT3_OUT="$TW\\obs\\int3-original.txt"
+SHIFT_EXPORT=$T/export-mut bash run-shift.sh int3-original real tests/e2e/zz-int3-admin.spec.ts --project=desktop --workers=1 > logs/int3-original.txt 2>&1
+export INT3_OUT="$TW\\obs\\int3-variant.txt"
+SHIFT_EXPORT=$T/export-mut bash run-shift.sh int3-variant real tests/e2e/zz-int3-admin2.spec.ts --project=desktop --workers=1 > logs/int3-variant.txt 2>&1
+unset INT3_OUT
+rm -f export-mut/tests/e2e/zz-int3-admin.spec.ts export-mut/tests/e2e/zz-int3-admin2.spec.ts
+bash cens.sh post-int3 > logs/cens-post-int3.log 2>&1
+echo "int3 done $(date -u +%H:%M:%SZ)" >> logs/probes.log
+# axe
+bash axe.sh > logs/axe-stdout.txt 2>&1
+bash cens.sh post-axe > logs/cens-post-axe.log 2>&1
+echo "axe done $(date -u +%H:%M:%SZ)" >> logs/probes.log
+# smoke DST proof from a scratch copy against the target's script
+mkdir -p $T/smoke
+cp $T/export/scripts/smoke-built-server.mjs $T/smoke/new-smoke.mjs
+git -C $REPO show a54061f:scripts/smoke-built-server.mjs > $T/smoke/old-smoke.mjs
+cp <repo>/handoff/delivery/evidence/WP5-CALDEF-SMOKE/dst-proof.mjs.txt $T/smoke/dst-proof.mjs
+node.exe $T/smoke/dst-proof.mjs $T/smoke/old-smoke.mjs $T/smoke/new-smoke.mjs > out/60-smoke-dst-proof.txt 2>&1
+echo "dst-proof exit $?" >> out/60-smoke-dst-proof.txt
+echo "probes done $(date -u +%H:%M:%SZ)" >> logs/probes.log
+echo probes-done > out/probes.done

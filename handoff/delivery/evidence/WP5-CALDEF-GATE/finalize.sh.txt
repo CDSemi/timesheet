@@ -1,0 +1,39 @@
+# Copies the task outputs into the evidence folder as masked LF .txt (refuses an address outside example.invalid).
+. <task>/env.sh
+cd $T
+mkdir -p $E
+ARGS=()
+for f in out/*.txt; do
+  b=$(basename $f)
+  case $b in
+    51-*-files.txt|51-*-hashes.txt) continue;;
+  esac
+  ARGS+=("$T/$f=$b")
+done
+for f in logs/*.txt; do
+  b=$(basename $f)
+  ARGS+=("$T/$f=log-$b")
+done
+for f in logs/*.log; do
+  b=$(basename $f .log)
+  ARGS+=("$T/$f=log-$b.txt")
+done
+for f in obs/*.txt; do
+  b=$(basename $f)
+  ARGS+=("$T/$f=obs-$b")
+done
+for f in mutants/*; do
+  b=$(basename $f)
+  case $b in
+    *.tsv) ARGS+=("$T/$f=mut-$b.txt");;
+    *.log) ARGS+=("$T/$f=mut-$b.txt");;
+  esac
+done
+ARGS+=("$T/README.txt=00-README.txt")
+for s in env.sh setup.sh digest.sh chain01.sh chain2.keep.sh probes.keep.sh sweep.keep.sh stress.keep.sh muts.keep.sh master2.sh drill.sh prep.sh stage.sh stress2.sh mutb.sh run-shift.sh census.sh cens.sh finalize.sh axe.sh; do
+  ARGS+=("$T/$s=$s.txt")
+done
+for s in census.mjs counts.mjs mask.mjs probe-now.mjs shiftclock.mjs zone.mjs zz-control.spec.ts zz-caldef-axe.spec.ts zz-int3-admin.spec.ts zz-int3-admin2.spec.ts caldef-mutate.mjs caldef-distcmp.mjs caldef-chunkcmp.mjs chunkdiff.mjs chunkcanon.mjs mapcheck.mjs docparity.mjs; do
+  ARGS+=("$T/$s=$s.txt")
+done
+node.exe $T/mask.mjs "<repo>\\handoff\\delivery\\evidence\\WP5-CALDEF-GATE" "${ARGS[@]}"

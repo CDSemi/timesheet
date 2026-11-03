@@ -199,3 +199,14 @@ Append briefly:
 Return at most 80 words, beginning 'Self-reported model: ...', with the full commit SHA.
 
 ## Results
+
+Self-reported model: claude-sonnet-5-5.
+
+- HEAD before 5b2f28793e1def408e7a2c57df5054917450a1f2; after and remote
+  300d61f055a859857aa8eb3845ed21f4560e82fa (pushed, fast-forward).
+- D_PRE = HEAD digest (ls-tree) = npm run digest after: e24274b9...51a7 (885 files).
+- Staged 162: source 34, records 6, briefs 9, evidence 113. Converted CRLF to LF:
+  evidence/WP5-CALDEF-DOCS/03-preflight.txt. No masking, no unstaging.
+- Checks (Node v24.21.0): precommit 0, diff --cached --check 0, JSON parse 0,
+  validate_orchestration 0, check_recovery 0, validate_package --preflight 0, push 0.
+- Details: evidence/WP5-CALDEF-FREEZE/checks.txt.

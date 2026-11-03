@@ -1,0 +1,15 @@
+# Usage: bash stress2.sh <group>   group a: FIX19 desktop+mobile, FIX18 desktop ; group b: FIX18 mobile, unsaved desktop+mobile
+cd <task>
+F18="WP5-UX5-FIX18 \(F-UX5I-1\)"
+F19="WP5-UX5-FIX19 \(F-UX5I2-1\)"
+UNS="Escape and the Close button: with unsaved edits|Escape dispatched in the same task"
+SPEC=tests/e2e/day-editor.spec.ts
+if [ "$1" = a ]; then
+  bash stage.sh st-f19-desktop real $SPEC --project=desktop --grep "$F19" --repeat-each=20 --workers=10
+  bash stage.sh st-f19-mobile real $SPEC --project=mobile --grep "$F19" --repeat-each=20 --workers=10
+  bash stage.sh st-f18-desktop real $SPEC --project=desktop --grep "$F18" --repeat-each=20 --workers=10
+else
+  bash stage.sh st-f18-mobile real $SPEC --project=mobile --grep "$F18" --repeat-each=20 --workers=10
+  bash stage.sh st-uns-desktop real $SPEC --project=desktop --grep "$UNS" --repeat-each=20 --workers=10
+  bash stage.sh st-uns-mobile real $SPEC --project=mobile --grep "$UNS" --repeat-each=20 --workers=10
+fi

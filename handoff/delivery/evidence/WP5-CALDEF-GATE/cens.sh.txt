@@ -1,0 +1,9 @@
+# Usage: bash cens.sh <label> - two back-to-back read-only samples, then the busy-core calculation into out/10-census-<label>.txt
+. <task>/env.sh
+L=$1
+bash $T/census.sh $L-a
+bash $T/census.sh $L-b
+GAP=$(( ($(cat $T/census/$L-b-time.txt) - $(cat $T/census/$L-a-time.txt)) / 1000 ))
+if [ "$GAP" -lt 1 ]; then GAP=1; fi
+{ echo "census $L at $(date -u +%Y-%m-%dT%H:%M:%SZ) (mission Playwright runs finished; gap ${GAP}s)"; node.exe $T/census.mjs $T/census/$L-a.txt $T/census/$L-b.txt $GAP; } > $T/out/10-census-$L.txt 2>&1
+cat $T/out/10-census-$L.txt

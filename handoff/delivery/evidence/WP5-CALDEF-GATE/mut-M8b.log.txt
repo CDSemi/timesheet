@@ -1,0 +1,53 @@
+
+ RUN  v5.0.2 <task>/export-mut
+
+ ❯ tests/integration/calendar-default-change.test.ts (18 tests | 2 failed) 4848ms
+   ❯ POST /api/days/batch with a changed calendar default (5)
+     × I10: a commit with one changed default is 409 with the dates and writes neither date; stale_version wins 252ms
+     × I15: the commit order is stale, invalid, reason, default_changed, then conflicts 242ms
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 16 passed (18)
+   Start at  02:30:37
+   Duration  5.72s (tests 86%, transform 9%, import 5%)
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I10: a commit with one changed default is 409 with the dates and writes neither date; stale_version wins
+AssertionError: {"mode":"commit","changed":["2026-09-22"],"unchanged":[],"days":[{"work_date":"2026-09-22","classification":{"day_class":"normal","reason":"scheduled_weekday","name":null,"calendar_version_id":"d6110be6-af53-49c7-904b-dc97a31f1575"},"default_category":"Worked","category":"Off","category_source":"explicit","attendance_expected":false,"leave_minutes":0,"leave_kind":null,"wfh":false,"ot_leave":{"kind_minutes":0,"consumed_minutes":0,"reversed_minutes":0,"mismatch":false},"entry":{"id":"8271b343-a220-4161-91df-e06a7390aff8","work_date":"2026-09-22","category":"Off","category_source":"explicit","leave_minutes":0,"leave_kind":null,"wfh":false,"notes":"","version":1},"sessions":[],"calculation":{"status":"no_records","provisional":true,"policy_version_id":"3438e440-3018-42c3-b484-dcddcf12788a","gross_seconds":null,"excluded_break_seconds":null,"regular_seconds":null,"nonworking_seconds":null,"regular_minutes":null,"nonworking_minutes":null,"normal_excess_minutes":null,"eligible_minutes":null,"credited_minutes":null,"segments":[]},"calculation_error":null,"deficit_minutes":0,"edit":{"period_relation":"current","reason_required":false}}]}: expected 200 to be 409 // Object.is equality
+
+- Expected
++ Received
+
+- 409
++ 200
+
+ ❯ tests/integration/calendar-default-change.test.ts:311:58
+    309|       entries: [entry(DAY_A, 'Worked', { default_category: 'Worked' })…
+    310|     });
+    311|     expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+       |                                                          ^
+    312|     expect(refused.body.error).toMatchObject({
+    313|       code: 'default_changed',
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  tests/integration/calendar-default-change.test.ts > POST /api/days/batch with a changed calendar default > I15: the commit order is stale, invalid, reason, default_changed, then conflicts
+AssertionError: expected 'conflicts_require_confirmation' to be 'default_changed' // Object.is equality
+
+Expected: "default_changed"
+Received: "conflicts_require_confirmation"
+
+ ❯ tests/integration/calendar-default-change.test.ts:374:37
+    372|     const refused = await batch(body);
+    373|     expect(refused.status, JSON.stringify(refused.body)).toBe(409);
+    374|     expect(refused.body.error.code).toBe('default_changed');
+       |                                     ^
+    375|     const confirmedToo = await batch({ ...body, confirm_conflicts: tru…
+    376|     expect(confirmedToo.status).toBe(409);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+exit=1

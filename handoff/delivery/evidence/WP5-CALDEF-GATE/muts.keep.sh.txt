@@ -1,0 +1,23 @@
+. <task>/env.sh
+export GIT_CONFIG_VALUE_0=$T/export-mut
+cd $T
+bash cens.sh pre-muts > logs/cens-pre-muts.log 2>&1
+cd $T/export-mut
+for id in M1 M2a M2b M3 M4 M5a M5b M6 M7a M7b M8a M8b M9a M9b M16 M17 M19 M13a M13b M9c M24 M10 M11a M11b M11c M12a M14 M15a M15b M15c M15d M18 M20 M21 M22 M23; do
+  node.exe $T/caldef-mutate.mjs $id >> $T/logs/muts-stdout.txt 2>&1
+  echo "$id exit $? $(date -u +%H:%M:%SZ)" >> $T/logs/muts-progress.txt
+done
+bash $T/cens.sh post-muts > $T/logs/cens-post-muts.log 2>&1
+# restore proof: the sources of export-mut against export, byte for byte
+cd $T
+diff -rq export/src export-mut/src > out/61-restore-src.txt 2>&1; echo "diff src exit $?" >> out/61-restore-src.txt
+diff -rq export/tests export-mut/tests > out/61-restore-tests.txt 2>&1; echo "diff tests exit $?" >> out/61-restore-tests.txt
+diff -rq export/scripts export-mut/scripts > out/61-restore-scripts.txt 2>&1; echo "diff scripts exit $?" >> out/61-restore-scripts.txt
+# rebuild clean and compare dist with the target build
+cd $T/export-mut
+npm run build > $T/logs/muts-final-build.txt 2>&1; echo "final clean build exit $?" > $T/out/61-restore-dist.txt
+find dist -type f | LC_ALL=C sort > $T/tmp/mut-dist-files.txt
+rm -f $T/tmp/mut-dist-hashes.txt
+while IFS= read -r f; do printf '%s %s\n' "$f" "$(sha256sum "$f" | cut -d' ' -f1)" >> $T/tmp/mut-dist-hashes.txt; done < $T/tmp/mut-dist-files.txt
+diff $T/tmp/mut-dist-hashes.txt $T/out/51-target-hashes.txt >> $T/out/61-restore-dist.txt 2>&1; echo "dist hash diff vs target build exit $?" >> $T/out/61-restore-dist.txt
+echo muts-done > $T/out/muts.done

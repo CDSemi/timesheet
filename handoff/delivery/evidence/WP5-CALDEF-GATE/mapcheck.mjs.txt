@@ -1,0 +1,33 @@
+// WP5-CALDEF-GATE item 1 (third pass): for each client chunk of the target build, list the source modules recorded in its source map and which of
+// them changed between the two builds (compared by the sourcesContent in the two maps; falls back to the module paths when it is absent).
+// A lazy chunk whose modules are all unchanged differs only by bundler naming (import aliases, local names, export order).
+// Usage: node mapcheck.mjs <base assets dir> <target assets dir>
+import { readdirSync, readFileSync } from 'node:fs';
+
+const [a, b] = process.argv.slice(2);
+const key = (name) => name.replace(/-[A-Za-z0-9_-]{8}\.js\.map$/, '');
+const maps = (dir) => new Map(readdirSync(dir).filter((n) => n.endsWith('.js.map')).map((n) => [key(n), JSON.parse(readFileSync(`${dir}/${n}`, 'utf8'))]));
+const base = maps(a);
+const target = maps(b);
+const modules = (map) => {
+  const out = new Map();
+  (map.sources ?? []).forEach((src, i) => out.set(src.replace(/^(\.\.\/)+/, ''), map.sourcesContent?.[i] ?? null));
+  return out;
+};
+for (const [name, map] of target) {
+  const before = modules(base.get(name) ?? { sources: [] });
+  const after = modules(map);
+  const changed = [];
+  const added = [];
+  const removed = [];
+  for (const [src, content] of after) {
+    if (!before.has(src)) added.push(src);
+    else if (before.get(src) !== content) changed.push(src);
+  }
+  for (const src of before.keys()) if (!after.has(src)) removed.push(src);
+  const own = [...after.keys()].filter((s) => !s.includes('node_modules'));
+  console.log(`${name}: ${after.size} modules (${own.length} own, sourcesContent ${[...after.values()].every((c) => c !== null) ? 'present' : 'ABSENT'}); changed ${changed.length}, added ${added.length}, removed ${removed.length}`);
+  for (const s of changed) console.log(`  changed: ${s}`);
+  for (const s of added) console.log(`  added: ${s}`);
+  for (const s of removed) console.log(`  removed: ${s}`);
+}

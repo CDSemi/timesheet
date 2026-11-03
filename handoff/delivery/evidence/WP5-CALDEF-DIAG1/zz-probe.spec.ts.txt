@@ -1,0 +1,81 @@
+import { appendFileSync } from 'node:fs';
+import { namedDayButton } from './dayButton.ts';
+import { expect, test } from './fixtures.ts';
+
+test.use({ locale: 'en-US', timezoneId: 'Asia/Ho_Chi_Minh', launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } });
+test.skip(({ isMobile }) => isMobile, 'desktop only');
+
+const OUT = process.env.PROBE_OUT ?? '';
+
+test('probe: the week card scrollbar press-drag, measured', async ({ page, employeeSeed, signInThroughUi }) => {
+  test.setTimeout(120_000);
+  const periods = await employeeSeed.periodsCurrent();
+  const days = await employeeSeed.displayedPeriodFreeWorkdays();
+  const facts: Record<string, unknown> = {
+    simulatedNow: new Date().toISOString(),
+    today_local: periods.today_local,
+    reporting_zone: periods.reporting_zone,
+    current_payroll_date: periods.current.payroll_date,
+    free_days: days,
+  };
+  await page.setViewportSize({ width: 900, height: 900 });
+  await signInThroughUi();
+  await expect(page.locator('[data-day]')).toHaveCount(14);
+  const first = days[0] ?? '';
+  facts.day = first;
+  if (first !== '') {
+    const dayDate = new Date(`${first}T12:00:00Z`);
+    facts.day_weekday = dayDate.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
+    await namedDayButton(page, first, 'Edit').click();
+    await expect(page.getByRole('dialog', { name: /Day editor/ })).toBeVisible();
+    await page.waitForTimeout(400);
+  }
+  const editor = page.getByRole('dialog', { name: /Day editor/ });
+  facts.editor_side = first === '' ? null : await editor.getAttribute('data-side');
+  const measured = await page.evaluate<unknown>(`(() => {
+    const weeks = [...document.querySelectorAll('.sheet-week')].map((week) => {
+      const box = week.getBoundingClientRect();
+      const track = week.offsetHeight - week.clientHeight;
+      return {
+        label: week.getAttribute('aria-label'),
+        scrollWidth: week.scrollWidth, clientWidth: week.clientWidth,
+        track, top: Math.round(box.top), bottom: Math.round(box.bottom), left: Math.round(box.left), right: Math.round(box.right),
+        overflowX: getComputedStyle(week).overflowX,
+        trackY: Math.round(box.top + week.clientTop + week.clientHeight + Math.max(1, track / 2)),
+      };
+    });
+    const dlg = document.querySelector('[role="dialog"]');
+    const dbox = dlg ? dlg.getBoundingClientRect() : null;
+    return {
+      weeks, scrollY: window.scrollY, innerWidth: window.innerWidth, innerHeight: window.innerHeight, clientWidth: document.documentElement.clientWidth,
+      dialog: dbox ? { left: Math.round(dbox.left), right: Math.round(dbox.right), top: Math.round(dbox.top), bottom: Math.round(dbox.bottom) } : null,
+    };
+  })()`);
+  facts.measured = measured;
+  const bar = await page.evaluate<{ x: number; y: number; index: number } | null>(`(() => {
+    let index = 0;
+    for (const week of document.querySelectorAll('.sheet-week')) {
+      const box = week.getBoundingClientRect();
+      const track = week.offsetHeight - week.clientHeight;
+      const y = box.top + week.clientTop + week.clientHeight + Math.max(1, track / 2);
+      if (week.scrollWidth > week.clientWidth && track > 0 && box.top > 0 && y < window.innerHeight) return { x: box.right - 60, y, index };
+      index += 1;
+    }
+    return null;
+  })()`);
+  facts.bar = bar;
+  if (bar !== null) {
+    facts.element_at_drag_start = await page.evaluate<string>(
+      `(() => { const el = document.elementFromPoint(${bar.x}, ${bar.y}); if (!el) return 'none'; const c = el.className && el.className.baseVal === undefined ? String(el.className) : ''; return el.tagName.toLowerCase() + (c ? '.' + c.split(' ').join('.') : '') + ' | inside the day dialog: ' + (el.closest('dialog') ? 'yes' : 'no') + ' | inside a week card: ' + (el.closest('.sheet-week') ? 'yes' : 'no'); })()`,
+    );
+    facts.drawer_box = await editor.boundingBox();
+    const scrolled = () => page.evaluate<number>(`[...document.querySelectorAll('.sheet-week')].reduce((sum, week) => sum + week.scrollLeft, 0)`);
+    await page.mouse.move(bar.x, bar.y);
+    await page.mouse.down();
+    await page.mouse.move(bar.x + 120, bar.y, { steps: 5 });
+    await page.mouse.up();
+    facts.scrolled_after_drag = await scrolled();
+    facts.editor_visible_after = await editor.isVisible();
+  }
+  appendFileSync(OUT, `${JSON.stringify(facts)}\n`);
+});

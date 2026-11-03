@@ -1,0 +1,22 @@
+// Usage: node results.mjs <task folder> <log prefix> <out file> label1 label2 ...
+// One line per label: the Playwright summary lines (passed / failed / skipped) and the run exit line of logs/<prefix>-<label>.txt.
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+
+const [, , folder, prefix, outFile, ...labels] = process.argv;
+const rows = ['label | passed | failed | skipped | flaky | playwright exit'];
+for (const label of labels) {
+  const logPath = join(folder, 'logs', `${prefix}-${label}.txt`);
+  if (!existsSync(logPath)) {
+    rows.push(`${label} | no log`);
+    continue;
+  }
+  const log = readFileSync(logPath, 'utf8');
+  const count = (word) => {
+    const match = new RegExp(`^\\s+(\\d+) ${word}\\b`, 'm').exec(log);
+    return match ? match[1] : '0';
+  };
+  const exit = /^exit=(\d+)/m.exec(log)?.[1] ?? '?';
+  rows.push(`${label} | ${count('passed')} | ${count('failed')} | ${count('skipped')} | ${count('flaky')} | ${exit}`);
+}
+writeFileSync(outFile, `${rows.join('\n')}\n`);

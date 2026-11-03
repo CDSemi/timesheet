@@ -3474,8 +3474,76 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
     trước khi đóng băng của vòng này.
 - **WP5-CALDEF-PATHS** (light, haiku, chỉ đọc) liệt kê mọi đường dẫn trước khi đóng băng, để
   không phải mở rộng phạm vi commit sau khi đã giao việc.
-- **Tiếp theo:** WP5-CALDEF-FREEZE (đã đăng ký, đã có brief; D_PRE e24274b9, 34 đường dẫn ngoài
-  `handoff/`), rồi gate và một audit opus mới.
+- **WP5-CALDEF-PATHS xong:** đúng 34 đường dẫn dự kiến ngoài `handoff/`, các nhóm hồ sơ và
+  evidence đúng như dự kiến, không có gì chặn commit.
+- **WP5-CALDEF-FREEZE xong.** Commit 300d61f055a859857aa8eb3845ed21f4560e82fa trên main, đã push
+  theo kiểu fast-forward từ 5b2f287.
+  - D_PRE = digest của HEAD = e24274b9 (885 file). 162 đường dẫn được stage.
+  - Một chỉnh sửa được phép: đổi CRLF sang LF trong `evidence/WP5-CALDEF-DOCS/03-preflight.txt`.
+  - Mọi bước kiểm tra đều exit 0.
+- **WP5-CALDEF-GATE** (verifier, sonnet) đã được giao, chạy một mình trên 300d61f / e24274b9.
+  Vì `dist/server` thay đổi, gate chạy lại drill container và `npm audit`.
+- **WP5-CALDEF-AUDIT** (auditor opus mới) đã được đăng ký kèm brief. Cặp review là
+  `WP5_CALDEF_REVIEW`. Nếu audit này đạt, WP5 được nghiệm thu lại và audit này thay
+  WP5-UX5-RECHECK-RN.
+- **Nếu bị gián đoạn:** một verifier mới (lần 2) trên cùng brief, trong thư mục task
+  WP5-CALDEF-GATE-a2, sau khi kiểm tra không còn tiến trình nào của gate đang chạy.
+- **WP5-CALDEF-GATE xong, FAIL ở đúng một mục** (2026-11-03).
+  - Trong lượt FULL theo đồng hồ thật, `classic-scrollbar.spec.ts:143` trên desktop hỏng:
+    thao tác nhấn-kéo thanh cuộn riêng của thẻ tuần đọc được `scrolled()` = 0. Máy không
+    tải nặng (2,06 lõi bận).
+  - Test hỏng 20/20 trên bản đích và 3/3 trên a54061f vào ngày đó. Test đạt ngày 2026-11-02
+    và ở ba mốc FULL giả lập, và file spec không thuộc vòng này. Vậy đây là tình trạng có
+    từ trước và phụ thuộc ngày, nhưng một mục của gate chưa đạt.
+  - Một shard stress gặp lỗi 401 khi đăng nhập; suy ra là tranh chấp cổng, lần chạy lại đạt.
+  - Mọi mục khác đạt: drill 209/0, `npm audit` 0, `npm test` x3 2.425, sáu lượt quét 0 lỗi,
+    36/36 mutant, INT3 E3 bị từ chối kèm thông báo, chứng minh DST của smoke 0 sai lệch,
+    axe 21 lượt 0 lỗi, tài liệu EN/VI khớp.
+- **WP5-CALDEF-DIAG1** (planner, sonnet, chỉ đọc) đã được giao, chạy một mình. Task tìm
+  nguyên nhân theo ngày, xác định lỗi do test hay sản phẩm, đề xuất bản sửa nhỏ nhất kèm
+  chứng minh, chạy kiểm tra toàn diện ở các ngày 2026-11-04, 11-05 và 11-09, và đánh giá lỗi
+  401 qua đọc code. Sau đó là bản sửa, đóng băng, gate lại và audit.
+- **Nếu bị gián đoạn:** một planner mới (lần 2) trên cùng brief, trong thư mục task
+  WP5-CALDEF-DIAG1-a2, sau khi kiểm tra không còn tiến trình probe nào đang chạy.
+- **WP5-CALDEF-DIAG1 xong: lỗi do giả định của test, sản phẩm không có lỗi.**
+  - Thẻ tuần tràn ngang ở mọi ngày. Test nhấn tại x = 793 mà không xem Day editor nổi đang ở
+    đâu. Ngăn kéo neo ở phía ngược với cột đang sửa (docs/04). Khi ngày được mở là thứ Hai
+    đến thứ Tư, ngăn kéo neo bên phải và che điểm đó, nên cú nhấn rơi vào ô ghi chú của nó.
+  - Test gốc hỏng đúng 4 trên 25 mốc: 11-03, 11-04, 11-05 và đồng hồ thật.
+  - Bản vá 14 dòng, chỉ sửa test, nhấn ở đầu thẻ không bị ngăn kéo che và kiểm tra cú nhấn
+    rơi vào thẻ. Bản vá đạt 25/25. Mutant M1 và M2 đều bị bắt. Với bản vá, toàn bộ e2e trên
+    cả hai project có 0 lỗi ở các ngày 2026-11-04, 11-05 và 11-09.
+  - Lỗi 401 là tranh chấp cổng của bộ test trong `fixtures.ts`, đã gặp hai lần nhưng chưa
+    tái hiện được. Việc này đưa vào backlog.
+- **Quyết định coordinator 2026-11-03:** chấp nhận kết luận và bản vá. Gate lại có phạm vi
+  thu hẹp. Gate vẫn so sánh `dist/` và chạy `npm audit`; drill, 36 mutant, probe INT3, chứng
+  minh smoke, axe và tài liệu được giữ kết quả cũ.
+- **WP5-CALDEF-FIX2** (worker, sonnet) đã được giao, chạy một mình trên đúng file spec đó.
+  Tiếp theo là tra cứu đường dẫn, WP5-CALDEF-FIX2-FREEZE, WP5-CALDEF-REGATE thu hẹp và audit,
+  chuyển sang commit mới.
+- **Nếu bị gián đoạn:** kiểm tra `git status` của `tests/e2e/classic-scrollbar.spec.ts`, rồi
+  giao một worker mới (lần 2) trên cùng brief, trong thư mục task WP5-CALDEF-FIX2-a2.
+- **Soạn sẵn trong lúc FIX2 chạy:** brief `tasks/WP5-CALDEF-REGATE.md` (thu hẹp; cổng
+  52290-52329), và brief audit đã chuyển sang commit đóng băng của gate lại, có thêm phần xét
+  FIX2 và rủi ro F2 trong backlog. FIX2-FREEZE và REGATE được đưa lên board sau khi có kết
+  quả FIX2 và một lượt tra cứu đường dẫn.
+- **WP5-CALDEF-FIX2 xong** (chưa commit). Chỉ `tests/e2e/classic-scrollbar.spec.ts` thay đổi
+  (+11/-3). Digest 59e2ec3f (885 file).
+  - Worker tái hiện lỗi trước. Test đã vá đạt khi ngăn kéo ở bên trái lẫn bên phải và theo
+    đồng hồ thật, và stress đạt 20/20 ở cả hai phía.
+  - Mutant M1 và M2 đều bị bắt. Lint, typecheck và `git diff --check` exit 0.
+- **WP5-CALDEF-PATHS2** (light, haiku, chỉ đọc) chạy trước bước đóng băng. Nếu bị gián đoạn,
+  chạy lại lượt tra cứu này.
+- **WP5-CALDEF-PATHS2 xong.** Có một đường dẫn ngoài `handoff/`, và các nhóm trong
+  `handoff/` đúng như dự kiến (evidence của gate có 327 file). Hai file evidence kết thúc
+  bằng một dòng trống; bỏ dòng đó là chỉnh sửa khoảng trắng được phép. Bước đóng băng phải
+  đọc 48 file tiến trình.
+- **WP5-CALDEF-FIX2-FREEZE** (committer, sonnet) đã được giao, chạy một mình, với D_PRE
+  59e2ec3f. Coordinator không ghi file nào trong lúc task chạy. WP5-CALDEF-REGATE (thu hẹp)
+  và WP5-CALDEF-AUDIT đã được đăng ký; audit giờ phụ thuộc vào gate lại.
+- **Nếu bị gián đoạn:** kiểm tra `git log`, `git status` và origin/main trước. Nếu commit đã
+  có, ghi nhận nó. Nếu chưa, giao cùng brief cho một committer mới (lần 2), trong thư mục
+  task WP5-CALDEF-FIX2-FREEZE-a2.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 
