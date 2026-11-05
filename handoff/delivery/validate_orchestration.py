@@ -179,6 +179,7 @@ def audit_authors(audit, tasks):
 
 
 def validate_audits(tasks, by_id):
+    """Acceptance structure of audits; skipped under the direct change policy (an audit then runs only on request)."""
     for task in tasks:
         if task["kind"] != "audit":
             continue
@@ -301,6 +302,11 @@ def validate_non_product(board, by_id, active):
 
 
 def validate(board, state, configured):
+    # Direct change policy (owner decision 2026-11-04): without gates, audits or acceptance digests, only the
+    # acceptance checks below are off; schema, profiles, concurrency, ownership, commits, stop_before and files stay.
+    policy = board.get("change_policy")
+    check(policy in (None, "direct"), "Unknown change_policy")
+    direct = policy == "direct"
     check(board.get("schema_version") == 1, "Unsupported board schema")
     check(board.get("mission_id"), "Mission ID missing")
     check(board.get("authorized_scope") == PACKAGES, "Mission scope must preserve WP1–WP5")
@@ -372,7 +378,7 @@ def validate(board, state, configured):
             for key in ("freeze_commit", "reviewed_commit"):
                 check(task.get(key) is None or is_sha(task[key]), f"Invalid {key}: {name}")
             check(task.get("gate_included") in (None, True, False), f"Invalid gate_included: {name}")
-        if task["status"] == "done" and task["kind"] in {"gate", "audit"}:
+        if task["status"] == "done" and task["kind"] in {"gate", "audit"} and not direct:
             check(evidence and re.fullmatch(r"[a-f0-9]{64}", task.get("source_digest") or ""),
                   f"Gate/audit lacks digest/execution evidence: {name}")
         if task["status"] == "done" and task["kind"] == "gate":
@@ -380,10 +386,11 @@ def validate(board, state, configured):
         if task["kind"] == "audit" and task["status"] == "done":
             check(task.get("decision") in {"PASS", "FIX REQUIRED", "NOT VERIFIED"}, f"Audit verdict missing: {name}")
             authors = audit_authors(task, tasks)[1]
-            if task["package"] == GOVERNANCE:
+            if task["package"] == GOVERNANCE and not direct:
                 check(is_sha(task.get("reviewed_commit")), f"Governance audit needs reviewed_commit: {name}")
-            check(task.get("agent_id") and task["agent_id"] not in authors, f"Auditor is author or identity unknown: {name}")
-            if task["decision"] == "PASS":
+            check(direct or (task.get("agent_id") and task["agent_id"] not in authors),
+                  f"Auditor is author or identity unknown: {name}")
+            if task["decision"] == "PASS" and not direct:
                 check(task.get("reviewed_digest") == task["source_digest"], f"PASS digest mismatch: {name}")
                 if task["package"] == active and task.get("superseded_by") is None:
                     kept = (isinstance(record, dict) and task["reviewed_digest"] == record.get("base_digest")
@@ -408,7 +415,8 @@ def validate(board, state, configured):
                     check(by_id[dependency].get("decision") == "PASS", f"Dependency audit not PASS: {name}")
                 if by_id[dependency]["kind"] == "gate":
                     check(by_id[dependency].get("decision") == "PASS", f"Dependency gate not PASS: {name}")
-                    if task["kind"] == "audit" and task["status"] == "done" and task.get("decision") == "PASS":
+                    if (task["kind"] == "audit" and task["status"] == "done" and task.get("decision") == "PASS"
+                            and not direct):
                         check(by_id[dependency]["source_digest"] == task["reviewed_digest"],
                               f"Gate/audit snapshot mismatch: {name}")
         visiting.remove(name)
@@ -416,10 +424,12 @@ def validate(board, state, configured):
 
     for name in by_id:
         visit(name)
-    validate_audits(tasks, by_id)
+    if not direct:
+        validate_audits(tasks, by_id)
     validate_addresses(tasks, by_id)
     validate_superseded(tasks, by_id, board["status"] == "software_ready")
-    validate_non_product(board, by_id, active)
+    if not direct:
+        validate_non_product(board, by_id, active)
     running = [task for task in tasks if task["status"] == "running"]
     validate_commits(tasks, lookups, release_declared)
     active_lookups = sum(1 for item in lookups if item.get("status") == "running")

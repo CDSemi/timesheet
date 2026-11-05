@@ -90,3 +90,8 @@ Return at most 80 words, beginning 'Self-reported model: ...', with the full com
 staged count and every check's exit code.
 
 ## Results
+
+- HEAD before 9aba1e70e6461fc5d1183ec71270aad9d4df1b25; after 6126afef47d4aff3e8ad079209f16aceda0b298d.
+- Pushed to origin main (fast-forward); remote SHA 6126afef47d4aff3e8ad079209f16aceda0b298d.
+- Digest 52ec1fc7 unchanged. Staged 11 paths; one evidence file masked (profile path). All checks exit 0.
+  Details in evidence/WP5-CALDEF-CKPT/checks.txt.

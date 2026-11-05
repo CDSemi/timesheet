@@ -20,6 +20,7 @@ Runtime: never feed a script to python or node through stdin (no heredocs, no `|
 `| python`, `node -` or `python -`); write a file and run it. Never pipe output into
 head or tail; redirect to a file and read it.
 
+You run only on the owner's yes (document 08, "Direct change policy").
 Inspect actual files, git status, runtime and source digest. Execute assigned gates
 with synthetic data and task-local output paths. Write only assigned English
 verification/recovery reports and evidence. Do not edit source or repair tests.

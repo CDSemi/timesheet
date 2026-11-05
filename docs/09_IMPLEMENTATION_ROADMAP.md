@@ -1,6 +1,6 @@
 # Implementation roadmap
 
-Five packages in order. One coordinator delegates planning, implementation, fixes, verification and independent audit; no vendor owns a mandatory role. The mission advances automatically after each required gate/audit PASS. Huy owns business exceptions, setup and real activation. Complexity routing and recovery are in [AI workflow](08_AI_WORKFLOW_AND_BUDGET.md). Internal checkpoints are recovery points, not extra phases.
+Five packages in order. One coordinator delegates planning, implementation and fixes (verification and audit only on the owner's yes); no vendor owns a mandatory role. Since 2026-11-04 changes follow the direct change policy: no gate or audit stands between a change and the owner. Huy owns business exceptions, setup and real activation. Complexity routing and recovery are in [AI workflow](08_AI_WORKFLOW_AND_BUDGET.md). Internal checkpoints are recovery points, not extra phases.
 
 ## WP1 — Foundation and time calculation
 

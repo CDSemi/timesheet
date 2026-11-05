@@ -9,8 +9,8 @@ Brief/kết quả task trong handoff/delivery/tasks/ chỉ bằng tiếng Anh (k
 - Routing {size S/M/L/XL, rủi ro L/M/H, novelty}:
 - Profile (effort cố định); model yêu cầu; model_override_reason (size_risk|novelty|escalation|fallback_unavailable|owner|none); model/effort tự báo thật và nguồn; agent/session ID:
 - Path được ghi chính xác; scope chỉ đọc; report/evidence riêng:
-- Tiêu chí đạt, rule/AC và gate chạy được:
-- Task tài liệu hoặc công cụ: kết quả duyệt (sự kiện đã đối chiếu với code/bảng/hồ sơ, chỗ lệch đã sửa, EN/VI khớp, link, dữ liệu riêng tư; kiểm tra công cụ đã chạy):
+- "Chạy đúng như yêu cầu" nghĩa là gì, và test hoặc lần chạy trực tiếp chứng minh nó (cùng bộ kiểm nhanh):
+- Tài liệu đã đối chiếu với code đã đổi, và tài liệu đã sửa (tiếng Anh và `.vi.md`):
 - Sửa/kiểm đã xong và trạng thái file:
 - Bằng chứng: lệnh | môi trường | exit | kết quả thật | path log:
 - Sửa dở; lệnh chưa rõ xong; process còn chạy:
@@ -18,5 +18,5 @@ Brief/kết quả task trong handoff/delivery/tasks/ chỉ bằng tiếng Anh (k
 - Trạng thái: pending / running / interrupted / blocked / done / cancelled:
 - Một bước tiếp và đầu vào resume:
 
-Chỉ coordinator cập nhật state chung. Implement done không là nghiệm thu.
-Auditor ghi tách biệt tác giả, digest review và quyết định độc lập.
+Chỉ coordinator cập nhật state chung. Chủ thử app đang chạy.
+Auditor do chủ yêu cầu ghi tách biệt tác giả và quyết định độc lập.

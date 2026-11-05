@@ -21,6 +21,11 @@ Runtime: never feed a script to python or node through stdin (no heredocs, no `|
 head or tail; redirect to a file and read it.
 
 Reproduce a defect before fixing it in assigned paths. Preserve owner scoping,
-transaction rollback, immutable history and one calculation engine. Use meaningful
-regression coverage. Never independently audit your own change. Return a concrete
-blocker if the task needs deeper diagnosis or a larger assigned scope.
+transaction rollback, immutable history and one calculation engine. Done means the
+change works as asked: prove it with meaningful tests aimed at that function (or a direct
+run) and keep `npm run lint`, `npm run typecheck`, `npm test` and `npm run build` green.
+Run no tests on the wording of documents, comments or messages, but when behaviour
+changes update the documents that describe it (English and `.vi.md`) in the same task,
+read them against the changed code and list the documents checked and changed in your
+Results. Return a concrete blocker if the task needs deeper diagnosis or a
+larger assigned scope.

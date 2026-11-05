@@ -87,6 +87,13 @@ def synthetic():
                  git={"branch": "main", "release_declared": False, "last_commit": None, "unpushed": []})
     value["git"]["last_commit"] = SHA
     value.pop("non_product_since_acceptance", None)  # a live record never leaks in; probes add their own
+    value.pop("change_policy", None)  # the live board is "direct"; the gated probes test the old mode, direct() opts in
+    return value
+
+
+def direct(value):
+    """Opt a synthetic board into the direct change policy (owner decision 2026-11-04)."""
+    value["change_policy"] = "direct"
     return value
 
 
@@ -541,6 +548,166 @@ def suite():
 
     # Non-product (documentation and workflow tooling) changes after an acceptance: is_non_product, non_product_since_acceptance (V1-V6).
     non_product_suite()
+
+    # Direct change policy: the acceptance checks are off, everything else stays (old mode proven above).
+    direct_suite()
+
+
+def direct_suite():
+    leaked = synthetic()
+    assert "change_policy" not in leaked
+    accepts("a live change_policy does not leak into the synthetic board", leaked)
+    value = direct(finished())
+    accepts("direct policy accepts a finished board", value)
+    invalid = copy.deepcopy(value)
+    invalid["change_policy"] = "gated"
+    rejects("unknown change_policy rejected", invalid, "Unknown change_policy")
+
+    # Relaxed under direct, still rejected without the field.
+    relaxed = [
+        ("stale audit PASS", lambda board: board.update(current_source_digest="b" * 64), "Stale PASS"),
+        ("audit without gate dependency or gate_included",
+         lambda board: task_of(board, "S-AUDIT").update(depends_on=["S-IMPL"]), "needs a gate dependency"),
+        ("self audit", lambda board: task_of(board, "S-AUDIT").update(agent_id="synthetic-plan"),
+         "Auditor is author"),
+        ("audit PASS without digest or evidence",
+         lambda board: task_of(board, "S-AUDIT").update(evidence=[]), "lacks digest/execution evidence"),
+        ("gate and audit on different snapshots",
+         lambda board: task_of(board, "S-GATE").update(source_digest="b" * 64), "Gate/audit snapshot mismatch"),
+        ("audit PASS with a reviewed digest differing from its source digest",
+         lambda board: task_of(board, "S-AUDIT").update(reviewed_digest="b" * 64), "PASS digest mismatch"),
+        ("gate freeze_commit differing from audit reviewed_commit",
+         lambda board: (task_of(board, "S-GATE").update(freeze_commit=SHA),
+                        task_of(board, "S-AUDIT").update(reviewed_commit="d" * 40)),
+         "Gate freeze_commit differs"),
+        ("GOV audit without reviewed_commit",
+         lambda board: [task.update(package="GOV") for task in board["tasks"]],
+         "Governance audit needs reviewed_commit"),
+        ("audit weaker than its author model",
+         lambda board: (task_of(board, "S-IMPL").update(actual_model="claude-opus-5-5", actual_source="self_reported"),
+                        task_of(board, "S-AUDIT").update(actual_model="claude-sonnet-5-5",
+                                                         actual_source="self_reported")),
+         "Audit model weaker than author model"),
+        ("malformed non_product_since_acceptance record",
+         lambda board: board.update(non_product_since_acceptance={"base_commit": "abc"}), "base_commit invalid"),
+    ]
+    for label, edit, expected in relaxed:
+        base = finished()
+        edit(base)
+        rejects(f"gated mode rejects: {label}", base, expected)
+        direct(base)
+        accepts(f"direct policy accepts: {label}", base)
+
+    # Kept under direct.
+    def kept(label, make, expected, expected_state=None):
+        board = direct(make())
+        rejects(f"direct policy still rejects: {label}", board, expected, expected_state)
+
+    def edited(edit, base=synthetic):
+        board = base()
+        edit(board)
+        return board
+
+    kept("unknown dependency", lambda: edited(lambda b: task_of(b, "S-IMPL").update(depends_on=["MISSING"])),
+         "Unknown/self dependency")
+    kept("dependency cycle", lambda: edited(lambda b: task_of(b, "S-PLAN").update(depends_on=["S-IMPL"])),
+         "Dependency cycle")
+    kept("path traversal", lambda: edited(lambda b: task_of(b, "S-PLAN")["owned_paths"].append("../outside")),
+         "Unsafe path")
+    kept("task owning shared state",
+         lambda: edited(lambda b: task_of(b, "S-PLAN")["owned_paths"].append("handoff/delivery/STATE.json")),
+         "Task owns shared state")
+    kept("profile effort differing from the profile",
+         lambda: edited(lambda b: task_of(b, "S-IMPL").update(requested_effort="xhigh")),
+         "Requested profile settings differ")
+    kept("invalid task status", lambda: edited(lambda b: task_of(b, "S-PLAN").update(status="verified")),
+         "Invalid status/kind")
+    kept("running task before its dependency",
+         lambda: edited(lambda b: task_of(b, "S-IMPL").update(status="running")), "Unfinished dependency")
+    kept("failed gate unlocking its dependent",
+         lambda: edited(lambda b: task_of(b, "S-GATE").update(decision="FAIL"), finished), "Dependency gate not PASS")
+    kept("dependency on an audit that is not PASS",
+         lambda: edited(lambda b: task_of(b, "S-AUDIT").update(decision="NOT VERIFIED"), finished),
+         "Dependency audit not PASS")
+    kept("malformed reviewed_commit",
+         lambda: edited(lambda b: task_of(b, "S-AUDIT").update(reviewed_commit="not-a-sha"), finished),
+         "Invalid reviewed_commit")
+    kept("missing evidence file",
+         lambda: edited(lambda b: task_of(b, "S-AUDIT").update(evidence=["handoff/delivery/missing-evidence.txt"]),
+                        finished), "Evidence file missing")
+    kept("missing prompt file",
+         lambda: edited(lambda b: task_of(b, "S-PLAN").update(prompt="handoff/prompts/MISSING.md")), "Prompt missing")
+    kept("missing durable report",
+         lambda: edited(lambda b: task_of(b, "S-PLAN").update(status="done", attempt=1, agent_id="x",
+                                                              report="handoff/delivery/MISSING.md",
+                                                              owned_paths=["handoff/delivery/MISSING.md"])),
+         "Durable English brief/result missing")
+
+    def two_writers(board):
+        task_of(board, "S-PLAN").update(status="done")
+        task_of(board, "S-IMPL").update(status="running", depends_on=[])
+        extra = copy.deepcopy(task_of(board, "S-IMPL"))
+        extra.update(id="S-SECOND-WRITER", depends_on=[])
+        board["tasks"].append(extra)
+    kept("two source writers", lambda: edited(two_writers), "More than one source writer")
+    kept("source writer beside a gate",
+         lambda: edited(lambda b: (task_of(b, "S-IMPL").update(status="running", depends_on=[]),
+                                   task_of(b, "S-GATE").update(status="running", depends_on=[]))),
+         "Source writer overlaps")
+    kept("colliding report ownership",
+         lambda: edited(lambda b: (task_of(b, "S-PLAN").update(status="running", depends_on=[]),
+                                   b["tasks"].append({**copy.deepcopy(task_of(b, "S-PLAN")), "id": "S-SECOND-PLAN"}))),
+         "Concurrent ownership conflict")
+    kept("running task outside the active package",
+         lambda: edited(lambda b: task_of(b, "S-PLAN").update(package=NEXT_PACKAGE, status="running")),
+         "Running task outside active package")
+    kept("too many active subagents",
+         lambda: edited(lambda b: (task_of(b, "S-PLAN").update(status="running", attempt=1, agent_id="x"),
+                                   b.update(auxiliary_lookups=[{"id": "L1", "status": "running"},
+                                                               {"id": "L2", "status": "running"}]))),
+         "Too many active subagents")
+    kept("running commit beside another running task",
+         lambda: edited(lambda b: (task_of(b, "S-COMMIT").update(status="running", depends_on=[]),
+                                   task_of(b, "S-PLAN").update(status="running"))),
+         "Commit task must run alone")
+    kept("commit task with a non-committer profile",
+         lambda: edited(lambda b: task_of(b, "S-COMMIT").update(profile="timesheet-worker"), finished),
+         "Commit requires committer profile")
+    kept("done commit without a 40-hex SHA",
+         lambda: edited(lambda b: task_of(b, "S-COMMIT").update(commit_sha="abc123"), finished),
+         "Commit result incomplete")
+
+    def after_release(board):
+        board["git"]["release_declared"] = True
+    kept("commit on main after release_declared", lambda: edited(after_release, finished),
+         "Direct commit to main after release")
+    kept("stop_before changed", lambda: edited(lambda b: b.update(stop_before=["real_sending"])),
+         "Owner activation boundary missing")
+    kept("changed concurrency policy", lambda: edited(lambda b: b.update(max_active_subagents=3)),
+         "Concurrency policy changed")
+    kept("invalid next_task_id", lambda: edited(lambda b: b.update(next_task_id="S-MISSING")), "Next task invalid")
+
+    prior = synthetic_state(NEXT_PACKAGE)
+    prior["phases"][PACKAGES.index(BASE)]["independent_review"] = "failed"
+    kept("next package past an unpassed prior package",
+         lambda: edited(lambda b: b.update(active_package=NEXT_PACKAGE)), "Prior package not independently passed",
+         prior)
+    ready_state = synthetic_state(BASE)
+    for phase in ready_state["phases"]:
+        phase["independent_review"] = "passed"
+
+    def software_ready(board):
+        task_of(board, "S-NEXT").update(status="cancelled")
+        board.update(status="software_ready", next_task_id=None)
+    accepts("direct software_ready with every package passed accepted",
+            direct(edited(software_ready, finished)), ready_state)
+    unaudited = copy.deepcopy(ready_state)
+    unaudited["phases"][-1]["independent_review"] = "not_started"
+    kept("software_ready with a package lacking its audit in STATE", lambda: edited(software_ready, finished),
+         "Software readiness requires every package audit", unaudited)
+    kept("software_ready with a pending task",
+         lambda: edited(lambda b: (software_ready(b), task_of(b, "S-NEXT").update(status="pending")), finished),
+         "Required tasks remain", ready_state)
 
 
 def doc_board():

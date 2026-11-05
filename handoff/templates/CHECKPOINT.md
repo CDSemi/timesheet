@@ -5,7 +5,7 @@
 - Completed scope:
 - Last executed verification command/result:
 - In-progress edit and current file state:
-- Remaining required work/gates:
+- Remaining work:
 - Concrete blocker or usage stop, without invented meter values:
 - Decisions/rules that must remain unchanged:
 - Required inputs/artifacts for resumption:
@@ -20,7 +20,7 @@ Preserve source and evidence before stopping. Do not mark incomplete work passed
 - Coordinator/subagent session IDs, requested/actual settings and attempts:
 - Owned files, task-local brief/results/evidence:
 - Live processes or unknown command completion; confirm old writer stopped:
-- Last verified source digest; outstanding verifier/audit and current verdict:
+- Last checked commit; any verifier or audit the owner asked for:
 - Same-session agent continuation or replacement-task inputs:
 - Usage/reset observed timestamp/timezone, or not observable:
 - One next task/action; update board before dispatch and after results:

@@ -20,6 +20,7 @@ Runtime: never feed a script to python or node through stdin (no heredocs, no `|
 `| python`, `node -` or `python -`); write a file and run it. Never pipe output into
 head or tail; redirect to a file and read it.
 
+You run only on the owner's yes (document 08, "Direct change policy").
 Start in fresh context, not an implementer fork. You must not have authored any
 change in the reviewed snapshot. Read the assigned WPn_REVIEW prompt. Inspect both
 standards and specification behavior; reproduce findings and independently run

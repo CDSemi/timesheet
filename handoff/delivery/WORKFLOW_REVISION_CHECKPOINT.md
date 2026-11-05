@@ -3616,6 +3616,66 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - **If interrupted:** check `git log`, `git status` and origin/main first. If the commit
   exists, record it. Otherwise give the same brief to a fresh committer (attempt 2), in task
   folder WP5-CALDEF-CKPT-a2.
+- **WP5-CALDEF-CKPT done.** Commit 6126afef47d4aff3e8ad079209f16aceda0b298d on main, pushed
+  as a fast-forward from 9aba1e7.
+  - 11 paths, handoff only. One profile path was masked in the ACCEPT `checks.txt`.
+  - Every check exited 0. The digest 52ec1fc7 is unchanged.
+  - Deviation: only the `npm run digest` form was run, not the `ls-tree` form. The two are
+    equivalent here.
+- **The board is `software_ready`** with `next_task_id` null. Only its record of 6126afe is
+  uncommitted.
+- **Next:** the owner reviews the pilot packet, does the device checks and runs the NAS
+  steps.
+
+## Owner decision 2026-11-04: direct change policy
+
+- **The owner's words** are verbatim on the board under `owner_decisions`. The rules and
+  gates are too strict; the owner wants the app running soon. Work normally: the owner tests
+  and asks for fixes, with no gate after gate. The owner also wants the needed actions listed
+  in chat, not in the long packet.
+- **The board** is set to `change_policy` `"direct"`. From now on there is no verifier gate,
+  independent audit, freeze, regate, plan review or documentation review.
+- **A change is:**
+  1. a worker implements it and runs lint, typecheck, unit tests and build;
+  2. the committer commits and pushes;
+  3. the owner tests and asks for fixes.
+- **Kept:** the privacy and secrets rules, synthetic data in development, time semantics,
+  owner business rules, no deprecated APIs, and commits only by the committer. Real sending,
+  deployment and activation are the owner's acts on the NAS.
+- **GOV-DIRECT** (worker-high, sonnet) is dispatched. It rewrites AGENTS rules 2, 5, 9, 13
+  and 14, docs/08, docs/12:7, the prompts and the profiles. It also relaxes the validators
+  under the board field, with probes for both modes. Then one commit follows, with no review.
+- **If interrupted:** a fresh worker-high (attempt 2) on the same brief, in task folder
+  GOV-DIRECT-a2, after a `git status` check.
+- **The owner's refinement, the same day** (verbatim on the board). It is sent to the running
+  worker as brief Addendum 1.
+  - Go straight to the code; done means it works as asked.
+  - Test only the function: tests aimed at the change, with lint, typecheck, npm test and
+    build kept green.
+  - No wording checks of docs, comments or messages, and the documentation preflight is no
+    longer required.
+  - No routine audit, full e2e, sweep or drill. The coordinator asks the owner first when it
+    thinks one is truly needed.
+- **The owner's clarification of the wording point** (verbatim on the board; brief
+  Addendum 2).
+  - Only test runs on wording are dropped. The documents must still match the current
+    behaviour.
+  - The worker that changes a function updates its documents (EN and VI) in the same task,
+    checks them by reading against the code, and lists what it checked.
+  - There is no separate review task. The coordinator looks at that list before the commit.
+- **GOV-DIRECT done**, with Addenda 1 and 2.
+  - Changed:
+    - AGENTS rules 2, 5, 9, 13 and 14;
+    - docs/06, 08, 09 and 12:7;
+    - the prompts, the templates and seven profiles;
+    - `validate_orchestration.py`, which relaxes the acceptance checks under `change_policy`
+      `"direct"`, and `check_recovery.py`, now with 193 probes.
+  - Its checks all exited 0.
+- **GOV-DIRECT-COMMIT** (committer) is dispatched alone. After it, the board returns to
+  `software_ready`.
+- **If interrupted:** check `git log`, `git status` and origin/main first. If the commit
+  exists, record it. Otherwise give the same brief to a fresh committer (attempt 2), in task
+  folder GOV-DIRECT-COMMIT-a2.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

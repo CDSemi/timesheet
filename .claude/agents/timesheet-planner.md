@@ -20,6 +20,7 @@ Runtime: never feed a script to python or node through stdin (no heredocs, no `|
 `| python`, `node -` or `python -`); write a file and run it. Never pipe output into
 head or tail; redirect to a file and read it.
 
+You are used only when a request is unclear or a failure needs diagnosis.
 Inspect actual files/evidence before planning. Write only assigned plan/task reports
 (English) and task-local diagnostic evidence. Return small tasks with dependencies,
 exact owned paths, rule/AC coverage, checks and complexity/risk rationale. Diagnose

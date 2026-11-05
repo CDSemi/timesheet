@@ -252,9 +252,25 @@ Luồng hiện tại:
      push. Board đã trở lại `software_ready`.
    - Backlog không bắt buộc: R-CALDEF-1..4, ranh giới 2,05:1 của nút phụ, và lỗi tranh chấp
      cổng F2 trong harness e2e.
-5. **Tiếp theo, chủ dự án: duyệt pilot.** Đọc
-   [pilot packet](delivery/WP5_PILOT_PACKET.vi.md). D-1..D-15 và R-UX5I2-3 đã được trả lời;
-   R-UX5I2-3 đã được làm xong và nghiệm thu.
+5. **Đã xong: chính sách thay đổi trực tiếp (quyết định của chủ dự án 2026-11-04, GOV-DIRECT).**
+   - Mỗi thay đổi là một yêu cầu của chủ dự án. Một worker đi thẳng vào code và chứng minh
+     thay đổi chạy đúng như yêu cầu. Worker giữ cho lint, typecheck, `npm test` và build đều
+     đạt, và giữ tài liệu mô tả phần hành vi vừa đổi khớp với nó (EN và VI).
+   - Committer commit và push. Chủ dự án test và yêu cầu sửa.
+   - Không có gate, đóng băng, gate lại hay review. Audit, chạy e2e đầy đủ, sweep hay drill
+     chỉ chạy khi chủ dự án đồng ý.
+   - Xem luật AGENTS 5 và 14, và mục "Direct change policy" của tài liệu 08.
+6. **Tiếp theo, chủ dự án: đưa app lên NAS.** Danh sách ngắn đã gửi trong chat ngày
+   2026-11-04:
+   - build trên NAS;
+   - file env ở chế độ capture;
+   - proxy HTTPS;
+   - bootstrap và Setup;
+   - chạy thử ở chế độ capture;
+   - sau đó cấu hình SMTP với `PRODUCTION_SENDING_ENABLED=true`.
+
+   Chi tiết nằm trong runbook (docs/11) và
+   [pilot packet](delivery/WP5_PILOT_PACKET.vi.md). D-1..D-15 và R-UX5I2-3 đã được trả lời.
    - Làm các kiểm tra trên thiết bị thật (mục 10 của gói).
    - Làm các bước NAS của chủ dự án trong docs/11 và mẫu khôi phục trên máy đích.
    - Chỉ gửi thật, triển khai và kích hoạt sau khi chủ dự án cho phép rõ ràng. Khi đó

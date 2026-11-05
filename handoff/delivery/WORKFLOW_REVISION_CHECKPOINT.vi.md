@@ -3708,6 +3708,65 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - **Nếu bị gián đoạn:** kiểm tra `git log`, `git status` và origin/main trước. Nếu commit đã
   có, ghi nhận nó. Nếu chưa, giao cùng brief cho một committer mới (lần 2), trong thư mục task
   WP5-CALDEF-CKPT-a2.
+- **WP5-CALDEF-CKPT xong.** Commit 6126afef47d4aff3e8ad079209f16aceda0b298d trên main, đã push
+  theo kiểu fast-forward từ 9aba1e7.
+  - 11 đường dẫn, chỉ trong handoff. Một đường dẫn hồ sơ người dùng trong `checks.txt` của
+    ACCEPT đã được che.
+  - Mọi bước kiểm tra đều exit 0. Digest 52ec1fc7 không đổi.
+  - Sai lệch: chỉ chạy dạng `npm run digest`, không chạy dạng `ls-tree`. Ở đây hai dạng là
+    tương đương.
+- **Board ở trạng thái `software_ready`**, `next_task_id` là null. Chỉ còn bản ghi của 6126afe
+  trên board là chưa commit.
+- **Tiếp theo:** chủ dự án duyệt pilot packet, làm các kiểm tra trên thiết bị và chạy các bước
+  NAS.
+
+## Quyết định của chủ dự án 2026-11-04: chính sách thay đổi trực tiếp
+
+- **Lời của chủ dự án** được ghi nguyên văn trên board, trong `owner_decisions`. Luật và gate
+  đang quá chặt; chủ dự án muốn app sớm chạy được. Cứ làm bình thường: chủ dự án tự test và yêu
+  cầu sửa khi cần, không đặt hết gate này đến gate khác. Chủ dự án cũng muốn các việc cần làm
+  được liệt kê ngay trong chat, không phải trong packet dài.
+- **Board** được đặt `change_policy` là `"direct"`. Từ nay không còn gate của verifier, audit
+  độc lập, đóng băng, gate lại, review kế hoạch hay review tài liệu.
+- **Một thay đổi gồm:**
+  1. một worker làm và chạy lint, typecheck, unit test và build;
+  2. committer commit và push;
+  3. chủ dự án test và yêu cầu sửa.
+- **Giữ nguyên:** các luật về quyền riêng tư và bí mật, dữ liệu giả lập khi phát triển, ngữ
+  nghĩa thời gian, luật nghiệp vụ của chủ dự án, không dùng API lỗi thời, và chỉ committer
+  được commit. Việc gửi thật, triển khai và kích hoạt là việc chủ dự án làm trên NAS.
+- **GOV-DIRECT** (worker-high, sonnet) đã được giao. Nó viết lại luật AGENTS 2, 5, 9, 13 và
+  14, docs/08, docs/12:7, các prompt và profile. Nó cũng nới các validator theo trường trên
+  board, kèm probe cho cả hai chế độ. Sau đó là một commit, không review.
+- **Nếu bị gián đoạn:** một worker-high mới (lần 2) trên cùng brief, trong thư mục task
+  GOV-DIRECT-a2, sau khi kiểm tra `git status`.
+- **Chủ dự án nói rõ thêm, cùng ngày** (nguyên văn trên board). Phần này được gửi cho worker
+  đang chạy dưới dạng Addendum 1 của brief.
+  - Đi thẳng vào code; xong nghĩa là chạy đúng như yêu cầu.
+  - Chỉ test chức năng: test nhắm vào phần thay đổi, đồng thời giữ lint, typecheck, npm test và
+    build đều đạt.
+  - Không kiểm tra câu chữ trong tài liệu, comment hay thông báo, và không còn bắt buộc chạy
+    preflight tài liệu.
+  - Không tự chạy audit, e2e đầy đủ, sweep hay drill. Khi thấy thật sự cần, coordinator hỏi
+    chủ dự án trước.
+- **Chủ dự án làm rõ điểm về câu chữ** (nguyên văn trên board; Addendum 2 của brief).
+  - Chỉ bỏ việc chạy test câu chữ. Tài liệu vẫn phải khớp với cách chức năng đang chạy.
+  - Worker nào sửa một chức năng thì cập nhật luôn tài liệu của chức năng đó (EN và VI) trong
+    cùng task, đọc đối chiếu với code, và liệt kê những gì đã kiểm.
+  - Không có task review riêng. Coordinator xem danh sách đó trước khi commit.
+- **GOV-DIRECT xong**, gồm cả Addendum 1 và 2.
+  - Đã sửa:
+    - luật AGENTS 2, 5, 9, 13 và 14;
+    - docs/06, 08, 09 và 12:7;
+    - các prompt, template và bảy profile;
+    - `validate_orchestration.py`, nay nới các kiểm tra nghiệm thu khi `change_policy` là
+      `"direct"`, và `check_recovery.py`, nay có 193 probe.
+  - Mọi bước kiểm tra của nó đều exit 0.
+- **GOV-DIRECT-COMMIT** (committer) đã được giao, chạy một mình. Sau khi nó xong, board trở lại
+  `software_ready`.
+- **Nếu bị gián đoạn:** kiểm tra `git log`, `git status` và origin/main trước. Nếu commit đã
+  có, ghi nhận nó. Nếu chưa, giao cùng brief cho một committer mới (lần 2), trong thư mục task
+  GOV-DIRECT-COMMIT-a2.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

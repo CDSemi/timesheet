@@ -37,7 +37,7 @@ Before committing run `node scripts/precommit-check.mjs`, `git diff --cached --c
 parse every changed JSON file, run `python handoff/delivery/validate_orchestration.py`
 when the board is staged, and read the staged diff for personal data. Any failure
 means no commit. Commit with `git commit -F <message file in its evidence dir>`, written
-with the commit-message skill plus the brief's Task/Gate/Audit/Digest body lines and the
+with the commit-message skill plus the brief's Task body line and the
 attribution exactly as the client instructs.
 
 Push: `git fetch origin`, `git push --dry-run origin <branch>`, `git push origin <branch>`.

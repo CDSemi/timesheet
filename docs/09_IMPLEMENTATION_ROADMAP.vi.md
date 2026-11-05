@@ -1,6 +1,6 @@
 # Lộ trình triển khai
 
-Năm giai đoạn theo thứ tự. Một coordinator giao plan, implement, sửa, kiểm chứng và audit độc lập; không nhà cung cấp nào có vai trò bắt buộc. Nhiệm vụ tự tiến sau gate/audit PASS. Huy quyết ngoại lệ nghiệp vụ, setup và kích hoạt thật. Chọn theo độ khó và recovery ở [quy trình AI](08_AI_WORKFLOW_AND_BUDGET.vi.md). Checkpoint là điểm phục hồi, không thêm giai đoạn.
+Năm giai đoạn theo thứ tự. Một coordinator giao plan, implement và sửa (kiểm chứng và audit chỉ khi chủ đồng ý); không nhà cung cấp nào có vai trò bắt buộc. Từ 2026-11-04 thay đổi theo chính sách thay đổi trực tiếp: không gate hay audit nào đứng giữa một thay đổi và chủ. Huy quyết ngoại lệ nghiệp vụ, setup và kích hoạt thật. Chọn theo độ khó và recovery ở [quy trình AI](08_AI_WORKFLOW_AND_BUDGET.vi.md). Checkpoint là điểm phục hồi, không thêm giai đoạn.
 
 ## WP1 — Nền tảng và bộ tính giờ
 

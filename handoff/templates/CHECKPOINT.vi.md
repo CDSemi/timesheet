@@ -5,7 +5,7 @@
 - Phần đã xong:
 - Lệnh/kết quả kiểm đã chạy cuối:
 - Sửa đang làm và trạng thái file:
-- Việc/gate bắt buộc còn:
+- Việc còn lại:
 - Chặn cụ thể hoặc dừng vì usage, không bịa đồng hồ:
 - Quyết định/quy tắc cần giữ:
 - Đầu vào/artifact cần khi tiếp tục:
@@ -22,7 +22,7 @@ Bản dịch của [CHECKPOINT.md](CHECKPOINT.md); tiếng Anh là nguồn chu�
 - Session ID coordinator/subagent, settings yêu cầu/thật và attempt:
 - File sở hữu, brief/kết quả/evidence từng task:
 - Process còn hoặc lệnh chưa rõ xong; xác nhận writer cũ dừng:
-- Digest source đã kiểm cuối; verifier/audit còn và verdict hiện tại:
+- Commit đã kiểm cuối; verifier hoặc audit chủ đã yêu cầu (nếu có):
 - Đầu vào tiếp agent trong phiên cũ hoặc task thay thế:
 - Usage/reset kèm thời điểm/múi giờ quan sát, hoặc không thấy:
 - Một task/bước tiếp; cập nhật bảng trước giao việc và sau kết quả:

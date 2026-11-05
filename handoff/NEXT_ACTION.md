@@ -250,9 +250,24 @@ Current route:
      pushed. The board is back to `software_ready`.
    - Optional backlog: R-CALDEF-1..4, the 2.05:1 secondary-button boundary, and the e2e
      harness port race F2.
-5. **Next, owner: review the pilot.** Read the
-   [pilot packet](delivery/WP5_PILOT_PACKET.md). D-1..D-15 and R-UX5I2-3 are answered;
-   R-UX5I2-3 is built and accepted.
+5. **Done: direct change policy (owner decision 2026-11-04, GOV-DIRECT).**
+   - A change is an owner request. One worker goes straight to the code and proves the
+     change works as asked. It keeps lint, typecheck, `npm test` and build green, and keeps
+     the documents of the changed behaviour matching it (EN and VI).
+   - The committer commits and pushes. The owner tests and asks for fixes.
+   - There is no gate, freeze, regate or review. An audit, a full e2e run, a sweep or a drill
+     runs only after the owner says yes.
+   - See AGENTS rules 5 and 14 and document 08, "Direct change policy".
+6. **Next, owner: put the app on the NAS.** The short list was given in chat on 2026-11-04:
+   - build on the NAS;
+   - the env file in capture mode;
+   - the HTTPS proxy;
+   - bootstrap and Setup;
+   - a capture-mode trial;
+   - then SMTP with `PRODUCTION_SENDING_ENABLED=true`.
+
+   The details are in the runbook (docs/11) and the
+   [pilot packet](delivery/WP5_PILOT_PACKET.md). D-1..D-15 and R-UX5I2-3 are answered.
    - Do the pilot device checks (packet section 10).
    - Run the owner NAS steps in docs/11 and the target restore form.
    - Real sending, deployment and activation happen only after the owner's explicit
