@@ -100,3 +100,8 @@ Return at most 80 words, beginning 'Self-reported model: ...', with the full com
 staged count, any masked or unstaged file, and every check's exit code.
 
 ## Results
+
+- HEAD before 6126afef47d4aff3e8ad079209f16aceda0b298d; after 23e653e24e42e2c9f49a40c6d3b278e509c9cf2b.
+- Pushed to origin main (fast-forward); remote SHA equals HEAD.
+- Staged 39 paths; nothing masked, converted or unstaged. All checks exit 0 (193 probes).
+  Details in evidence/GOV-DIRECT-COMMIT/checks.txt.

@@ -23,7 +23,7 @@ rewrite history or tag.
    BEFORE invocation. At most two subagents, one source writer.
 3. The worker implements, proves the changed behaviour with tests aimed at that function
    (or a direct run), keeps `npm run lint`, `npm run typecheck`, `npm test` and
-   `npm run build` green, and writes real results into the brief's Results. It runs no
+   `npm run build` green, and writes real results into the brief's Results. For time, OT or ledger, sign-off, or sending changes it also runs that area's unit, integration and e2e specs and `npm run verify` (AGENTS rule 5). It runs no
    tests on the wording of documents, comments or messages, but when a change alters
    behaviour it updates the documents that describe it (English and `.vi.md`) in the same
    task, reads them against the changed code and lists the documents checked and changed

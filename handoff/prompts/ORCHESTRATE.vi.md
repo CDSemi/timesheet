@@ -21,7 +21,7 @@ bao giờ amend, force-push, viết lại lịch sử hay tạo tag.
    agent. Tối đa hai subagent, một writer source.
 3. Worker triển khai, chứng minh hành vi đã đổi bằng test nhắm vào chức năng đó (hoặc
    chạy trực tiếp), giữ `npm run lint`, `npm run typecheck`, `npm test` và
-   `npm run build` xanh, rồi ghi kết quả thật vào Results của brief. Worker không chạy
+   `npm run build` xanh, rồi ghi kết quả thật vào Results của brief. Với thay đổi về thời gian, OT hoặc ledger, ký duyệt hay gửi, worker chạy thêm các spec unit, integration, e2e của vùng đó và `npm run verify` (quy tắc 5 của AGENTS). Worker không chạy
    test trên chữ nghĩa của tài liệu, comment hay thông báo, nhưng khi một thay đổi làm đổi
    hành vi thì cập nhật các tài liệu mô tả nó (tiếng Anh và `.vi.md`) trong cùng task, đọc
    đối chiếu với code đã đổi và liệt kê tài liệu đã kiểm và đã sửa trong Results; đọc

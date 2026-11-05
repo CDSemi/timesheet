@@ -3676,6 +3676,22 @@ Based on [CHECKPOINT](../templates/CHECKPOINT.md). Updated 2026-10-05 UTC.
 - **If interrupted:** check `git log`, `git status` and origin/main first. If the commit
   exists, record it. Otherwise give the same brief to a fresh committer (attempt 2), in task
   folder GOV-DIRECT-COMMIT-a2.
+- **GOV-DIRECT-COMMIT done.** Commit 23e653e24e42e2c9f49a40c6d3b278e509c9cf2b on main, pushed
+  as a fast-forward from 6126afe. 39 paths. The precommit check, `validate_orchestration.py`
+  and `check_recovery.py` (193 probes) all exited 0.
+- **The board is `software_ready`** with `next_task_id` null, under `change_policy`
+  `"direct"`.
+- **Next:** the owner puts the app on the NAS and asks for changes. Each change goes to one
+  worker, then a commit.
+- **The owner asked where the proxy IP comes from, and allowed risk tests by the agents**
+  (verbatim on the board). The proxy IP is answered in chat: the Docker bridge gateway of the
+  Compose network.
+- **GOV-DIRECT2 done** (worker). AGENTS rule 5, docs/08, the worker profiles and
+  ORCHESTRATE now say: a change to time, OT or the ledger, sign-off or sending also runs that
+  area's unit, integration and e2e specs and `npm run verify`, in the same task.
+  `check_recovery.py` and `validate_orchestration.py` both exited 0.
+- **GOV-DIRECT2-COMMIT** (committer) is dispatched alone. After it, the board returns to
+  `software_ready`.
 
 ## Update 2026-10-14: owner-requested UI change round 2 (WP5-UX2)
 

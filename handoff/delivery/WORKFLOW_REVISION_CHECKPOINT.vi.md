@@ -3767,6 +3767,22 @@ Theo [CHECKPOINT](../templates/CHECKPOINT.vi.md). Cập nhật 2026-10-05 UTC.
 - **Nếu bị gián đoạn:** kiểm tra `git log`, `git status` và origin/main trước. Nếu commit đã
   có, ghi nhận nó. Nếu chưa, giao cùng brief cho một committer mới (lần 2), trong thư mục task
   GOV-DIRECT-COMMIT-a2.
+- **GOV-DIRECT-COMMIT xong.** Commit 23e653e24e42e2c9f49a40c6d3b278e509c9cf2b trên main, đã
+  push theo kiểu fast-forward từ 6126afe. 39 đường dẫn. Kiểm tra precommit,
+  `validate_orchestration.py` và `check_recovery.py` (193 probe) đều exit 0.
+- **Board ở trạng thái `software_ready`**, `next_task_id` là null, theo `change_policy`
+  `"direct"`.
+- **Tiếp theo:** chủ dự án đưa app lên NAS và yêu cầu các thay đổi. Mỗi thay đổi giao cho một
+  worker, rồi commit.
+- **Chủ dự án hỏi IP proxy lấy ở đâu, và cho phép các agent tự test các mảng rủi ro**
+  (nguyên văn trên board). Câu hỏi IP proxy đã được trả lời trong chat: đó là gateway của mạng
+  bridge Docker do Compose tạo.
+- **GOV-DIRECT2 xong** (worker). Luật AGENTS 5, docs/08, profile của worker và ORCHESTRATE nay
+  ghi: thay đổi nào đụng giờ giấc, OT hay sổ OT, ký duyệt hoặc gửi email thì chạy thêm các test
+  unit, integration và e2e của mảng đó và `npm run verify`, trong cùng task.
+  `check_recovery.py` và `validate_orchestration.py` đều exit 0.
+- **GOV-DIRECT2-COMMIT** (committer) đã được giao, chạy một mình. Sau khi nó xong, board trở lại
+  `software_ready`.
 
 ## Cập nhật 2026-10-14: vòng thay đổi UI lần 2 theo yêu cầu chủ dự án (WP5-UX2)
 

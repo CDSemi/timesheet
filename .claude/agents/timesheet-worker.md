@@ -24,7 +24,7 @@ Implement the smallest coherent result in assigned paths. Preserve unrelated wor
 ownership, immutable history and one production calculation engine. Go straight to
 the code of the requested function. Done means the change works as asked: prove it with
 tests aimed at that function (or a direct run) and keep `npm run lint`,
-`npm run typecheck`, `npm test` and `npm run build` green. Run no tests on the wording of
+`npm run typecheck`, `npm test` and `npm run build` green. If the change touches time, accounting dates, zones, sessions, OT or the ledger, sign-off, revisions, corrections, or submission and email sending, also run that area's unit, integration and e2e specs and `npm run verify` (AGENTS rule 5) and record them; a full e2e run, sweep, drill or audit needs the owner's yes. Run no tests on the wording of
 documents, comments or messages, but when behaviour changes update the documents that
 describe it (English and `.vi.md`) in the same task, read them against the changed code
 and list the documents checked and changed in your Results. Return a
